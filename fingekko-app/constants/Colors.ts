@@ -22,7 +22,7 @@ export const Colors = {
   // UI colors
   border: '#E9ECEF',         // Card borders
   shadow: '#000000',         // Shadow color
-  tabBar: '#FFFFFF',         // Bottom tab background
+  tabBar: '#ebe7e7d9',         // Bottom tab background
   tabBarActive: '#2ECC71',   // Active tab icon
   tabBarInactive: '#ADB5BD', // Inactive tab icon
 };
