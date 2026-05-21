@@ -1,6 +1,6 @@
 export const Colors = {
   // Pr
-  primary: '#2ECC71',        // FinGekko green
+  primary: '#32c672',        // FinGekko green
   primaryDark: '#27AE60',    // Darker green (buttons pressed)
   primaryLight: '#A8E6CF',   // Light green (backgrounds)
 

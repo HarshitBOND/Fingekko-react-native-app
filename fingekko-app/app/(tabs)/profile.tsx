@@ -3,6 +3,7 @@ import { CalendarDays, ChevronRight, CircleAlert, Eye, Wallet } from 'lucide-rea
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import Divider from '../../components/Divider';
 import Navbar from '../../components/Navbar';
 import { Colors, FontSizes } from '../../constants/Colors';
 
@@ -53,7 +54,12 @@ export default function TabIndex(){
               </View>
             </View>
 
-            <View style={styles.balanceTopDivider} />
+            <Divider
+              orientation="vertical"
+              thickness={1}
+              color="rgba(255, 255, 255, 0.19)"
+              inset={8}
+            />
 
             <View style={styles.balanceTopRight}>
               <View style={styles.spendInfo}>
@@ -208,13 +214,6 @@ const styles= StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-  },
-
-  balanceTopDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.19)',
-    marginHorizontal: 8,
-    alignSelf: 'stretch',
   },
 
   balanceLabelRow: {
