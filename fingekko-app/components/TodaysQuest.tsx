@@ -100,28 +100,8 @@ export default function TodaysQuest() {
 				})}
 			</View>
 
-			<LinearGradient
-				colors={['#fff4d7', '#f4f9e4']}
-				start={{ x: 0, y: 0 }}
-				end={{ x: 1, y: 1 }}
-				style={styles.bonusCard}
-			>
-				<View style={styles.bonusLeft}>
-					<View style={styles.bonusIconWrap}>
-						<Wallet size={20} color="#c77c1c" />
-					</View>
-					<View>
-						<Text style={styles.bonusTitle}>Complete all quests</Text>
-						<Text style={styles.bonusSubtitle}>to earn bonus XP!</Text>
-						<Text style={styles.bonusXP}>+75 XP</Text>
-					</View>
-				</View>
-
-				<Image
-					source={require('../assets/images/gekko.png')}
-					style={styles.bonusGekko}
-				/>
-			</LinearGradient>
+			
+            <Image source={require('../assets/images/+75xp.png')} style={{flex:1, width: '100%', height: 60, marginTop: 12}} />
 		</View>
 	);
 }

@@ -21,7 +21,7 @@ export default function YourDreamJourney() {
                     <Text style={styles.savedAmount}> Rs. {Saved.toLocaleString()}</Text>
                     <Text style={styles.goalAmount}> / Rs. {goal.toLocaleString()}</Text>
                 </View>
-                <Text style={{fontSize: FontSizes.sm}}> {Math.round(levelProgress * 100)}% </Text>
+                <Text style={{fontSize: FontSizes.xs}}> {Math.round(levelProgress * 100)}% </Text>
             </View>
             <ProgressBar
                 progress={levelProgress}
@@ -29,6 +29,9 @@ export default function YourDreamJourney() {
                 radius={999}
                 trackColor="rgba(158, 207, 240, 0.18)"
             />
+            <Text style={{fontSize: FontSizes.xs, color: Colors.textSecondary, paddingTop: 6}}>
+                💡 Save Rs. 1200 more this month to stay on track!
+            </Text>
         </View>
 
         <View style={{flex: 1.3, marginLeft: 12, marginTop: 16}}>
@@ -60,12 +63,12 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     savedAmount: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: 'bold',
         color: Colors.primary,
     },
     goalAmount: {
-        fontSize: 14,
+        fontSize: 12,
         color: Colors.textSecondary,
     },
 });

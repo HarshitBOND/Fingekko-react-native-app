@@ -9,6 +9,7 @@ import TodaysProgress from '../../components/TodaysProgress';
 import TodaysQuest from '../../components/TodaysQuest';
 import { Colors, FontSizes } from '../../constants/Colors';
 import YourDreamJourney from '@/components/yourDreamJourney';
+import BageSection from '@/components/BageSection';
 
 const levelData = {
   title: 'Planner Gekko',
@@ -105,6 +106,7 @@ export default function TabIndex() {
         <TodaysProgress />
         <TodaysQuest />
         <YourDreamJourney />
+        <BageSection />
       </ScrollView>
     </SafeAreaView>
   );
