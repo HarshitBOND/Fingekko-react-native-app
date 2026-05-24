@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
+
 // ─── Custom Tab Bar Icon Component ───────────────────────────────
 // We build our own icon so we can style it exactly like FinGekko
 

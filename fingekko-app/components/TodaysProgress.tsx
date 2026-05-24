@@ -4,7 +4,14 @@ import { BarChart3, Flame, Target, Zap } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import Divider from './Divider';
 
-const progressItems = [
+type ProgressItem = {
+  icon: typeof Flame;
+  value: string;
+  label: string;
+  color: string;
+};
+
+const defaultProgressItems: ProgressItem[] = [
   {
     icon: Flame,
     value: '12',
@@ -31,7 +38,8 @@ const progressItems = [
   },
 ];
 
-export default function TodaysProgress() {
+export default function TodaysProgress({ items }: { items?: ProgressItem[] }) {
+  const progressItems = items && items.length > 0 ? items : defaultProgressItems;
   const rowItems = progressItems.flatMap((item, index) => {
     const Icon = item.icon;
     const content = (

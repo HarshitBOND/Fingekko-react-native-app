@@ -18,7 +18,7 @@ export interface Goal{
     createdAt: number;
     emoji: string ;
 }
-
+    
 
 export interface StreakData{
     currentStrak: number;
@@ -53,4 +53,38 @@ export interface Category{
     label: string;
     emoji : string;
     type: TransactionType;
+}
+
+export type QuestType =
+    | 'saving'
+        | 'discipline'
+            | 'tracking'
+                | 'engagement'
+                    | 'budgeting'
+                        | 'challenge'
+                            | 'lifestyle'
+                                | 'mindfulness'
+                                |'learning'
+                                    
+
+export type QuestStatus = 'pending' | 'completed' | 'failed';
+
+export interface QuestDefinition {
+    id: number;
+    text: string;
+    difficulty: number;
+    type: QuestType;
+    xp: number;
+}
+
+export interface DailyQuest {
+    questId: number;
+    status: QuestStatus;
+    progress: number;
+}
+
+export interface QuestState {
+    date: string;
+    difficultyByType: Record<QuestType, number>;
+    quests: DailyQuest[];
 }

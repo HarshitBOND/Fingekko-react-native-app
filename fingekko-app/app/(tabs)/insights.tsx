@@ -1,398 +1,518 @@
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { Transaction } from '@/constants/types';
+import type { ApiUser, ProfileResponse, TransactionsResponse } from '@/types';
+import { apiRequest } from '@/utils/api';
+import { formatCurrency } from '@/utils/helpers';
+import { useAuth } from '@clerk/clerk-expo';
+import {
+    ChevronRight,
+    Flame,
+    Home,
+    Lightbulb,
+    ShoppingBag,
+    Utensils,
+    Wallet,
+} from 'lucide-react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { EXPENSE_CATEGORIES } from '../../constants/categories';
-import { Colors, FontSizes, Spacing } from '../../constants/Colors';
-import { Transaction, UserProfile } from '../../constants/types';
-import { formatCurrency, isSameDay } from '../../utils/helpers';
-import { getProfile, getTransactions } from '../../utils/storage';
-
-const CATEGORY_COLORS = [
-  Colors.primary,
-  Colors.savings,
-  '#F39C12',
-  Colors.expense,
-  '#1ABC9C',
-];
-
-const DONUT_SIZE = 140;
-const DONUT_RADIUS = 48;
-const DONUT_STROKE = 16;
+import Navbar from '../../components/Navbar';
+import { FontSizes } from '../../constants/Colors';
 
 export default function InsightsScreen() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { getToken, isSignedIn } = useAuth();
+  const [profile, setProfile] = useState<ApiUser | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
+  useEffect(() => {
+    let isActive = true;
 
-      async function loadData() {
-        const [nextProfile, nextTransactions] = await Promise.all([
-          getProfile(),
-          getTransactions(),
+    const loadData = async () => {
+      if (!isSignedIn) {
+        setProfile(null);
+        setTransactions([]);
+        return;
+      }
+
+      const token = await getToken();
+      if (!token) {
+        return;
+      }
+
+      try {
+        const [profileResponse, transactionsResponse] = await Promise.all([
+          apiRequest<ProfileResponse>('/api/profile', {}, token),
+          apiRequest<TransactionsResponse>('/api/transactions', {}, token),
         ]);
 
         if (!isActive) {
           return;
         }
 
-        setProfile(nextProfile);
-        setTransactions(nextTransactions);
+        setProfile(profileResponse.user);
+        setTransactions(transactionsResponse.transactions);
+      } catch (error) {
+        console.warn('Failed to load insights:', error);
       }
+    };
 
-      loadData();
+    loadData();
 
-      return () => {
-        isActive = false;
-      };
-    }, [])
-  );
+    return () => {
+      isActive = false;
+    };
+  }, [getToken, isSignedIn]);
 
   const currency = profile?.currency ?? '₹';
-  const formatAmount = (amount: number) => formatCurrency(Math.round(amount), currency);
+  const formatAmount = (value: number) => formatCurrency(Math.round(value), currency);
 
-  const monthStats = useMemo(() => {
+  const insights = useMemo(() => {
     const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
+    const expenses = transactions.filter((item) => item.type === 'expense');
 
-    const inMonth = transactions.filter(transaction => {
-      const date = new Date(transaction.date);
-      if (Number.isNaN(date.getTime())) {
-        return false;
-      }
-      return date.getMonth() === month && date.getFullYear() === year;
-    });
+    const parse = (value: string) => {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
 
-    const income = inMonth
-      .filter(transaction => transaction.type === 'income')
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const expenses = inMonth
-      .filter(transaction => transaction.type === 'expense')
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const net = income - expenses;
-    const savingsRate = income > 0 ? Math.max(0, net / income) : 0;
+    const inRange = (date: Date | null, start: Date, end: Date) =>
+      date ? date >= start && date <= end : false;
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    const expensesThisMonth = expenses.reduce((sum, item) => {
+      const date = parse(item.date);
+      return inRange(date, startOfMonth, now) ? sum + item.amount : sum;
+    }, 0);
+
+    const expensesLastMonth = expenses.reduce((sum, item) => {
+      const date = parse(item.date);
+      return inRange(date, startOfLastMonth, endOfLastMonth) ? sum + item.amount : sum;
+    }, 0);
+
+    const daysInLastMonth = endOfLastMonth.getDate() || 1;
+    const daysInThisMonth = Math.max(1, now.getDate());
+    const avgLastMonth = expensesLastMonth / daysInLastMonth;
+    const avgThisMonth = expensesThisMonth / daysInThisMonth;
+
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weeklySpend = expenses.reduce((sum, item) => {
+      const date = parse(item.date);
+      return date && date >= weekStart ? sum + item.amount : sum;
+    }, 0);
+
+    const monthlyIncome = profile?.monthlyIncome ?? 0;
+    const weeklyBudget = monthlyIncome > 0 ? monthlyIncome / 4 : Math.max(weeklySpend * 1.2, 1);
+    const weeklyLeft = Math.max(0, weeklyBudget - weeklySpend);
+    const weeklyProgress = weeklyBudget > 0 ? Math.min(1, weeklySpend / weeklyBudget) : 0;
+
+    const savedAmount = Math.max(0, expensesLastMonth - expensesThisMonth);
+    const savedPercent = expensesLastMonth > 0 ? Math.round((savedAmount / expensesLastMonth) * 100) : 0;
+
+    const categoryTotals = expenses.reduce((acc, item) => {
+      acc[item.category] = (acc[item.category] ?? 0) + item.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const topCategories = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, amount]) => ({ label, amount }));
+
+    const fallbackCategories = [
+      { label: 'Shopping', amount: 0 },
+      { label: 'Food', amount: 0 },
+      { label: 'Home', amount: 0 },
+    ];
+
+    const categories = [...topCategories, ...fallbackCategories].slice(0, 3);
+    const maxCategory = Math.max(1, ...categories.map((item) => item.amount));
+    const categoryRows = categories.map((item) => ({
+      ...item,
+      percent: Math.max(20, Math.round((item.amount / maxCategory) * 100)),
+    }));
 
     return {
-      monthLabel: now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
-      income,
-      expenses,
-      net,
-      savingsRate,
+      expensesThisMonth,
+      expensesLastMonth,
+      avgLastMonth,
+      avgThisMonth,
+      savedAmount,
+      savedPercent,
+      weeklySpend,
+      weeklyBudget,
+      weeklyLeft,
+      weeklyProgress,
+      categoryRows,
+      biggestSpendsCount: Math.min(3, expenses.length),
+      transactionCount: expenses.length,
     };
-  }, [transactions]);
+  }, [profile?.monthlyIncome, transactions]);
 
-  const weeklySpend = useMemo(() => {
-    const today = new Date();
-    const days = Array.from({ length: 7 }).map((_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (6 - index));
-      const dateString = date.toISOString().split('T')[0];
-      const expenseTotal = transactions
-        .filter(transaction => transaction.type === 'expense')
-        .filter(transaction => isSameDay(transaction.date, dateString))
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-      return {
-        date,
-        dateString,
-        expenseTotal,
-      };
-    });
-
-    const values = days.map(day => day.expenseTotal);
-    const maxValue = Math.max(...values, 1);
-    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-
-    return { days, values, maxValue, average };
-  }, [transactions]);
-
-  const categoryStats = useMemo(() => {
-    const totals = new Map<string, number>();
-    const expenseTransactions = transactions.filter(transaction => transaction.type === 'expense');
-
-    expenseTransactions.forEach(transaction => {
-      const current = totals.get(transaction.category) ?? 0;
-      totals.set(transaction.category, current + transaction.amount);
-    });
-
-    const sorted = Array.from(totals.entries())
-      .map(([id, value]) => ({ id, value }))
-      .sort((a, b) => b.value - a.value);
-
-    const top = sorted.slice(0, 4);
-    const rest = sorted.slice(4);
-    const otherTotal = rest.reduce((sum, item) => sum + item.value, 0);
-    const mappedTop = top.map((item, index) => {
-      const meta = EXPENSE_CATEGORIES.find(category => category.id === item.id);
-      const label = meta?.label ?? item.id.charAt(0).toUpperCase() + item.id.slice(1);
-
-      return {
-        id: item.id,
-        label,
-        value: item.value,
-        color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-      };
-    });
-
-    if (otherTotal > 0) {
-      mappedTop.push({
-        id: 'other',
-        label: 'Other',
-        value: otherTotal,
-        color: CATEGORY_COLORS[mappedTop.length % CATEGORY_COLORS.length],
-      });
-    }
-
-    const total = expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-
-    return {
-      total,
-      segments: total > 0 ? mappedTop : [{ id: 'none', label: 'No data', value: 1, color: Colors.border }],
-    };
-  }, [transactions]);
-
-  const donutSegments = useMemo(() => {
-    const circumference = 2 * Math.PI * DONUT_RADIUS;
-    let offset = 0;
-
-    return categoryStats.segments.map(segment => {
-      const total = categoryStats.total > 0 ? categoryStats.total : segment.value;
-      const length = (segment.value / total) * circumference;
-      const dashArray = `${length} ${circumference - length}`;
-      const dashOffset = circumference - offset;
-      offset += length;
-
-      return {
-        ...segment,
-        dashArray,
-        dashOffset,
-      };
-    });
-  }, [categoryStats]);
-
-  const lineChart = useMemo(() => {
-    const width = 320;
-    const height = 160;
-    const padding = 24;
-    const innerWidth = width - padding * 2;
-    const innerHeight = height - padding * 2;
-
-    const points = weeklySpend.values.map((value, index) => {
-      const x = padding + (index / (weeklySpend.values.length - 1)) * innerWidth;
-      const y = padding + innerHeight - (value / weeklySpend.maxValue) * innerHeight;
-      return { x, y };
-    });
-
-    const linePath = points
-      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-      .join(' ');
-    const areaPath = `${linePath} L ${padding + innerWidth} ${padding + innerHeight} L ${padding} ${padding + innerHeight} Z`;
-
-    return { width, height, points, linePath, areaPath };
-  }, [weeklySpend]);
-
-  const barChart = useMemo(() => {
-    const width = 320;
-    const height = 160;
-    const baseline = height - 24;
-    const maxValue = Math.max(monthStats.income, monthStats.expenses, 1);
-    const barWidth = 46;
-    const spacing = 90;
-
-    const incomeHeight = (monthStats.income / maxValue) * (height - 60);
-    const expenseHeight = (monthStats.expenses / maxValue) * (height - 60);
-
-    return {
-      width,
-      height,
-      baseline,
-      barWidth,
-      spacing,
-      incomeHeight,
-      expenseHeight,
-    };
-  }, [monthStats]);
+  const [firstName] = (profile?.name ?? 'Friend').split(' ');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View pointerEvents="none" style={styles.backgroundLayer}>
-        <View style={styles.greenGlow} />
-      </View>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.page}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <Navbar />
+
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Insights</Text>
-          <Text style={styles.headerSubtitle}>{monthStats.monthLabel}</Text>
+          <View>
+            <Text style={styles.heading}>Insights</Text>
+            <Text style={styles.subHeading}>Understand. Improve. Level up.</Text>
+          </View>
         </View>
 
+        {/* TOP CARD */}
         <View style={styles.heroCard}>
-          <View style={styles.heroRow}>
-            <View>
-              <Text style={styles.heroLabel}>Net this month</Text>
-              <Text
+          <Image
+            source={require('../../assets/images/personalityThePlanner.png')}
+            style={styles.heroImage}
+            resizeMode="contain"
+          />
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroTitle}>
+              Great job, {firstName}! 👋
+            </Text>
+
+            <Text style={styles.heroText}>
+              You spent {formatAmount(insights.savedAmount)} less than last month.
+            </Text>
+
+            <Text style={styles.heroText}>
+              Keep it up!
+            </Text>
+          </View>
+
+          <View style={styles.streakBox}>
+            <View style={styles.fireBadge}>
+              <Flame color="#fff" size={18} />
+            </View>
+
+            <Text style={styles.streakTitle}>On fire!</Text>
+            <Text style={styles.streakSub}>{insights.savedPercent}% leaner</Text>
+          </View>
+        </View>
+
+        {/* SPENDING COMPARISON */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>
+            SPENDING COMPARISON
+          </Text>
+
+          <View style={styles.compareContainer}>
+            {/* LAST MONTH */}
+            <View style={styles.compareBox}>
+              <Text style={styles.compareLabel}>
+                Last Month (Apr)
+              </Text>
+
+              <Text style={styles.compareAmount}>
+                {formatAmount(insights.expensesLastMonth)}
+              </Text>
+
+              <View style={{ marginTop: 18 }}>
+                <View style={styles.blurLine} />
+                <View style={[styles.blurLine, { width: '85%' }]} />
+                <View style={[styles.blurLine, { width: '70%' }]} />
+                <View style={[styles.blurLine, { width: '92%' }]} />
+              </View>
+
+              <Text style={styles.avgText}>
+                Monthly avg {formatAmount(insights.avgLastMonth)} / day
+              </Text>
+            </View>
+
+            {/* THIS MONTH */}
+            <View style={styles.compareBox}>
+              <Text style={[styles.compareLabel, { color: '#17A34A' }]}>
+                This Month (May)
+              </Text>
+
+              <Text style={styles.compareAmount}>
+                {formatAmount(insights.expensesThisMonth)}
+              </Text>
+
+              {/* GRAPH */}
+              <View style={styles.graphContainer}>
+                <View style={styles.dashedLine} />
+
+                <View style={styles.graphBars}>
+                  <View style={styles.barLight} />
+                  <View style={[styles.barLight, { height: 60 }]} />
+                  <View style={[styles.barLight, { height: 45 }]} />
+                  <View style={[styles.barLight, { height: 50 }]} />
+
+                  <View style={{ width: 18 }} />
+
+                  <View style={[styles.barLight, { height: 40 }]} />
+                  <View style={[styles.barLight, { height: 80 }]} />
+                  <View style={[styles.barLight, { height: 42 }]} />
+
+                  <View style={{ width: 18 }} />
+
+                  <View style={styles.barDark} />
+                  <View style={[styles.barDark, { height: 95 }]} />
+
+                  <View style={{ width: 18 }} />
+
+                  <View style={[styles.barLight, { height: 50 }]} />
+                  <View style={[styles.barLight, { height: 65 }]} />
+                </View>
+              </View>
+
+              <Text style={styles.avgText}>
+                Monthly avg {formatAmount(insights.avgThisMonth)} / day
+              </Text>
+            </View>
+          </View>
+
+          {/* INSIGHT BOX */}
+          <View style={styles.insightBox}>
+            <View style={styles.insightLeft}>
+              <Lightbulb color="#F6B100" size={20} />
+
+              <View style={{ marginLeft: 10 }}>
+                <Text style={styles.insightTitle}>
+                  You're spending 12% less this month
+                </Text>
+
+                <Text style={styles.insightDesc}>
+                  That's like saving ₹2,350 so far!
+                </Text>
+              </View>
+            </View>
+
+            <ChevronRight size={18} color="#17A34A" />
+          </View>
+        </View>
+
+        {/* WEEKLY SNAPSHOT */}
+        <View style={styles.card}>
+          <View style={styles.snapshotHeader}>
+            <Text style={styles.sectionTitle}>
+              WEEKLY SNAPSHOT
+            </Text>
+
+            <Text style={styles.weekText}>This week</Text>
+          </View>
+
+          <View style={styles.snapshotRow}>
+            <View style={styles.progressCircle}>
+              <Text style={styles.progressText}>70%</Text>
+            </View>
+
+            <View style={styles.snapshotStats}>
+              <Text style={styles.snapshotAmount}>
+                ₹3,820 of ₹5,500
+              </Text>
+
+              <Text style={styles.snapshotSub}>
+                weekly budget used
+              </Text>
+
+              <View style={styles.progressBarBg}>
+                <View style={styles.progressBarFill} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statsGrid}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>3</Text>
+              <Text style={styles.statLabel}>Biggest spends</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>6</Text>
+              <Text style={styles.statLabel}>Transactions</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>₹1,680</Text>
+              <Text style={styles.statLabel}>Left for week</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* CATEGORY + IMPACT */}
+        <View style={styles.row}>
+          {/* CATEGORY */}
+          <View style={[styles.card, { flex: 1 }]}>
+            <Text style={styles.sectionTitle}>
+              TOP CATEGORIES
+            </Text>
+
+            <View style={styles.categoryItem}>
+              <View style={styles.categoryIcon}>
+                <ShoppingBag size={18} color="#16A34A" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <View style={styles.categoryRow}>
+                  <Text style={styles.categoryName}>
+                    Shopping
+                  </Text>
+
+                  <Text style={styles.categoryAmount}>
+                    ₹6,240
+                  </Text>
+                </View>
+
+                <View style={styles.categoryBarBg}>
+                  <View
+                    style={[
+                      styles.categoryBarFill,
+                      { width: '70%' },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.categoryItem}>
+              <View
                 style={[
-                  styles.heroValue,
-                  monthStats.net >= 0 ? styles.positiveValue : styles.negativeValue,
+                  styles.categoryIcon,
+                  { backgroundColor: '#F4E8FF' },
                 ]}
               >
-                {formatAmount(Math.abs(monthStats.net))}
-              </Text>
-              <Text style={styles.heroSub}>{monthStats.net >= 0 ? 'Surplus' : 'Deficit'}</Text>
+                <Utensils size={18} color="#8B5CF6" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <View style={styles.categoryRow}>
+                  <Text style={styles.categoryName}>
+                    Food
+                  </Text>
+
+                  <Text style={styles.categoryAmount}>
+                    ₹4,120
+                  </Text>
+                </View>
+
+                <View style={styles.categoryBarBg}>
+                  <View
+                    style={[
+                      styles.categoryBarFill,
+                      {
+                        width: '52%',
+                        backgroundColor: '#8B5CF6',
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
             </View>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>
-                {Math.round(monthStats.savingsRate * 100)}% saved
-              </Text>
+
+            <View style={styles.categoryItem}>
+              <View
+                style={[
+                  styles.categoryIcon,
+                  { backgroundColor: '#FFF3E1' },
+                ]}
+              >
+                <Home size={18} color="#F59E0B" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <View style={styles.categoryRow}>
+                  <Text style={styles.categoryName}>
+                    Home
+                  </Text>
+
+                  <Text style={styles.categoryAmount}>
+                    ₹2,980
+                  </Text>
+                </View>
+
+                <View style={styles.categoryBarBg}>
+                  <View
+                    style={[
+                      styles.categoryBarFill,
+                      {
+                        width: '40%',
+                        backgroundColor: '#F59E0B',
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
             </View>
           </View>
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Income</Text>
-              <Text style={styles.heroStatValue}>{formatAmount(monthStats.income)}</Text>
-            </View>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Expenses</Text>
-              <Text style={styles.heroStatValue}>{formatAmount(monthStats.expenses)}</Text>
-            </View>
-          </View>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${Math.min(monthStats.savingsRate * 100, 100)}%` },
-              ]}
+
+          {/* IMPACT */}
+          <View style={[styles.card, styles.impactCard]}>
+            <Image
+              source={require('../../assets/images/personalityThePlanner.png')}
+              style={styles.treeImage}
+              resizeMode="contain"
             />
+
+            <Text style={styles.impactSave}>
+              ₹2,350
+            </Text>
+
+            <Text style={styles.impactText}>
+              saved this month 🌱
+            </Text>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Spending trend</Text>
-            <Text style={styles.sectionValue}>{formatAmount(weeklySpend.average)} avg/day</Text>
+        {/* GUIDANCE */}
+        <View style={styles.guidanceCard}>
+          <Image
+            source={require('../../assets/images/personalityThePlanner.png')}
+            style={styles.guidanceImage}
+            resizeMode="contain"
+          />
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.guidanceTitle}>
+              GEKKO GUIDANCE
+            </Text>
+
+            <Text style={styles.guidanceMain}>
+              Try a no-spend weekend!
+            </Text>
+
+            <Text style={styles.guidanceSub}>
+              You usually spend ₹1,200 on weekends.
+            </Text>
           </View>
-          <View style={styles.chartCard}>
-            <Svg width="100%" height={lineChart.height} viewBox={`0 0 ${lineChart.width} ${lineChart.height}`}>
-              <Defs>
-                <LinearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor={Colors.expense} stopOpacity={0.25} />
-                  <Stop offset="100%" stopColor={Colors.expense} stopOpacity={0} />
-                </LinearGradient>
-              </Defs>
-              <Path d={lineChart.areaPath} fill="url(#spendGradient)" />
-              <Path d={lineChart.linePath} stroke={Colors.expense} strokeWidth={3} fill="none" />
-              {lineChart.points.map((point, index) => (
-                <Circle key={`dot-${index}`} cx={point.x} cy={point.y} r={4} fill={Colors.expense} />
-              ))}
-            </Svg>
-            <View style={styles.axisRow}>
-              {weeklySpend.days.map(day => (
-                <Text key={day.dateString} style={styles.axisLabel}>
-                  {day.date.toLocaleDateString('en-IN', { weekday: 'short' })}
-                </Text>
-              ))}
-            </View>
-          </View>
+
+          <ChevronRight size={20} color="#17A34A" />
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Category split</Text>
-            <Text style={styles.sectionValue}>{formatAmount(categoryStats.total)} spent</Text>
-          </View>
-          <View style={styles.chartCard}>
-            <View style={styles.donutRow}>
-              <View style={styles.donutWrap}>
-                <Svg width={DONUT_SIZE} height={DONUT_SIZE}>
-                  <G rotation="-90" origin={`${DONUT_SIZE / 2} ${DONUT_SIZE / 2}`}>
-                    {donutSegments.map(segment => (
-                      <Circle
-                        key={segment.id}
-                        cx={DONUT_SIZE / 2}
-                        cy={DONUT_SIZE / 2}
-                        r={DONUT_RADIUS}
-                        stroke={segment.color}
-                        strokeWidth={DONUT_STROKE}
-                        strokeDasharray={segment.dashArray}
-                        strokeDashoffset={segment.dashOffset}
-                        strokeLinecap="round"
-                        fill="none"
-                      />
-                    ))}
-                  </G>
-                </Svg>
-                <View style={styles.donutCenter}>
-                  <Text style={styles.donutValue}>{formatAmount(categoryStats.total)}</Text>
-                  <Text style={styles.donutLabel}>spent</Text>
-                </View>
-              </View>
-              <View style={styles.legendList}>
-                {categoryStats.total > 0 ? (
-                  categoryStats.segments.map(segment => (
-                    <View key={segment.id} style={styles.legendRow}>
-                      <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-                      <Text style={styles.legendLabel}>{segment.label}</Text>
-                      <Text style={styles.legendValue}>{formatAmount(segment.value)}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyText}>No expense data yet.</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* BADGE CARD */}
+        <View style={styles.rewardCard}>
+          <View style={styles.rewardLeft}>
+            <Wallet size={28} color="#fff" />
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Income vs expenses</Text>
-            <Text style={styles.sectionValue}>{formatAmount(monthStats.net)} net</Text>
-          </View>
-          <View style={styles.chartCard}>
-            <Svg width="100%" height={barChart.height} viewBox={`0 0 ${barChart.width} ${barChart.height}`}>
-              <Line
-                x1={20}
-                y1={barChart.baseline}
-                x2={barChart.width - 20}
-                y2={barChart.baseline}
-                stroke={Colors.border}
-                strokeWidth={1}
-              />
-              <Rect
-                x={barChart.width / 2 - barChart.spacing}
-                y={barChart.baseline - barChart.incomeHeight}
-                width={barChart.barWidth}
-                height={barChart.incomeHeight}
-                rx={12}
-                fill={Colors.income}
-              />
-              <Rect
-                x={barChart.width / 2 + barChart.spacing - barChart.barWidth}
-                y={barChart.baseline - barChart.expenseHeight}
-                width={barChart.barWidth}
-                height={barChart.expenseHeight}
-                rx={12}
-                fill={Colors.expense}
-              />
-            </Svg>
-            <View style={styles.barLegendRow}>
-              <View style={styles.barLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.income }]} />
-                <View>
-                  <Text style={styles.legendLabel}>Income</Text>
-                  <Text style={styles.legendValue}>{formatAmount(monthStats.income)}</Text>
-                </View>
-              </View>
-              <View style={styles.barLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.expense }]} />
-                <View>
-                  <Text style={styles.legendLabel}>Expenses</Text>
-                  <Text style={styles.legendValue}>{formatAmount(monthStats.expenses)}</Text>
-                </View>
+            <View style={{ marginLeft: 12 }}>
+              <Text style={styles.rewardTitle}>
+                Unlock “Smart Saver”
+              </Text>
+
+              <Text style={styles.rewardSub}>
+                Save ₹3,000 more this month
+              </Text>
+
+              <View style={styles.rewardBarBg}>
+                <View style={styles.rewardBarFill} />
               </View>
             </View>
+          </View>
+
+          <View style={styles.rewardBadge}>
+            <Text style={styles.rewardBadgeText}>
+              LV 2
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -401,221 +521,454 @@ export default function InsightsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  page: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f4f6f5',
   },
-  backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    gap: 12,
   },
-  greenGlow: {
-    position: 'absolute',
-    top: -120,
-    right: -140,
-    width: 280,
-    height: 240,
-    borderRadius: 200,
-    backgroundColor: Colors.primary,
-    opacity: 0.18,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
+
   header: {
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.base,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  headerTitle: {
+
+  heading: {
+    fontSize: FontSizes.lg,
+    fontWeight: '800',
+    color: '#111827',
+  },
+
+  subHeading: {
+    marginTop: 4,
+    color: '#6B7280',
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+  },
+
+  heroCard: {
+    backgroundColor: '#0b5f4b',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  heroImage: {
+    width: 95,
+    height: 95,
+    marginRight: 14,
+  },
+
+  heroTitle: {
+    color: '#fff',
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+
+  heroText: {
+    color: '#D8F5E0',
+    fontSize: FontSizes.md,
+    lineHeight: 22,
+  },
+
+  streakBox: {
+    alignItems: 'center',
+  },
+
+  fireBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: '#16A34A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  streakTitle: {
+    color: '#FDE68A',
+    fontWeight: '700',
+    fontSize: FontSizes.base,
+  },
+
+  streakSub: {
+    color: '#D1FAE5',
+    fontSize: FontSizes.sm,
+    marginTop: 4,
+  },
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  sectionTitle: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
+  compareContainer: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+
+  compareBox: {
+    flex: 1,
+  },
+
+  compareLabel: {
+    color: '#6B7280',
+    fontSize: FontSizes.md,
+  },
+
+  compareAmount: {
     fontSize: FontSizes.xxl,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    marginTop: 6,
+    color: '#111827',
   },
-  headerSubtitle: {
+
+  blurLine: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 10,
+    width: '80%',
+  },
+
+  avgText: {
+    marginTop: 16,
+    color: '#6B7280',
+    fontSize: FontSizes.sm,
+  },
+
+  graphContainer: {
+    marginTop: 18,
+    height: 120,
+    justifyContent: 'flex-end',
+  },
+
+  dashedLine: {
+    position: 'absolute',
+    top: '50%',
+    width: '100%',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#16A34A',
+  },
+
+  graphBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+
+  barLight: {
+    width: 10,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#C7F0CF',
+    marginRight: 4,
+  },
+
+  barDark: {
+    width: 12,
+    height: 70,
+    borderRadius: 10,
+    backgroundColor: '#16A34A',
+    marginRight: 4,
+  },
+
+  insightBox: {
+    marginTop: 16,
+    backgroundColor: '#F2FAF3',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  insightLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  insightTitle: {
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 3,
+  },
+
+  insightDesc: {
+    color: '#6B7280',
+    fontSize: FontSizes.sm,
+  },
+
+  snapshotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  weekText: {
+    color: '#16A34A',
+    fontWeight: '600',
+  },
+
+  snapshotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  progressCircle: {
+    width: 86,
+    height: 86,
+    borderRadius: 999,
+    borderWidth: 10,
+    borderColor: '#16A34A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+
+  progressText: {
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+
+  snapshotStats: {
+    flex: 1,
+  },
+
+  snapshotAmount: {
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  snapshotSub: {
+    color: '#6B7280',
+    marginTop: 4,
+  },
+
+  progressBarBg: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    marginTop: 14,
+  },
+
+  progressBarFill: {
+    height: '100%',
+    width: '70%',
+    backgroundColor: '#16A34A',
+    borderRadius: 999,
+  },
+
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 22,
+  },
+
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  statNumber: {
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  statLabel: {
+    marginTop: 6,
+    fontSize: FontSizes.sm,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  categoryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#E9F7EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  categoryName: {
+    fontWeight: '600',
+    color: '#111827',
+  },
+
+  categoryAmount: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+
+  categoryBarBg: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    marginTop: 10,
+  },
+
+  categoryBarFill: {
+    height: '100%',
+    backgroundColor: '#16A34A',
+    borderRadius: 999,
+  },
+
+  impactCard: {
+    width: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  treeImage: {
+    width: 80,
+    height: 80,
+    marginBottom: 12,
+  },
+
+  impactSave: {
+    fontSize: FontSizes.xxl,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+
+  impactText: {
+    textAlign: 'center',
+    color: '#6B7280',
+    marginTop: 8,
+  },
+
+  guidanceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  guidanceImage: {
+    width: 70,
+    height: 70,
+    marginRight: 14,
+  },
+
+  guidanceTitle: {
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+
+  guidanceMain: {
+    fontSize: FontSizes.base,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+
+  guidanceSub: {
+    color: '#6B7280',
     marginTop: 4,
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
   },
-  heroCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  heroRow: {
+
+  rewardCard: {
+    backgroundColor: '#0b5f4b',
+    borderRadius: 12,
+    padding: 12,
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  heroLabel: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  heroValue: {
-    fontSize: 34,
-    fontWeight: '700',
-    marginTop: Spacing.xs,
-  },
-  positiveValue: {
-    color: Colors.income,
-  },
-  negativeValue: {
-    color: Colors.expense,
-  },
-  heroSub: {
-    marginTop: 2,
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  heroBadge: {
-    backgroundColor: 'rgba(46, 204, 113, 0.14)',
-    borderRadius: 999,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(46, 204, 113, 0.24)',
-  },
-  heroBadgeText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-    color: Colors.primaryDark,
-  },
-  heroStatsRow: {
+
+  rewardLeft: {
     flexDirection: 'row',
-    gap: Spacing.base,
-    marginTop: Spacing.lg,
-  },
-  heroStat: {
+    alignItems: 'center',
     flex: 1,
-    padding: Spacing.base,
-    backgroundColor: Colors.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  heroStatLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
+
+  rewardTitle: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: FontSizes.base,
   },
-  heroStatValue: {
+
+  rewardSub: {
+    color: '#D1FAE5',
     marginTop: 6,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    fontSize: FontSizes.sm,
   },
-  progressTrack: {
+
+  rewardBarBg: {
     height: 8,
-    backgroundColor: Colors.border,
     borderRadius: 999,
-    overflow: 'hidden',
-    marginTop: Spacing.base,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginTop: 10,
+    width: 150,
   },
-  progressFill: {
+
+  rewardBarFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    width: '35%',
+    backgroundColor: '#B7FF6A',
     borderRadius: 999,
   },
-  section: {
-    marginTop: Spacing.xl,
-    gap: Spacing.base,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  sectionValue: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  chartCard: {
-    backgroundColor: Colors.surface,
+
+  rewardBadge: {
+    width: 58,
+    height: 58,
     borderRadius: 20,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  axisRow: {
-    marginTop: Spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  axisLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-  },
-  donutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-  },
-  donutWrap: {
-    width: DONUT_SIZE,
-    height: DONUT_SIZE,
-    alignItems: 'center',
+    backgroundColor: '#16A34A',
     justifyContent: 'center',
-  },
-  donutCenter: {
-    position: 'absolute',
     alignItems: 'center',
   },
-  donutValue: {
-    fontSize: FontSizes.md,
+
+  rewardBadgeText: {
+    color: '#fff',
     fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  donutLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-  },
-  legendList: {
-    flex: 1,
-    gap: Spacing.sm,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendLabel: {
-    flex: 1,
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  legendValue: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  emptyText: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  barLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.base,
-  },
-  barLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    fontSize: FontSizes.base,
   },
 });

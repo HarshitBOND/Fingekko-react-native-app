@@ -5,7 +5,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
 import { STORAGE_KEYS } from '../constants/storage';
-import { Goal, Transaction, UserProfile } from '../constants/types';
+import { Goal, QuestState, Transaction, UserProfile } from '../constants/types';
+import type { AuthSession } from '../types';
 
 // ─── Generic Helpers ──────────────────────────────────────────────
 
@@ -109,6 +110,20 @@ async function loadData<T>(key: string): Promise<T | null> {
   }
 }
 
+// ─── Auth Session ─────────────────────────────────────────────────
+
+export async function getAuthSession(): Promise<AuthSession | null> {
+  return loadData<AuthSession>(STORAGE_KEYS.AUTH_SESSION);
+}
+
+export async function saveAuthSession(session: AuthSession): Promise<void> {
+  await saveData(STORAGE_KEYS.AUTH_SESSION, session);
+}
+
+export async function clearAuthSession(): Promise<void> {
+  await storage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+}
+
 // ─── Transactions ─────────────────────────────────────────────────
 
 export async function getTransactions(): Promise<Transaction[]> {
@@ -166,4 +181,14 @@ export async function saveGoal(goal: Goal): Promise<void> {
   const existing = await getGoals();
   const updated = [goal, ...existing];
   await saveData(STORAGE_KEYS.GOALS, updated);
+}
+
+// ─── Quests ───────────────────────────────────────────────────────
+
+export async function getQuestState(): Promise<QuestState | null> {
+  return loadData<QuestState>(STORAGE_KEYS.QUESTS);
+}
+
+export async function saveQuestState(state: QuestState): Promise<void> {
+  await saveData(STORAGE_KEYS.QUESTS, state);
 }

@@ -1,21 +1,24 @@
+import type { ApiUser, GoalsResponse, ProfileResponse, TransactionsResponse } from '@/types';
+import { apiRequest } from '@/utils/api';
+import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useMemo, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Navbar from '../../components/Navbar';
 import { Colors, FontSizes, Spacing } from '../../constants/Colors';
-import { Goal, Transaction, UserProfile } from '../../constants/types';
-import { formatCurrency, formatDate, generateId } from '../../utils/helpers';
-import { getGoals, getProfile, getTransactions, saveGoal } from '../../utils/storage';
+import { Goal, Transaction } from '../../constants/types';
+import { formatCurrency, formatDate } from '../../utils/helpers';
 
 const EMOJI_OPTIONS = ['🎯', '🏠', '🚗', '🎓', '✈️', '💍', '📱'];
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -50,7 +53,8 @@ function toDateString(date: Date): string {
 }
 
 export default function GoalScreen() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { getToken, isSignedIn } = useAuth();
+  const [profile, setProfile] = useState<ApiUser | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [title, setTitle] = useState('');
@@ -65,19 +69,31 @@ export default function GoalScreen() {
       let isActive = true;
 
       async function loadData() {
-        const [nextProfile, nextTransactions, nextGoals] = await Promise.all([
-          getProfile(),
-          getTransactions(),
-          getGoals(),
+        if (!isSignedIn) {
+          setProfile(null);
+          setTransactions([]);
+          setGoals([]);
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          return;
+        }
+
+        const [profileResponse, transactionsResponse, goalsResponse] = await Promise.all([
+          apiRequest<ProfileResponse>('/api/profile', {}, token),
+          apiRequest<TransactionsResponse>('/api/transactions', {}, token),
+          apiRequest<GoalsResponse>('/api/goals', {}, token),
         ]);
 
         if (!isActive) {
           return;
         }
 
-        setProfile(nextProfile);
-        setTransactions(nextTransactions);
-        setGoals(nextGoals);
+        setProfile(profileResponse.user);
+        setTransactions(transactionsResponse.transactions);
+        setGoals(goalsResponse.goals);
       }
 
       loadData();
@@ -85,7 +101,7 @@ export default function GoalScreen() {
       return () => {
         isActive = false;
       };
-    }, [])
+    }, [getToken, isSignedIn])
   );
 
   const currency = profile?.currency ?? '₹';
@@ -178,21 +194,26 @@ export default function GoalScreen() {
       }
     }
 
-    const newGoal: Goal = {
-      id: generateId(),
+    const payload = {
       title: trimmedTitle,
       targetAmount: targetValue,
       currentAmount: clampedCurrent,
       deadline: toDateString(deadlineDate),
-      createdAt: Date.now(),
       emoji,
     };
 
     setIsSaving(true);
 
     try {
-      await saveGoal(newGoal);
-      setGoals(currentGoals => [newGoal, ...currentGoals]);
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Missing auth token');
+      }
+      const response = await apiRequest<{ goal: Goal }>('/api/goals', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }, token);
+      setGoals(currentGoals => [response.goal, ...currentGoals]);
       setTitle('');
       setTargetAmount('');
       setCurrentAmount('');
@@ -208,11 +229,9 @@ export default function GoalScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={styles.container}>
-        <View pointerEvents="none" style={styles.backgroundLayer}>
-          <View style={styles.greenGlow} />
-        </View>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          <Navbar />
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Goals</Text>
             <Text style={styles.headerSubtitle}>Make the plan, we will track the pace.</Text>
@@ -472,46 +491,32 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  container: {
+  page: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f4f6f5',
   },
-  backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  greenGlow: {
-    position: 'absolute',
-    top: -120,
-    left: -140,
-    width: 280,
-    height: 240,
-    borderRadius: 200,
-    backgroundColor: Colors.primary,
-    opacity: 0.18,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   header: {
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.base,
+    paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontSize: FontSizes.lg,
+    fontWeight: '800',
+    color: '#111827',
   },
   headerSubtitle: {
     marginTop: 4,
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
+    color: '#6b7280',
   },
   heroCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
     shadowColor: Colors.shadow,
@@ -556,12 +561,12 @@ const styles = StyleSheet.create({
   heroStatsRow: {
     flexDirection: 'row',
     gap: Spacing.base,
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
   },
   heroStat: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: Spacing.base,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -587,20 +592,21 @@ const styles = StyleSheet.create({
   heroHintText: {
     fontSize: FontSizes.sm,
     color: Colors.expense,
+    borderRadius: 12,
   },
   section: {
     marginTop: Spacing.xl,
     gap: Spacing.base,
   },
   sectionTitle: {
-    fontSize: FontSizes.lg,
+    marginTop: Spacing.md,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
   formCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.base,
@@ -654,7 +660,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   emojiChip: {
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: Spacing.sm,
@@ -670,7 +676,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: Colors.primary,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingVertical: Spacing.base,
     alignItems: 'center',
     shadowColor: Colors.primary,
@@ -690,8 +696,8 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 18,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.sm,
@@ -720,8 +726,8 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 18,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -737,11 +743,11 @@ const styles = StyleSheet.create({
   },
   goalCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: Spacing.base,
+    marginBottom: Spacing.md,
     gap: Spacing.sm,
   },
   goalHeader: {

@@ -1,7 +1,24 @@
+import { useUser } from '@clerk/clerk-expo';
 import { Bell, TextAlignStart } from 'lucide-react-native';
 import { View, Text, StyleSheet, Image } from 'react-native';
 
 export default function Navbar() {
+  const { user } = useUser();
+  const initials = (() => {
+    if (!user) {
+      return 'FG';
+    }
+
+    const first = user.firstName?.trim() || '';
+    const last = user.lastName?.trim() || '';
+    const fallback = user.username?.trim() || user.fullName?.trim() || '';
+    const source = first || fallback;
+    const initialA = source ? source.charAt(0).toUpperCase() : 'F';
+    const initialB = last ? last.charAt(0).toUpperCase() : 'G';
+
+    return `${initialA}${initialB}`;
+  })();
+
   return (
     <View style={styles.header}>
 
@@ -26,7 +43,7 @@ export default function Navbar() {
         <Bell size={22} color="#374151" />
 
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>AR</Text>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
       </View>
 

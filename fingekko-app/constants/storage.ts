@@ -5,4 +5,6 @@ export const STORAGE_KEYS = {
   STREAK:       'fingekko_streak',
   PROFILE:      'fingekko_profile',
   ACHIEVEMENTS: 'fingekko_achievements',
+  QUESTS:       'fingekko_quests_state',
+  AUTH_SESSION: 'fingekko_auth_session',
 } as const;

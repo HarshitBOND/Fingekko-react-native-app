@@ -1,50 +1,63 @@
+import type { ApiUser, GoalsResponse, ProfileResponse, TransactionsResponse } from '@/types';
+import { apiRequest } from '@/utils/api';
+import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { BarChart, ChevronLeft, Plus, Target } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Navbar from '../../components/Navbar';
 import { Colors, FontSizes, Spacing } from '../../constants/Colors';
 import { Goal, Transaction, UserProfile } from '../../constants/types';
 import { formatCurrency } from '../../utils/helpers';
 import { calculateSafeToSpend } from '../../utils/safe-to-spend';
-import { getGoals, getProfile, getTransactions } from '../../utils/storage';
 
 export default function SafeToSpendScreen() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { getToken, isSignedIn } = useAuth();
+  const [profile, setProfile] = useState<ApiUser | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
       async function loadData() {
-        const [nextProfile, nextTransactions, nextGoals] = await Promise.all([
-          getProfile(),
-          getTransactions(),
-          getGoals(),
+        if (!isSignedIn) {
+          setProfile(null);
+          setTransactions([]);
+          setGoals([]);
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          return;
+        }
+
+        const [profileResponse, transactionsResponse, goalsResponse] = await Promise.all([
+          apiRequest<ProfileResponse>('/api/profile', {}, token),
+          apiRequest<TransactionsResponse>('/api/transactions', {}, token),
+          apiRequest<GoalsResponse>('/api/goals', {}, token),
         ]);
 
         if (!isActive) {
           return;
         }
 
-        setProfile(nextProfile);
-        setTransactions(nextTransactions);
-        setGoals(nextGoals);
+        setProfile(profileResponse.user);
+        setTransactions(transactionsResponse.transactions);
+        setGoals(goalsResponse.goals);
       }
 
       loadData();
 
       fadeAnim.setValue(0);
       slideAnim.setValue(16);
-      glowAnim.setValue(0);
-
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -56,22 +69,39 @@ export default function SafeToSpendScreen() {
           duration: 450,
           useNativeDriver: true,
         }),
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
       ]).start();
 
       return () => {
         isActive = false;
       };
-    }, [fadeAnim, glowAnim, slideAnim])
+    }, [fadeAnim, getToken, isSignedIn, slideAnim])
   );
 
+  const profileSnapshot = useMemo<UserProfile | null>(() => {
+    if (!profile) {
+      return null;
+    }
+
+    return {
+      name: profile.name,
+      monthlyIncome: profile.monthlyIncome ?? 0,
+      currency: profile.currency ?? '₹',
+      xp: profile.xp,
+      level: profile.level,
+      personalityType: null,
+      streak: {
+        currentStrak: 0,
+        bestStreak: 0,
+        lastTrackedDate: '',
+        trackedDates: [],
+      },
+      achievements: [],
+    };
+  }, [profile]);
+
   const safeSpendData = useMemo(
-    () => calculateSafeToSpend({ profile, transactions, goals }),
-    [goals, profile, transactions]
+    () => calculateSafeToSpend({ profile: profileSnapshot, transactions, goals }),
+    [goals, profileSnapshot, transactions]
   );
 
   const currency = profile?.currency ?? '₹';
@@ -81,11 +111,9 @@ export default function SafeToSpendScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View pointerEvents="none" style={styles.backgroundLayer}>
-        <Animated.View style={[styles.blueGlow, { opacity: glowAnim }]} />
-      </View>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.page}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <Navbar />
         <Animated.View
           style={[
             styles.contentWrap,
@@ -166,31 +194,17 @@ export default function SafeToSpendScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  page: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f4f6f5',
   },
-  backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  blueGlow: {
-    position: 'absolute',
-    top: -140,
-    left: -120,
-    right: -120,
-    height: 260,
-    borderRadius: 200,
-    backgroundColor: Colors.savings,
-    opacity: 0.2,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   contentWrap: {
-    paddingTop: Spacing.lg,
-    gap: Spacing.xl,
+    gap: 12,
   },
   topBar: {
     flexDirection: 'row',
@@ -221,8 +235,8 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -284,13 +298,13 @@ const styles = StyleSheet.create({
   metricRow: {
     flexDirection: 'row',
     gap: Spacing.base,
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
   },
   metricCard: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 16,
-    padding: Spacing.base,
+    borderRadius: 12,
+    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -341,8 +355,8 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: Spacing.lg,
+    borderRadius: 12,
+    padding: Spacing.md,
     gap: Spacing.base,
     borderWidth: 1,
     borderColor: Colors.border,
