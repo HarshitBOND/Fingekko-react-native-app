@@ -15,13 +15,17 @@ async function connectDb() {
   }
 
   try {
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      dbName: process.env.MONGODB_DB_NAME || undefined,
+    });
     isConnected = true;
     usingMemory = false;
     return { usingMemory: false };
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
-    throw error;
+    console.warn('Failed to connect to MongoDB. Falling back to in-memory storage.');
+    isConnected = false;
+    usingMemory = true;
+    return { usingMemory: true };
   }
 }
 

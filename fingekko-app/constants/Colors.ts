@@ -37,6 +37,7 @@ export const FontSizes = {
   xl: 22,
   xxl: 28,
   xxxl: 36,
+  xxxxl: 48,
 };
 
 // Spacing system (use multiples of 4)

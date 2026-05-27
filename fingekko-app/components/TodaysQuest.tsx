@@ -4,7 +4,7 @@ import type { QuestStateResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { BarChart3, Check, Target, Wallet, X, Zap } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Divider from './Divider';
 import ProgressBar from './ProgressBar';
@@ -467,8 +467,13 @@ export default function TodaysQuest() {
   const { getToken, isSignedIn } = useAuth();
   const [questState, setQuestState] = useState<QuestState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const getTokenRef = useRef(getToken);
 
   const questBankById = useMemo(() => new Map(questBank.map((quest) => [quest.id, quest])), []);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   useEffect(() => {
     let isActive = true;
@@ -478,7 +483,7 @@ export default function TodaysQuest() {
       let stored: QuestState | null = null;
 
       if (isSignedIn) {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (token) {
           const response = await apiRequest<QuestStateResponse>('/api/quests/state', {}, token);
           stored = response.state as QuestState | null;
@@ -492,7 +497,7 @@ export default function TodaysQuest() {
           : createDailyQuestState(todayKey, difficultyByType);
 
       if ((!stored || stored.date !== todayKey) && isSignedIn) {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (token) {
           await apiRequest('/api/quests/state', {
             method: 'PUT',
@@ -512,7 +517,7 @@ export default function TodaysQuest() {
     return () => {
       isActive = false;
     };
-  }, [getToken, isSignedIn]);
+  }, [isSignedIn]);
 
   const updateQuestStatus = (questId: number, nextStatus: QuestStatus) => {
     setQuestState((current) => {

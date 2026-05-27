@@ -15,11 +15,17 @@ const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
   : null;
 
+function isLikelyOrigin(origin) {
+  return /^https?:\/\//i.test(origin);
+}
+
+const resolvedOrigins = corsOrigins ? corsOrigins.filter(isLikelyOrigin) : null;
+
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(
   cors({
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    origin: resolvedOrigins && resolvedOrigins.length > 0 ? resolvedOrigins : true,
     credentials: true,
   })
 );

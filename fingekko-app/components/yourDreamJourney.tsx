@@ -1,4 +1,4 @@
-import {View, Text, StyleSheet,Image} from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { Colors, FontSizes } from '../constants/Colors';
 import ProgressBar from './ProgressBar';
 
@@ -16,13 +16,27 @@ export default function YourDreamJourney() {
             <Text style={styles.description}>
                 Goa Trip 🌴
             </Text>
-            <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
-                <View style={{flexDirection: 'row', alignItems: 'center', marginVertical: 8}}>
-                    <Text style={styles.savedAmount}> Rs. {Saved.toLocaleString()}</Text>
-                    <Text style={styles.goalAmount}> / Rs. {goal.toLocaleString()}</Text>
-                </View>
-                <Text style={{fontSize: FontSizes.xs}}> {Math.round(levelProgress * 100)}% </Text>
-            </View>
+                        <View style={styles.amountRow}>
+                                <View style={styles.amountValues}>
+                                        <Text
+                                            style={styles.savedAmount}
+                                            numberOfLines={1}
+                                            adjustsFontSizeToFit
+                                            minimumFontScale={0.8}
+                                        >
+                                            Rs. {Saved.toLocaleString()}
+                                        </Text>
+                                        <Text
+                                            style={styles.goalAmount}
+                                            numberOfLines={1}
+                                            adjustsFontSizeToFit
+                                            minimumFontScale={0.8}
+                                        >
+                                            / Rs. {goal.toLocaleString()}
+                                        </Text>
+                                </View>
+                                <Text style={styles.amountPercent}>{Math.round(levelProgress * 100)}%</Text>
+                        </View>
             <ProgressBar
                 progress={levelProgress}
                 height={6}
@@ -70,5 +84,22 @@ const styles = StyleSheet.create({
     goalAmount: {
         fontSize: 12,
         color: Colors.textSecondary,
+    },
+    amountRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginVertical: 8,
+    },
+    amountValues: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexShrink: 1,
+        minWidth: 0,
+    },
+    amountPercent: {
+        fontSize: FontSizes.xs,
+        color: Colors.textSecondary,
+        marginLeft: 8,
     },
 });

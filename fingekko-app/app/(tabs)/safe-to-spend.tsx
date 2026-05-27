@@ -4,7 +4,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Navbar from '../../components/Navbar';
@@ -18,9 +18,14 @@ export default function SafeToSpendScreen() {
   const [profile, setProfile] = useState<ApiUser | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const getTokenRef = useRef(getToken);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   useFocusEffect(
     useCallback(() => {
@@ -34,7 +39,7 @@ export default function SafeToSpendScreen() {
           return;
         }
 
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (!token) {
           return;
         }
@@ -74,7 +79,7 @@ export default function SafeToSpendScreen() {
       return () => {
         isActive = false;
       };
-    }, [fadeAnim, getToken, isSignedIn, slideAnim])
+    }, [fadeAnim, isSignedIn, slideAnim])
   );
 
   const profileSnapshot = useMemo<UserProfile | null>(() => {
@@ -137,7 +142,14 @@ export default function SafeToSpendScreen() {
               <Text style={styles.heroBadgeText}>You can safely spend</Text>
             </View>
             <View style={styles.heroAmountRow}>
-              <Text style={styles.heroAmount}>{formatAmount(safeSpendData.safeToSpend, true)}</Text>
+                <Text
+                  style={styles.heroAmount}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  {formatAmount(safeSpendData.safeToSpend, true)}
+                </Text>
               <Text style={styles.heroAmountSuffix}>today</Text>
             </View>
             <View style={styles.progressTrack}>
@@ -265,11 +277,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: Spacing.sm,
     marginTop: Spacing.base,
+    minWidth: 0,
   },
   heroAmount: {
     fontSize: 46,
     fontWeight: '700',
     color: Colors.savings,
+    flexShrink: 1,
   },
   heroAmountSuffix: {
     fontSize: FontSizes.base,

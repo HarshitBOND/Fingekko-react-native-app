@@ -3,14 +3,16 @@ import type { HomeResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BarChart3, CalendarDays, ChevronRight, CircleAlert, Eye, Flame, Target, Wallet, Zap } from 'lucide-react-native';
-import { useEffect, useMemo, useState, useWindowDimensions } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BarChart3, CalendarDays, ChevronRight, CircleAlert, Eye, Flame, Target, TrendingUp, Wallet, Zap } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import Divider from '../../components/Divider';
 import Navbar from '../../components/Navbar';
-import { Colors, FontSizes } from '../../constants/Colors';
+import { Colors, FontSizes, Spacing } from '../../constants/Colors';
+import { router } from 'expo-router';
+
 
 
 export default function TabIndex(){
@@ -25,6 +27,11 @@ export default function TabIndex(){
   const ringOffset = ringCircumference * (1 - spendProgress);
   const { getToken, isSignedIn } = useAuth();
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
+  const getTokenRef = useRef(getToken);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   useEffect(() => {
     let isActive = true;
@@ -36,7 +43,7 @@ export default function TabIndex(){
       }
 
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (!token) {
           return;
         }
@@ -54,7 +61,7 @@ export default function TabIndex(){
     return () => {
       isActive = false;
     };
-  }, [getToken, isSignedIn]);
+  }, [isSignedIn]);
 
   const stats = homeData?.stats ?? null;
 
@@ -122,7 +129,14 @@ export default function TabIndex(){
                 <Text style={styles.balanceLabel}>Remaining Balance</Text>
                 <Eye style={styles.balanceEye} size={16} color="rgba(255,255,255,0.9)" />
               </View>
-              <Text style={styles.balanceValue}>₹12,450</Text>
+              <Text
+                style={styles.balanceValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                ₹12,450
+              </Text>
               <View style={styles.healthBadge}>
                 <Text style={styles.healthBadgeText}>Healthy</Text>
               </View>
@@ -138,7 +152,14 @@ export default function TabIndex(){
             <View style={styles.balanceTopRight}>
               <View style={styles.spendInfo}>
                 <Text style={styles.spendLabel}>This Month's Spend</Text>
-                <Text style={styles.spendValue}>₹8,560</Text>
+                <Text
+                  style={styles.spendValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  ₹8,560
+                </Text>
                 <Text style={styles.spendSubLabel}>of ₹20,000 budget</Text>
               </View>
 
@@ -193,7 +214,14 @@ export default function TabIndex(){
                   <CalendarDays size={18} color="#ffffff" />
                 </View>
                 <View style={styles.bottomText}>
-                  <Text style={styles.bottomValue}>11</Text>
+                  <Text
+                    style={styles.bottomValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    11
+                  </Text>
                   <Text style={styles.bottomLabel}>Days left in this month</Text>
                 </View>
               </View>
@@ -203,7 +231,14 @@ export default function TabIndex(){
                   <Wallet size={18} color="#ffffff" />
                 </View>
                 <View style={styles.bottomText}>
-                  <Text style={styles.bottomValue}>₹1,120</Text>
+                  <Text
+                    style={styles.bottomValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    ₹1,120
+                  </Text>
                   <Text style={styles.bottomLabel}>Avg. daily spend</Text>
                 </View>
               </View>
@@ -236,12 +271,67 @@ export default function TabIndex(){
           </View>
 
             <View style={[styles.streakPlaceholder, { width: width < 420 ? '100%' : '48%' }]}>
-              <Text>Streak</Text>
+              <View style={{alignItems: 'center',justifyContent: 'center', flexDirection: 'row'}}>
+                <Text style={{fontSize: FontSizes.md}}>You are at roll! 🔥</Text>
+              </View>
+              <View style={styles.streakRow}>
+                      <Text style={styles.streakNumber}>12</Text>
+                      <Text style={styles.daysText}>Days</Text>
+              </View>
+              <Text style={{fontSize: FontSizes.sm, color:'#2f3845', textAlign:'center', marginTop: 8, fontWeight: '700'}}>
+                      On track streak
+              </Text>
             </View>
         </View>
 
         <View style={styles.SuggestionsPlaceholder}>
+            <View style={{flex:1, flexDirection:'row', alignItems:'center',  gap: 6, paddingHorizontal: 12}}>
+              <View style={{width: 48, height: 48, borderRadius: 24, backgroundColor: '#f2f0b8', alignItems:'center', justifyContent:'center'}}>
+              <TrendingUp color='#10b981'/>
+              </View>
+              <View>
+                <Text style={{fontSize: FontSizes.md, color: Colors.textPrimary, fontWeight: '800'}}>
+                  Better  choice?
+                </Text>
+                <Text style={{fontSize: FontSizes.sm, color:'#2f3845'}}>
+                  Cook at home more often to save ₹850!
+                </Text>
+                <Text style={{fontSize: FontSizes.sm, color:'#2f3845'}}>
+                  Move 2 days closer to Goa Trip
+                </Text>
+              </View>
+            </View>
+            <Pressable
+            onPress={() => router.push('/insights')}
+            style={{
+              flex: 0.25,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              
+              backgroundColor: '#27c260',
+              justifyContent: 'center',
+              borderRadius: 16,
+              paddingHorizontal: 12,
+              margin: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: 'white',
+                fontWeight: '400',
+                fontSize: FontSizes.xs,
+                padding:8,
+              }}
+            >
+              See Impact
+            </Text>
 
+            <ChevronRight
+              size={18}
+              color="rgba(255,255,255,0.6)"
+            />
+          </Pressable>
         </View>
 
       </ScrollView>
@@ -285,6 +375,7 @@ const styles= StyleSheet.create({
 
   balanceTopLeft: {
     flex: 1,
+    minWidth: 0,
   },
 
   balanceTopRight: {
@@ -292,6 +383,7 @@ const styles= StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    minWidth: 0,
   },
 
   balanceLabelRow: {
@@ -306,6 +398,28 @@ const styles= StyleSheet.create({
     marginLeft: 'auto',
   },
 
+    streakRow: {
+    gap: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+
+  streakNumber: {
+    fontSize: FontSizes.xxxxl,
+    fontWeight: '600',
+    color: '#10B981',
+    lineHeight: 44,
+    marginTop: 6,
+  },
+
+  daysText: {
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    color: '#10B981',
+    marginTop: 6,
+  },
+
   balanceLabel: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: FontSizes.sm,
@@ -316,6 +430,7 @@ const styles= StyleSheet.create({
     color: Colors.textLight,
     fontSize: 30,
     fontWeight: '700',
+    flexShrink: 1,
   },
 
   healthBadge: {
@@ -335,6 +450,7 @@ const styles= StyleSheet.create({
   spendInfo: {
     flex: 1,
     paddingRight: 8,
+    minWidth: 0,
   },
 
   spendLabel: {
@@ -349,6 +465,7 @@ const styles= StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
     marginBottom: 4,
+    flexShrink: 1,
   },
 
   spendSubLabel: {
@@ -372,8 +489,9 @@ const styles= StyleSheet.create({
   plannerImage: {
     width: '100%',
     height: undefined,
-    aspectRatio: 1.8,
-    borderRadius: 12,
+    aspectRatio: 0.8,
+    marginTop: 10,
+
   },
 
   streakPlaceholder:{
@@ -391,9 +509,12 @@ const styles= StyleSheet.create({
 
   SuggestionsPlaceholder:{
     height: 80,
-    backgroundColor: '#8be1f1',
+    backgroundColor: '#f2f1ce',
     borderRadius: 20,
     marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,  
   },
 
   datePill:{
@@ -491,12 +612,14 @@ const styles= StyleSheet.create({
 
   bottomText: {
     flex: 1,
+    minWidth: 0,
   },
 
   bottomValue: {
     color: '#9AD84D',
     fontSize: 18,
     fontWeight: '700',
+    flexShrink: 1,
   },
 
   bottomLabel: {

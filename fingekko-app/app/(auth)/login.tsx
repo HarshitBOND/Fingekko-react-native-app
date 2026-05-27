@@ -3,14 +3,14 @@ import { useSignIn } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -76,6 +76,10 @@ export default function LoginScreen() {
               secureTextEntry
             />
           </View>
+
+          <Pressable style={styles.linkButton} onPress={() => router.push('/(auth)/reset-password')}>
+            <Text style={styles.linkText}>Forgot password?</Text>
+          </Pressable>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

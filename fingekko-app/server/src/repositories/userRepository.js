@@ -9,9 +9,12 @@ function buildUser(data) {
   const stats = data.stats ?? {};
   const user = {
     id: crypto.randomUUID(),
+    clerkId: data.clerkId ?? null,
     name: data.name,
     email: data.email.toLowerCase(),
-    passwordHash: data.passwordHash,
+    passwordHash: data.passwordHash ?? null,
+    monthlyIncome: data.monthlyIncome ?? 0,
+    currency: data.currency ?? 'Rs. ',
     level: data.level ?? 1,
     xp: data.xp ?? 0,
     points: data.points ?? 0,
@@ -65,6 +68,24 @@ async function findByEmail(email) {
   return User.findOne({ email: normalized }).lean();
 }
 
+async function findByClerkId(clerkId) {
+  if (!clerkId) {
+    return null;
+  }
+
+  const { usingMemory } = getDbStatus();
+  if (usingMemory) {
+    for (const user of memoryUsers.values()) {
+      if (user.clerkId === clerkId) {
+        return cloneUser(user);
+      }
+    }
+    return null;
+  }
+
+  return User.findOne({ clerkId }).lean();
+}
+
 async function findById(id) {
   const { usingMemory } = getDbStatus();
   if (usingMemory) {
@@ -89,6 +110,12 @@ async function updateById(id, update) {
       updatedAt: new Date(),
     };
 
+    if (update.email && update.email !== current.email) {
+      memoryEmails.delete(current.email);
+      memoryEmails.set(update.email.toLowerCase(), current.id);
+      next.email = update.email.toLowerCase();
+    }
+
     memoryUsers.set(id, next);
     return cloneUser(next);
   }
@@ -98,6 +125,7 @@ async function updateById(id, update) {
 
 module.exports = {
   createUser,
+  findByClerkId,
   findByEmail,
   findById,
   updateById,

@@ -1,20 +1,33 @@
+import { apiRequest } from '@/utils/api';
+import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ChevronRight,
-  CircleDollarSign,
-  Plus,
-  ReceiptText,
-  Search,
-  Sparkles,
-  Users,
-  Wallet,
+    ArrowDownLeft,
+    ArrowUpRight,
+    ChevronRight,
+    CircleDollarSign,
+    Plus,
+    ReceiptText,
+    Search,
+    Sparkles,
+    Users,
+    Wallet,
 } from 'lucide-react-native';
-import { type ElementType } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { type ElementType, useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, FontSizes } from '../../constants/Colors';
+import { Colors, FontSizes, Spacing } from '../../constants/Colors';
 
 type StatCard = {
   label: string;
@@ -129,6 +142,79 @@ const ACTIVITY: ActivityCard[] = [
 ];
 
 export default function AddScreen() {
+  const { getToken, isSignedIn } = useAuth();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('');
+  const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const openModal = () => {
+    setError('');
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleSave = async () => {
+    setError('');
+
+    if (!isSignedIn) {
+      setError('Please sign in to add an expense.');
+      return;
+    }
+
+    const amountValue = Number(amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+
+    if (!category.trim()) {
+      setError('Category is required.');
+      return;
+    }
+
+    if (!date.trim()) {
+      setError('Date is required.');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Missing auth token');
+      }
+
+      await apiRequest('/api/transactions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: transactionType,
+          amount: amountValue,
+          category: category.trim(),
+          date: date.trim(),
+        }),
+      }, token);
+
+      setAmount('');
+      setCategory('');
+      setTransactionType('expense');
+      setDate(new Date().toISOString().split('T')[0]);
+      setIsModalOpen(false);
+      Alert.alert('Saved', 'Expense added successfully.');
+    } catch (saveError) {
+      setError('Unable to save the expense.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.page}>
       <LinearGradient
@@ -158,7 +244,7 @@ export default function AddScreen() {
             <Pressable style={styles.iconButton}>
               <Search size={18} color="#1f2937" />
             </Pressable>
-            <Pressable style={styles.primaryIconButton}>
+            <Pressable style={styles.primaryIconButton} onPress={openModal}>
               <Plus size={18} color="#ffffff" />
             </Pressable>
           </View>
@@ -279,7 +365,7 @@ export default function AddScreen() {
           </View>
 
           <View style={styles.bannerActions}>
-            <Pressable style={styles.bannerPrimaryButton}>
+            <Pressable style={styles.bannerPrimaryButton} onPress={openModal}>
               <Text style={styles.bannerPrimaryButtonText}>+ Add Expense</Text>
             </Pressable>
             <Pressable style={styles.bannerSecondaryButton}>
@@ -320,6 +406,100 @@ export default function AddScreen() {
           })}
         </View>
       </ScrollView>
+
+      <Modal transparent visible={isModalOpen} animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add expense</Text>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Amount</Text>
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                style={styles.fieldInput}
+                placeholder="0"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Category</Text>
+              <TextInput
+                value={category}
+                onChangeText={setCategory}
+                style={styles.fieldInput}
+                placeholder="Dinner, Rent, Taxi"
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TextInput
+                value={date}
+                onChangeText={setDate}
+                style={styles.fieldInput}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+
+            <View style={styles.typeRow}>
+              <Pressable
+                style={[
+                  styles.typeButton,
+                  transactionType === 'expense' && styles.typeButtonActive,
+                ]}
+                onPress={() => setTransactionType('expense')}
+              >
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    transactionType === 'expense' && styles.typeButtonTextActive,
+                  ]}
+                >
+                  Expense
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.typeButton,
+                  transactionType === 'income' && styles.typeButtonActive,
+                ]}
+                onPress={() => setTransactionType('income')}
+              >
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    transactionType === 'income' && styles.typeButtonTextActive,
+                  ]}
+                >
+                  Income
+                </Text>
+              </Pressable>
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.secondaryButton} onPress={closeModal}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -744,6 +924,104 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: '#166534',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    padding: Spacing.lg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    gap: Spacing.base,
+  },
+  modalTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  fieldInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 10,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.background,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  typeButton: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+  },
+  typeButtonActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(50, 198, 114, 0.12)',
+  },
+  typeButtonText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  typeButtonTextActive: {
+    color: Colors.primary,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  secondaryButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  secondaryButtonText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  primaryButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+  },
+  primaryButtonText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  errorText: {
+    color: Colors.expense,
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
   },
   activityRow: {
     flexDirection: 'row',
