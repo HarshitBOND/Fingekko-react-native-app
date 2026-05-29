@@ -1,163 +1,52 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  
-} from 'react-native';
-
-import {
-  Flame,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-} from 'lucide-react-native';
-import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet } from 'react-native';
+import { Flame, Check } from 'lucide-react-native';
 
 const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-const calendarDays = [
-  { day: 13, active: true },
-  { day: 14, active: true },
-  { day: 15, active: true },
-  { day: 16, active: true },
-  { day: 17, active: true },
-  { day: 18, active: true },
-  { day: 19, active: false },
-];
+export default function Streak({ compact = false, days = 12 }) {
+  const small = !!compact;
 
-export default function StreakScreen({compact = false}) {
+  const size = small ? 34 : 48;
+  const circleSize = small ? 28 : 34;
+  const numberFont = small ? 36 : 56;
+  const labelFont = small ? 14 : 18;
+
   return (
-    <View style={styles.container}>
-      {/* Top Text */}
-      <Text style={styles.heading}>
-        You’re on a roll! 🔥
-      </Text>
-
-      {/* Main Streak */}
-      <View style={styles.streakRow}>
-        <Text style={styles.streakNumber}>12</Text>
-        <Text style={styles.daysText}>Days</Text>
+    <View style={[styles.root, small && styles.rootCompact]}>
+      <View style={styles.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, small && styles.titleSmall]}>You’re on a roll! 🔥</Text>
+          <View style={styles.streakRowCentered}>
+            <Text style={[styles.streakNumber, { fontSize: numberFont }]}>{days}</Text>
+            <Text style={[styles.daysText, { fontSize: labelFont }]}>Days</Text>
+          </View>
+          <Text style={[styles.subHeading, small && styles.subHeadingSmall]}>On track streak</Text>
+        </View>
+        <View style={styles.bestBox}>
+          <View style={styles.iconWrap}>
+            <Flame size={small ? 18 : 22} color="#ff6b00" />
+          </View>
+          <View>
+            <Text style={styles.bestLabel}>Best</Text>
+            <Text style={styles.bestValue}>12d</Text>
+          </View>
+        </View>
       </View>
 
-      <Text style={styles.subHeading}>
-        On track streak
-      </Text>
-
-      {/* Week Progress */}
-      <View style={styles.weekWrapper}>
-        {weekDays.map((day, index) => (
-          <View key={index} style={styles.weekItem}>
+      <View style={styles.weekRow}>
+        {weekDays.map((d, i) => (
+          <View key={i} style={styles.weekItem}>
             <View
               style={[
-                styles.circle,
-                index === 6
-                  ? styles.unfilledCircle
-                  : styles.filledCircle,
+                styles.dayCircle,
+                { width: circleSize, height: circleSize, borderRadius: circleSize / 2 },
+                i === 6 ? styles.unfilled : styles.filled,
               ]}
             >
-              {index !== 6 && (
-                <Check
-                  size={14}
-                  color="#fff"
-                  strokeWidth={3}
-                />
-              )}
+              {i !== 6 && <Check size={small ? 12 : 14} color="#fff" />}
             </View>
-
-            <Text style={styles.weekText}>
-              {day}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Best Streak Card */}
-      <View style={styles.card}>
-        <View style={styles.iconContainer}>
-          <Flame
-            size={22}
-            color="#ff6b00"
-            fill="#ff6b00"
-          />
-        </View>
-
-        <View>
-          <Text style={styles.cardTitle}>
-            Best Streak
-          </Text>
-
-          <Text style={styles.cardValue}>
-            12 Days
-          </Text>
-        </View>
-      </View>
-
-      {/* Motivation Card */}
-      <View style={styles.card}>
-        <View style={styles.avatarBox}>
-          <Text style={styles.avatar}>🦎</Text>
-        </View>
-
-        <View>
-          <Text style={styles.cardTitle}>
-            Discipline today
-          </Text>
-
-          <Text style={styles.cardDesc}>
-            Freedom tomorrow.
-          </Text>
-        </View>
-      </View>
-
-      {/* Calendar Header */}
-      <View style={styles.calendarHeader}>
-        <View>
-          <Text style={styles.calendarTitle}>
-            Streak Calendar
-          </Text>
-
-          <Text style={styles.monthText}>
-            May 2024
-          </Text>
-        </View>
-
-        <View style={styles.arrowRow}>
-          <ChevronLeft size={20} color="#444" />
-          <ChevronRight size={20} color="#444" />
-        </View>
-      </View>
-
-      {/* Calendar Week Names */}
-      <View style={styles.calendarWeekRow}>
-        {weekDays.map((day, index) => (
-          <Text
-            key={index}
-            style={styles.calendarWeekText}
-          >
-            {day}
-          </Text>
-        ))}
-      </View>
-
-      {/* Calendar Dates */}
-      <View style={styles.calendarDatesRow}>
-        {calendarDays.map((item, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dateCircle,
-              item.active && styles.activeDateCircle,
-            ]}
-          >
-            <Text
-              style={[
-                styles.dateText,
-                item.active && styles.activeDateText,
-              ]}
-            >
-              {item.day}
-            </Text>
+            <Text style={[styles.weekLabel, small && styles.weekLabelSmall]}>{d}</Text>
           </View>
         ))}
       </View>
@@ -166,210 +55,105 @@ export default function StreakScreen({compact = false}) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
+  root: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
   },
-
-  heading: {
-    fontSize: 22,
+  rootCompact: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  title: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#111',
-    textAlign: 'center',
+    marginBottom: 6,
   },
-
-  streakRow: {
+  titleSmall: {
+    fontSize: 14,
+  },
+  streakRowCentered: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginTop: 20,
   },
-
   streakNumber: {
-    fontSize: 80,
+    color: '#10B981',
     fontWeight: '800',
-    color: '#10B981',
-    lineHeight: 85,
+    lineHeight: 1,
   },
-
   daysText: {
-    fontSize: 32,
-    fontWeight: '700',
     color: '#10B981',
-    marginBottom: 10,
-    marginLeft: 6,
+    fontWeight: '700',
+    marginLeft: 8,
   },
-
   subHeading: {
-    textAlign: 'center',
-    marginTop: 8,
-    color: '#444',
-    fontSize: 16,
-    fontWeight: '500',
+    color: '#4b5563',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 6,
   },
-
-  weekWrapper: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 28,
+  subHeadingSmall: {
+    fontSize: 12,
   },
-
-  weekItem: {
-    alignItems: 'center',
-  },
-
-  circle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  bestBox: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingLeft: 8,
   },
-
-  filledCircle: {
-    backgroundColor: '#16A34A',
-  },
-
-  unfilledCircle: {
-    borderWidth: 2,
-    borderColor: '#BDBDBD',
-    backgroundColor: '#fff',
-  },
-
-  weekText: {
-    marginTop: 8,
-    color: '#777',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    marginTop: 18,
-    padding: 16,
-    borderRadius: 20,
-
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-
-    elevation: 3,
-  },
-
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: '#FFF4EC',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginBottom: 4,
   },
-
-  avatarBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#EEFBEF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-
-  avatar: {
-    fontSize: 28,
-  },
-
-  cardTitle: {
-    fontSize: 15,
-    color: '#555',
-    fontWeight: '500',
-  },
-
-  cardValue: {
-    marginTop: 2,
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111',
-  },
-
-  cardDesc: {
-    marginTop: 2,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-  },
-
-  calendarHeader: {
-    marginTop: 34,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  calendarTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111',
-  },
-
-  monthText: {
-    marginTop: 6,
-    fontSize: 15,
+  bestLabel: {
+    fontSize: 12,
     color: '#666',
-    fontWeight: '500',
-  },
-
-  arrowRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-
-  calendarWeekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 22,
-    paddingHorizontal: 4,
-  },
-
-  calendarWeekText: {
-    width: 36,
+    fontWeight: '600',
     textAlign: 'center',
-    color: '#666',
-    fontWeight: '600',
   },
-
-  calendarDatesRow: {
+  bestValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111',
+    textAlign: 'center',
+  },
+  weekRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: 12,
   },
-
-  dateCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  weekItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  dayCircle: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
   },
-
-  activeDateCircle: {
+  filled: {
     backgroundColor: '#16A34A',
   },
-
-  dateText: {
-    color: '#444',
+  unfilled: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+  },
+  weekLabel: {
+    marginTop: 6,
+    color: '#6b7280',
+    fontSize: 12,
     fontWeight: '600',
   },
-
-  activeDateText: {
-    color: '#fff',
+  weekLabelSmall: {
+    fontSize: 11,
   },
 });

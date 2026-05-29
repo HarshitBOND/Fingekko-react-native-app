@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs , usePathname} from 'expo-router';
 import { BarChart, Home, Plus, Target, User } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,12 +12,13 @@ type TabIconProps = {
   icon: React.ElementType; // Icon component from lucide-react-native
   label: string;           // Tab label text
   focused: boolean;        // Is this tab currently active?
+  activeColor: string;
 };
 
-function TabIcon({ icon: Icon, label, focused }: TabIconProps) {
+function TabIcon({ icon: Icon, label, focused, activeColor }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
-      <Icon size={20} color={focused ? Colors.tabBarActive : Colors.tabBarInactive} />
+      <Icon size={20} color={focused ? activeColor : Colors.tabBarInactive} />
       <Text style={[
         styles.tabLabel,
         { color: focused ? Colors.tabBarActive : Colors.tabBarInactive }
@@ -31,6 +32,19 @@ function TabIcon({ icon: Icon, label, focused }: TabIconProps) {
 // ─── Main Tab Layout ──────────────────────────────────────────────
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+
+  const pathname = usePathname();
+
+  const activeColor =
+  pathname.startsWith('/insights')
+    ? '#5aabf6' // blue
+    : pathname.startsWith('/goals')
+    ? '#F97316' // orange
+    : pathname.startsWith('/profile')
+    ? '#A855F7' // purple
+    : pathname.startsWith('/add')
+    ? '#10B981' // emerald
+    : '#22C55E'; // default green
 
   return (
     <Tabs
@@ -49,7 +63,7 @@ export default function TabLayout() {
         name="index"             // matches app/(tabs)/index.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Home} label="Home" focused={focused} />
+            <TabIcon icon={Home} label="Home" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -58,7 +72,7 @@ export default function TabLayout() {
         name="insights"          // matches app/(tabs)/insights.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={BarChart} label="Insights" focused={focused} />
+            <TabIcon icon={BarChart} label="Insights" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -68,7 +82,9 @@ export default function TabLayout() {
         name="add"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={styles.addButton}>
+            <View style={[styles.addButton,
+              { backgroundColor: activeColor , shadowColor: activeColor} // Slightly transparent when not focused
+            ]}>
               <Plus size={24} color={Colors.textLight} />
             </View>
           ),
@@ -79,7 +95,7 @@ export default function TabLayout() {
         name="goals"             // matches app/(tabs)/goals.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Target} label="Goals" focused={focused} />
+            <TabIcon icon={Target} label="Goals" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -88,7 +104,7 @@ export default function TabLayout() {
         name="profile"           // matches app/(tabs)/profile.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={User} label="Profile" focused={focused} />
+            <TabIcon icon={User} label="Profile" focused={focused} activeColor={activeColor} />
           ),
         }}
       />

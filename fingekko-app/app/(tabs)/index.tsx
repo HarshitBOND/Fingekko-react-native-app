@@ -3,15 +3,15 @@ import type { HomeResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { BarChart3, CalendarDays, ChevronRight, CircleAlert, Eye, Flame, Target, TrendingUp, Wallet, Zap } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import Divider from '../../components/Divider';
 import Navbar from '../../components/Navbar';
 import { Colors, FontSizes, Spacing } from '../../constants/Colors';
-import { router } from 'expo-router';
 
 
 
@@ -117,135 +117,145 @@ export default function TabIndex(){
             </View>
         </View>
 
-        <LinearGradient
-          colors={['#095542', '#05282d']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.balanceCardPlaceholder}
-        >
-          <View style={styles.balanceTopRow}>
-            <View style={styles.balanceTopLeft}>
-              <View style={styles.balanceLabelRow}>
-                <Text style={styles.balanceLabel}>Remaining Balance</Text>
-                <Eye style={styles.balanceEye} size={16} color="rgba(255,255,255,0.9)" />
-              </View>
-              <Text
-                style={styles.balanceValue}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-              >
-                ₹12,450
-              </Text>
-              <View style={styles.healthBadge}>
-                <Text style={styles.healthBadgeText}>Healthy</Text>
-              </View>
-            </View>
-
-            <Divider
-              orientation="vertical"
-              thickness={1}
-              color="rgba(255, 255, 255, 0.19)"
-              inset={8}
-            />
-
-            <View style={styles.balanceTopRight}>
-              <View style={styles.spendInfo}>
-                <Text style={styles.spendLabel}>This Month's Spend</Text>
-                <Text
-                  style={styles.spendValue}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  ₹8,560
-                </Text>
-                <Text style={styles.spendSubLabel}>of ₹20,000 budget</Text>
-              </View>
-
-              <View style={styles.circularChart}>
-                <Svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
-                  <Circle
-                    cx={ringSize / 2}
-                    cy={ringSize / 2}
-                    r={ringRadius}
-                    stroke="rgba(255,255,255,0.18)"
-                    strokeWidth={ringStroke}
-                    fill="none"
-                  />
-                  <Circle
-                    cx={ringSize / 2}
-                    cy={ringSize / 2}
-                    r={ringRadius}
-                    stroke="#9AD84D"
-                    strokeWidth={ringStroke}
-                    fill="none"
-                    strokeDasharray={[ringCircumference]}
-                    strokeDashoffset={ringOffset}
-                    strokeLinecap="round"
-                    transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
-                  />
-                </Svg>
-                <View style={styles.circularText}>
-                  <Text style={styles.circularValue}>43%</Text>
-                  <Text style={styles.circularLabel}>used</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-
-
-          <View style={styles.progressTrack}>
+        <View style={styles.balanceCardPlaceholder}>
+          <ImageBackground
+            source={require('../../assets/images/bgHomePage.png')}
+            resizeMode="cover"
+            style={styles.balanceBackgroundImage}
+            imageStyle={styles.balanceBackgroundImageStyle}
+          >
             <LinearGradient
-              colors={['#9AD84D', '#76C93A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.progressFill, { width: `${remainingProgress * 100}%` }]}
+              colors={['rgba(5, 40, 45, 0.12)', 'rgba(5, 40, 45, 0.45)', 'rgba(5, 40, 45, 0.9)']}
+              locations={[0, 0.58, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.balanceFadeOverlay}
             />
-          </View>
 
-          <View style={styles.balanceBottomDivider} />
-
-          <View style={styles.bottomRow}>
-            <View style={styles.bottomItems}>
-              <View style={styles.bottomItem}>
-                <View style={styles.bottomIconWrap}>
-                  <CalendarDays size={18} color="#ffffff" />
-                </View>
-                <View style={styles.bottomText}>
+            <View style={styles.balanceContent}>
+              <View style={styles.balanceTopRow}>
+                <View style={styles.balanceTopLeft}>
+                  <View style={styles.balanceLabelRow}>
+                    <Text style={styles.balanceLabel}>Remaining Balance</Text>
+                    <Eye style={styles.balanceEye} size={16} color="rgba(255,255,255,0.9)" />
+                  </View>
                   <Text
-                    style={styles.bottomValue}
+                    style={styles.balanceValue}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.8}
                   >
-                    11
+                    ₹12,450
                   </Text>
-                  <Text style={styles.bottomLabel}>Days left in this month</Text>
+                  <View style={styles.healthBadge}>
+                    <Text style={styles.healthBadgeText}>Healthy</Text>
+                  </View>
+                </View>
+
+                <Divider
+                  orientation="vertical"
+                  thickness={1}
+                  color="rgba(255, 255, 255, 0.19)"
+                  inset={8}
+                />
+
+                <View style={styles.balanceTopRight}>
+                  <View style={styles.spendInfo}>
+                    <Text style={styles.spendLabel}>This Month's Spend</Text>
+                    <Text
+                      style={styles.spendValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      ₹8,560
+                    </Text>
+                    <Text style={styles.spendSubLabel}>of ₹20,000 budget</Text>
+                  </View>
+
+                  <View style={styles.circularChart}>
+                    <Svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={ringRadius}
+                        stroke="rgba(255,255,255,0.18)"
+                        strokeWidth={ringStroke}
+                        fill="none"
+                      />
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={ringRadius}
+                        stroke="#9AD84D"
+                        strokeWidth={ringStroke}
+                        fill="none"
+                        strokeDasharray={[ringCircumference]}
+                        strokeDashoffset={ringOffset}
+                        strokeLinecap="round"
+                        transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+                      />
+                    </Svg>
+                    <View style={styles.circularText}>
+                      <Text style={styles.circularValue}>43%</Text>
+                      <Text style={styles.circularLabel}>used</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
-              <View style={styles.bottomItemDivider} />
-              <View style={styles.bottomItem}>
-                <View style={styles.bottomIconWrap}>
-                  <Wallet size={18} color="#ffffff" />
+
+              <View style={styles.progressTrack}>
+                <LinearGradient
+                  colors={['#9AD84D', '#76C93A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressFill, { width: `${remainingProgress * 100}%` }]}
+                />
+              </View>
+
+              <View style={styles.balanceBottomDivider} />
+
+              <View style={styles.bottomRow}>
+                <View style={styles.bottomItems}>
+                  <View style={styles.bottomItem}>
+                    <View style={styles.bottomIconWrap}>
+                      <CalendarDays size={18} color="#ffffff" />
+                    </View>
+                    <View style={styles.bottomText}>
+                      <Text
+                        style={styles.bottomValue}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                      >
+                        11
+                      </Text>
+                      <Text style={styles.bottomLabel}>Days left in this month</Text>
+                    </View>
+                  </View>
+                  <View style={styles.bottomItemDivider} />
+                  <View style={styles.bottomItem}>
+                    <View style={styles.bottomIconWrap}>
+                      <Wallet size={18} color="#ffffff" />
+                    </View>
+                    <View style={styles.bottomText}>
+                      <Text
+                        style={styles.bottomValue}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                      >
+                        ₹1,120
+                      </Text>
+                      <Text style={styles.bottomLabel}>Avg. daily spend</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.bottomText}>
-                  <Text
-                    style={styles.bottomValue}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                  >
-                    ₹1,120
-                  </Text>
-                  <Text style={styles.bottomLabel}>Avg. daily spend</Text>
-                </View>
+                <ChevronRight size={18} color="rgba(255,255,255,0.6)" />
               </View>
             </View>
-            <ChevronRight size={18} color="rgba(255,255,255,0.6)" />
-          </View>
-        </LinearGradient>
+          </ImageBackground>
+        </View>
 
         <TodaysProgress items={progressItems} />
 
@@ -351,12 +361,8 @@ const styles= StyleSheet.create({
   },
 
   balanceCardPlaceholder:{
-    backgroundColor: '#0B6E4F',
     borderRadius: 18,
     marginHorizontal: 5,
-    paddingHorizontal: 20,
-    paddingTop: 25,
-    paddingBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6},
     shadowOpacity: 0.18,
@@ -365,6 +371,26 @@ const styles= StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+  },
+
+  balanceBackgroundImage: {
+    minHeight: 220,
+    width: '100%',
+  },
+
+  balanceBackgroundImageStyle: {
+    borderRadius: 18,
+  },
+
+  balanceFadeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  balanceContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 25,
+    paddingBottom: 12,
   },
 
   balanceTopRow: {
