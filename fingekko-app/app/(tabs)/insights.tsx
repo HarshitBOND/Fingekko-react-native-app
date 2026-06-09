@@ -6,19 +6,20 @@ import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import {
-  CalendarRange,
-  ChevronRight,
-  Flame,
-  Home,
-  Lightbulb,
-  ShoppingBag,
-  Utensils
+    CalendarRange,
+    ChevronRight,
+    Flame,
+    Home,
+    Lightbulb,
+    ShoppingBag,
+    Utensils
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Navbar from '../../components/Navbar';
+import { appendDummyExpense, createDummyProfile, createDummyTransactions } from '../../utils/demo-finance';
 
 const F = {
   xs: 10,
@@ -81,8 +82,7 @@ export default function InsightsScreen() {
 
   const currency = profile?.currency ?? '₹';
   const formatAmount = (value: number) => formatCurrency(Math.round(value), currency);
-  const todayKey = new Date().toDateString();
-  const now = useMemo(() => new Date(), [todayKey]);
+  const now = useMemo(() => new Date(), []);
 
   const insights = useMemo(() => {
     const expenses = transactions.filter((item) => item.type === 'expense');
@@ -153,7 +153,6 @@ export default function InsightsScreen() {
     ];
 
     const categories = [...topCategories, ...fallbackCategories].slice(0, 3);
-    const maxCategory = Math.max(1, ...categories.map((c) => c.amount));
 
     const categoryRows = categories.map((item) => {
       const share = totalExpenses > 0 ? Math.round((item.amount / totalExpenses) * 100) : 0;
@@ -440,56 +439,11 @@ export default function InsightsScreen() {
 
   // --- Dummy data / testing helpers -------------------------------------------------
   const [dummyAmount, setDummyAmount] = useState('');
-  const [dummyCategory, setDummyCategory] = useState('Shopping');
-
-  const generateDummyProfile = (): ApiUser => ({
-    id: 'dummy-user',
-    name: 'Demo User',
-    email: 'demo@example.com',
-    monthlyIncome: 30000,
-    currency: '₹',
-    level: 2,
-    xp: 420,
-    points: 1200,
-    userGekko: 'gekko-demo',
-    avatarKey: '',
-  });
-
-  const generateDummyTransactions = (): Transaction[] => {
-    const nowDate = new Date();
-    const thisMonth = nowDate.getMonth();
-    const thisYear = nowDate.getFullYear();
-    const sample: Transaction[] = [];
-    // last month samples
-    for (let i = 1; i <= 6; i++) {
-      const d = new Date(thisYear, thisMonth - 1, Math.min(28, i * 4));
-      sample.push({
-        id: `lm-${i}`,
-        type: 'expense',
-        amount: Math.round(500 + Math.random() * 2500),
-        category: ['Shopping', 'Food', 'Home'][i % 3],
-        date: d.toISOString(),
-        createdAt: d.getTime(),
-      });
-    }
-    // this month samples
-    for (let i = 1; i <= 8; i++) {
-      const d = new Date(thisYear, thisMonth, Math.min(28, i * 3));
-      sample.push({
-        id: `tm-${i}`,
-        type: 'expense',
-        amount: Math.round(200 + Math.random() * 1800),
-        category: ['Food', 'Shopping', 'Home'][i % 3],
-        date: d.toISOString(),
-        createdAt: d.getTime(),
-      });
-    }
-    return sample;
-  };
+  const dummyCategory = 'Shopping';
 
   const enableDummy = () => {
-    setProfile(generateDummyProfile());
-    setTransactions(generateDummyTransactions());
+    setProfile(createDummyProfile());
+    setTransactions(createDummyTransactions());
     setUseDummyData(true);
   };
 
@@ -503,15 +457,7 @@ export default function InsightsScreen() {
     const amt = Number(dummyAmount);
     if (!amt || Number.isNaN(amt)) { Alert.alert('Invalid amount'); return; }
     const nowD = new Date();
-    const tx: Transaction = {
-      id: `manual-${Date.now()}`,
-      type: 'expense',
-      amount: Math.round(amt),
-      category: dummyCategory || 'Misc',
-      date: nowD.toISOString(),
-      createdAt: nowD.getTime(),
-    };
-    setTransactions((t) => [...t, tx]);
+    setTransactions((t) => appendDummyExpense(t, amt, dummyCategory || 'Misc', nowD));
     setDummyAmount('');
   };
 
@@ -884,7 +830,7 @@ export default function InsightsScreen() {
                 <Text style={s.impactSub}>saved this month</Text>
               </View>
               <View style={s.impactGrowBlock}>
-                <Text style={s.impactGrowText}>That's {treesSaved} 🌳</Text>
+                <Text style={s.impactGrowText}>That&apos;s {treesSaved} 🌳</Text>
                 <Text style={s.impactGrowText}>for a greener planet!</Text>
               </View>
             </View>
@@ -924,7 +870,7 @@ export default function InsightsScreen() {
               <Text style={{ fontSize: 26 }}>🎁</Text>
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={s.rewardTitle}>Unlock "Smart Saver" badge</Text>
+              <Text style={s.rewardTitle}>Unlock &quot;Smart Saver&quot; badge</Text>
               <Text style={s.rewardSub}>Save ₹3,000 more this month</Text>
               <View style={s.rewardBarBg}>
                 <View style={[s.rewardBarFill, { width: `${Math.round(rewardProgress * 100)}%` }]} />
@@ -946,7 +892,7 @@ export default function InsightsScreen() {
           <Text style={{ fontSize: 18 }}>💡</Text>
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={s.tipTitle}>Quick tip</Text>
-            <Text style={s.tipText}>Track subscriptions you don't use. You could save up to ₹600/month!</Text>
+            <Text style={s.tipText}>Track subscriptions you don&apos;t use. You could save up to ₹600/month!</Text>
           </View>
           <ChevronRight size={16} color={TEXT_MUTED} />
         </TouchableOpacity>

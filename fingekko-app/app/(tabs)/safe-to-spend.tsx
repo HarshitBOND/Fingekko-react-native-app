@@ -63,7 +63,7 @@ export default function SafeToSpendScreen() {
 
       fadeAnim.setValue(0);
       slideAnim.setValue(16);
-      Animated.parallel([
+      const introAnim = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 450,
@@ -74,10 +74,17 @@ export default function SafeToSpendScreen() {
           duration: 450,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+
+      introAnim.start();
 
       return () => {
         isActive = false;
+        try {
+          introAnim.stop();
+        } catch (e) {
+          // ignore if stop is not supported or has already finished
+        }
       };
     }, [fadeAnim, isSignedIn, slideAnim])
   );

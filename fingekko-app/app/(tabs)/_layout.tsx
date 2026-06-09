@@ -21,8 +21,8 @@ function TabIcon({ icon: Icon, label, focused, activeColor }: TabIconProps) {
       <Icon size={20} color={focused ? activeColor : Colors.tabBarInactive} />
       <Text style={[
         styles.tabLabel,
-        { color: focused ? Colors.tabBarActive : Colors.tabBarInactive }
-      ]}>
+        { color: focused ? Colors.tabBarActive : Colors.tabBarInactive , textAlign: 'center'}
+      ]} numberOfLines={1}>
         {label}
       </Text>
     </View>
