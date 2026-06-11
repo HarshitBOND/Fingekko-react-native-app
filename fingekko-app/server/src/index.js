@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const { connectDb, getDbStatus } = require('./db');
 const authRoutes = require('./routes/auth');
+const clerkWebhookRoutes = require('./routes/clerkWebhook');
 const homeRoutes = require('./routes/home');
 
 const app = express();
@@ -29,7 +30,6 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '1mb' }));
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -44,6 +44,8 @@ app.get('/health', (req, res) => {
   return res.json({ status: 'ok', db: getDbStatus() });
 });
 
+app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
+app.use(express.json({ limit: '1mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api', homeRoutes);
 
@@ -68,10 +70,3 @@ connectDb()
     console.error('Unable to start API server:', error);
     process.exit(1);
   });
-
-  app.post('/webhook', require('./routes/clerkWebhook',(req,res)=>{
-    console.log("🔥 Clerk webhook received:");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-    res.status(200).send('Webhook received');
-  }));

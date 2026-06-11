@@ -46,15 +46,42 @@ function cloneUser(user) {
 
 async function createUser(data) {
   const { usingMemory } = getDbStatus();
-  if (usingMemory) {
-    const user = buildUser(data);
-    memoryUsers.set(user.id, user);
-    memoryEmails.set(user.email, user.id);
-    return cloneUser(user);
-  }
 
-  const created = await User.create(data);
-  return created.toObject();
+  try {
+    if (usingMemory) {
+      const user = buildUser(data);
+      memoryUsers.set(user.id, user);
+      memoryEmails.set(user.email, user.id);
+      return cloneUser(user);
+    }
+
+    const created = await User.create({
+      clerkId: data.clerkId,
+      name: data.name,
+      email: data.email,
+      monthlyIncome: data.monthlyIncome ?? 0,
+      currency: data.currency ?? 'Rs. ',
+      passwordHash: data.passwordHash ?? null,
+      level: 1,
+      xp: 0,
+      points: 0,
+      userGekko: "Planner Gekko",
+      avatarKey: "planner",
+      stats: {
+        dayStreak: 0,
+        questsDone: 0,
+        questsTarget: 4,
+        betterThanYesterday: 0,
+      },
+    });
+
+    console.log("✅ USER SAVED TO MONGO:", created._id);
+
+    return created.toObject();
+  } catch (err) {
+    console.error("❌ CREATE USER FAILED:", err.message);
+    throw err;
+  }
 }
 
 async function findByEmail(email) {
