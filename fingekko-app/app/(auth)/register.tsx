@@ -1,6 +1,7 @@
 import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignUp } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -10,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -22,6 +24,7 @@ export default function RegisterScreen() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const handleRegister = async () => {
     setError('');
@@ -115,13 +118,26 @@ export default function RegisterScreen() {
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  style={styles.input}
-                  placeholder="Minimum 6 characters"
-                  secureTextEntry
-                />
+
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    style={styles.passwordInput}
+                    placeholder="Minimum 6 characters"
+                    secureTextEntry={!isPasswordVisible}
+                  />
+
+                  <TouchableOpacity
+                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  >
+                    {isPasswordVisible ? (
+                      <Eye size={20} color={Colors.textSecondary} />
+                    ) : (
+                      <EyeOff size={20} color={Colors.textSecondary} />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </>
           ) : (
@@ -235,5 +251,21 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     fontSize: FontSizes.sm,
     fontWeight: '600',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.base,
+    backgroundColor: Colors.background,
+  },
+
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
   },
 });

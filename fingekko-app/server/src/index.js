@@ -68,3 +68,10 @@ connectDb()
     console.error('Unable to start API server:', error);
     process.exit(1);
   });
+
+  app.post('/webhook', require('./routes/clerkWebhook',(req,res)=>{
+    console.log("🔥 Clerk webhook received:");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    res.status(200).send('Webhook received');
+  }));

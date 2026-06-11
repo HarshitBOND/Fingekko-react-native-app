@@ -71,7 +71,7 @@ async function authMiddleware(req, res, next) {
       }
     }
 
-    const secret = process.env.JWT_SECRET || 'dev_secret_change_me';
+    const secret = process.env.JWT_SECRET || 'dev_secret_for_fallback';
     const payload = jwt.verify(token, secret);
     const user = await findById(payload.sub);
 

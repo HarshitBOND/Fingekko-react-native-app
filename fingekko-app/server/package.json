@@ -16,6 +16,7 @@
     "jose": "^5.9.6",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.2",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "svix": "^1.95.2"
   }
 }

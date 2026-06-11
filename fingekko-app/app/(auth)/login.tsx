@@ -1,16 +1,18 @@
 import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignIn } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -19,6 +21,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const handleLogin = async () => {
     setError('');
@@ -29,10 +32,15 @@ export default function LoginScreen() {
         return;
       }
 
-      const result = await signIn.create({ identifier: email.trim(), password });
+      const result = await signIn.create({
+        strategy: 'password',
+        identifier: email.trim(),
+        password,
+      });
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
+        router.replace('/(tabs)');
       } else {
         setError('Additional verification required.');
       }
@@ -68,15 +76,27 @@ export default function LoginScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-              placeholder="Your password"
-              secureTextEntry
-            />
-          </View>
 
+            <View style={styles.passwordContainer}>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                style={styles.passwordInput}
+                placeholder="Your password"
+                secureTextEntry={!isPasswordVisible}
+              />
+
+              <TouchableOpacity
+                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+              >
+                {isPasswordVisible ? (
+                  <Eye size={20} color={Colors.textSecondary} />
+                ) : (
+                  <EyeOff size={20} color={Colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
           <Pressable style={styles.linkButton} onPress={() => router.push('/(auth)/reset-password')}>
             <Text style={styles.linkText}>Forgot password?</Text>
           </Pressable>
@@ -136,6 +156,22 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
     fontWeight: '600',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.base,
+    backgroundColor: Colors.background,
+  },
+
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
   },
   input: {
     borderWidth: 1,

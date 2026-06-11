@@ -1,12 +1,14 @@
-import { Tabs , usePathname} from 'expo-router';
+import { useAuth } from '@clerk/clerk-expo';
+import { Redirect, Tabs, usePathname } from 'expo-router';
 import { BarChart, Home, Plus, Target, User } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
 
+
+
 // ─── Custom Tab Bar Icon Component ───────────────────────────────
-// We build our own icon so we can style it exactly like FinGekko
 
 type TabIconProps = {
   icon: React.ElementType; // Icon component from lucide-react-native
@@ -29,8 +31,20 @@ function TabIcon({ icon: Icon, label, focused, activeColor }: TabIconProps) {
   );
 }
 
-// ─── Main Tab Layout ──────────────────────────────────────────────
+// ─── Main Tab Layout ─────────────────────────────────────────────
 export default function TabLayout() {
+
+  const { isLoaded, isSignedIn } = useAuth();
+
+  //if loading the page
+  if(!isLoaded){
+    return null;
+  }
+  // If not signed in, redirect to auth flow
+  if (!isSignedIn) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   const insets = useSafeAreaInsets();
 
   const pathname = usePathname();

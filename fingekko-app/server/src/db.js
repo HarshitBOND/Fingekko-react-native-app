@@ -18,6 +18,7 @@ async function connectDb() {
     await mongoose.connect(uri, {
       dbName: process.env.MONGODB_DB_NAME || undefined,
     });
+    console.log(`Connected to MongoDB`);
     isConnected = true;
     usingMemory = false;
     return { usingMemory: false };

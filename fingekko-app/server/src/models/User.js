@@ -7,10 +7,10 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String },
     monthlyIncome: { type: Number, default: 0 },
-    currency: { type: String, default: 'Rs. ' },
+    currency: { type: String, default: 'INR' },
     level: { type: Number, default: 1 },
-    xp: { type: Number, default: 0 },
-    points: { type: Number, default: 0 },
+    xp: { type: Number, default: 0, min: 0 },
+    points: { type: Number, default: 0 , min: 0},
     userGekko: { type: String, default: 'Planner Gekko' },
     avatarKey: { type: String, default: 'planner' },
     stats: {
