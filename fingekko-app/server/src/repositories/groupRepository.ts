@@ -29,6 +29,10 @@ class GroupRepository {
   async getAllGroups() {
     return Group.find();
   }
+
+  async getGroupsByUser(userId: string) {
+    return Group.find({ members: userId });
+  }
 }
 
 export default new GroupRepository();

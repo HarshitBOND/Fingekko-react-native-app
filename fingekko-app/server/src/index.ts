@@ -42,6 +42,10 @@ app.use(
 );
 app.use(morgan('dev'));
 
+app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
+app.use(express.json({ limit: '1mb' }));
+
+
 app.get('/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', db: getDbStatus() });
 });
@@ -53,8 +57,7 @@ app.get("/", (req: Request,res: Response)=>{
   })
 })
 
-app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
-app.use(express.json({ limit: '1mb' }));
+
 // app.use('/api/auth', authRoutes);
 app.use('/api', homeRoutes);
 app.use("/api/groups", groupRoutes);
@@ -66,8 +69,9 @@ app.use("/api/groups", groupRoutes);
 
 
 
-
-
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err);

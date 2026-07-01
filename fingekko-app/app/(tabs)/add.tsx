@@ -1,12 +1,14 @@
 import { apiRequest } from '@/utils/api';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import {
   ArrowDownLeft,
   ArrowUpRight,
   ChevronRight,
   Menu,
   Plus,
+  Scroll,
   Users,
 } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
@@ -30,10 +32,9 @@ type GroupFromAPI = {
   id: string;
   name: string;
   members: string[];
-  icon: string ;
+  icon: string;
   balance: number;
 };
-
 
 type GroupItem = {
   id: string;
@@ -43,6 +44,15 @@ type GroupItem = {
   amountLabel: string;
   amount: string;
   amountColor: string;
+};
+
+type NonGroupExpenseItem = {
+  id: string;
+  user: string;
+  splitBetween: Map<string, number>;
+  title: string;
+  icon: string;
+
 };
 
 type ActivityItem = {
@@ -57,33 +67,30 @@ type ActivityItem = {
 };
 
 const GROUPS: GroupItem[] = [
+
+];
+
+const NON_GROUP_EXPENSES: NonGroupExpenseItem[] = [
   {
-    id: 'goa',
-    name: 'Goa Trip',
-    members: '4 members',
-    icon: '👥',
-    amountLabel: 'You are owed',
-    amount: '₹1,250',
-    amountColor: '#148a46',
-  },
-  {
-    id: 'cafe',
-    name: 'Weekend Cafe',
-    members: '3 members',
+    id: 'n1',
+    user: 'Alice',
+    splitBetween: new Map([
+      ['Alice', 1240],
+      ['Bob', 1240],
+    ]),
+    title: 'Dinner at Beach Shack',
+    icon: '🍽️',
+  }, {
+    id: 'n2',
+    user: 'Riya',
+    splitBetween: new Map([
+      ['Riya', -80],
+      ['Shreya', 80],
+      ['BehanKiLodi', 80],
+    ]),
+    title: 'Coffee at Cafe Coffee Day',
     icon: '☕',
-    amountLabel: 'You owe',
-    amount: '₹320',
-    amountColor: '#eb5a4f',
-  },
-  {
-    id: 'pg',
-    name: 'PG Expenses',
-    members: '2 members',
-    icon: '🏠',
-    amountLabel: 'You are settled up',
-    amount: '₹0',
-    amountColor: '#148a46',
-  },
+  }
 ];
 
 const ACTIVITY: ActivityItem[] = [
@@ -125,51 +132,203 @@ export default function HomeScreen() {
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [group, setGroup] = useState<GroupItem[]>([]);
+  const [nonGroupExpenses, setNonGroupExpenses] = useState<NonGroupExpenseItem[]>([]);
+  type ModalStep = 'choice' | 'group' | 'expense';
+
+  const [modalStep, setModalStep] = useState<ModalStep>('choice');
+  const [groupName, setGroupName] = useState('');
+  const [groupMemberInput, setGroupMemberInput] = useState('');
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [expenseFriendInput, setExpenseFriendInput] = useState('');
+  const [expenseFriends, setExpenseFriends] = useState<string[]>([]);
 
   const { user } = useUser();
 
+  const fetchGroups = async () => {
+    const token = await getToken();
+    if (!token) return;
+
+    const response = await apiRequest<GroupFromAPI[]>({
+      method: 'get',
+      url: '/api/groups',
+      token,
+    });
+
+    const formatted: GroupItem[] = response.map((g) => ({
+      id: g.id,
+      name: g.name,
+      members: `${g.members.length} members`,
+      icon: g.icon,
+      amountLabel:
+        g.balance > 0
+          ? 'You are owed'
+          : g.balance < 0
+            ? 'You owe'
+            : 'You are settled up',
+      amount: `₹${Math.abs(g.balance)}`,
+      amountColor: g.balance >= 0 ? '#148a46' : '#eb5a4f',
+    }));
+
+    setGroup(formatted);
+  };
+
+
+  const fetchNonGroupExpenses = async () => {
+    const token = await getToken();
+    if (!token) return;
+
+    const response = await apiRequest<NonGroupExpenseItem[]>({
+      method: 'get',
+      url: '/api/non-group-expenses',
+      token,
+    });
+
+    setNonGroupExpenses(response);
+  };
+
+  const refreshData = async () => {
+    await Promise.all([fetchGroups(), fetchNonGroupExpenses()]);
+  };
+
+
   useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const token = await getToken();
-        if (!token) throw new Error('Missing auth token');
-
-        const response = await apiRequest<GroupFromAPI[]>({
-          method: 'get',
-          url: '/api/groups',
-          token,
-        });
-        const formattedGroups: GroupItem[] = response.map((g) => ({
-          id: g.id,
-          name: g.name,
-          members: `${g.members.length} members`,
-          icon: g.icon,
-          amountLabel: g.balance >0 ? 'You are owed' : g.balance < 0 ? 'You owe' : 'You are settled up',
-          amount: `₹${Math.abs(g.balance)}`,
-          amountColor: g.balance >= 0 ? '#148a46' : '#eb5a4f',
-        }));
-
-        setGroup(formattedGroups);
-      } catch (err) {
-        console.error('Error fetching groups:', err);
-        Alert.alert('Error', 'Failed to load groups');
-      }
-    };
-
     if (isSignedIn) {
-      fetchGroups();
+      refreshData();
     }
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn]);
 
   const openModal = () => {
     setError('');
+    resetModalState();
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
   };
+  //////////////////////////////////////////////////////////////
+  const addGroupMember = () => {
+    const trimmed = groupMemberInput.trim();
+    if (trimmed && !groupMembers.includes(trimmed)) {
+      setGroupMembers([...groupMembers, trimmed]);
+      setGroupMemberInput('');
+    }
+  };
 
+  const removeGroupMember = (name: string) => {
+    setGroupMembers(groupMembers.filter((m) => m !== name));
+  };
+
+  const addExpenseFriend = () => {
+    const trimmed = expenseFriendInput.trim();
+    if (trimmed && !expenseFriends.includes(trimmed)) {
+      setExpenseFriends([...expenseFriends, trimmed]);
+      setExpenseFriendInput('');
+    }
+  };
+
+  const removeExpenseFriend = (name: string) => {
+    setExpenseFriends(expenseFriends.filter((f) => f !== name));
+  };
+
+  const resetModalState = () => {
+    setModalStep('choice');
+    setGroupName('');
+    setGroupMemberInput('');
+    setGroupMembers([]);
+    setExpenseFriendInput('');
+    setExpenseFriends([]);
+    setAmount('');
+    setCategory('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setError('');
+  };
+
+  const closeModalFully = () => {
+    setIsModalOpen(false);
+    resetModalState();
+  };
+
+  const handleCreateGroup = async () => {
+    setError('');
+    if (!groupName.trim()) {
+      setError('Group name is required.');
+      return;
+    }
+    if (groupMembers.length === 0) {
+      setError('Add at least one member.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Missing auth token');
+
+      await apiRequest({
+        method: 'post',
+        url: '/api/groups',
+        token,
+        data: { name: groupName.trim(), members: groupMembers },
+      });
+      await refreshData();
+      closeModalFully();
+      Alert.alert('Group created', `${groupName} created with ${groupMembers.length} member(s).`);
+      closeModalFully();
+    } catch {
+      setError('Unable to create group.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+  const handleCreateExpenseWithFriends = async () => {
+    setError('');
+    const amountValue = Number(amount);
+
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+    if (!category.trim()) {
+      setError('Category is required.');
+      return;
+    }
+    if (expenseFriends.length === 0) {
+      setError('Add at least one friend to split with.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Missing auth token');
+
+      await apiRequest({
+        method: 'post',
+        url: '/api/expenses',
+        token,
+        data: {
+          amount: amountValue,
+          category: category.trim(),
+          date: date.trim(),
+          splitWith: expenseFriends,
+        },
+      });
+
+      await refreshData();
+      closeModalFully();
+
+      Alert.alert('Expense added', `₹${amountValue} split with ${expenseFriends.length} friend(s).`);
+      closeModalFully();
+    } catch {
+      setError('Unable to save the expense.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  /////////////////////////////////////////////////////////////////////////////added by claude
   const handleSave = async () => {
     setError('');
 
@@ -202,19 +361,20 @@ export default function HomeScreen() {
         throw new Error('Missing auth token');
       }
 
-      /*await apiRequest(
-        '/api/transactions',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            type: transactionType,
-            amount: amountValue,
-            category: category.trim(),
-            date: date.trim(),
-          }),
-        },
+      await apiRequest({
+        method: 'post',
+        url: '/api/transactions',
         token,
-      );*/
+        data: {
+          type: transactionType,
+          amount: amountValue,
+          category: category.trim(),
+          date: date.trim(),
+        },
+      });
+
+      await refreshData();
+
 
       setAmount('');
       setCategory('');
@@ -251,7 +411,22 @@ export default function HomeScreen() {
     );
   };
 
+  const NongroupExpenseAmount = (expense: NonGroupExpenseItem): number => {
+    const Amount = expense.splitBetween.get(expense.user);
+    return Amount || 0;
+  }
 
+  const getAmountColor = (balance: number) => {
+    if (balance > 0) return '#148a46';
+    if (balance < 0) return '#eb5a4f';
+    return '#6b7280';
+  };
+
+  const getAmountLabel = (balance: number) => {
+    if (balance > 0) return 'You are owed';
+    if (balance < 0) return 'You owe';
+    return 'You are settled up';
+  };
 
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
@@ -322,6 +497,47 @@ export default function HomeScreen() {
           <ChevronRight size={18} color="#9ca3af" />
         </Pressable>
 
+        {/* ─── Non Group Expenses ─── */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeader}>Non Group Expenses</Text>
+          <Text style={styles.sectionLink}>View all</Text>
+        </View>
+
+        <View style={styles.card}>
+          {nonGroupExpenses.length === 0 ? (
+            <View style={{ padding: 16 }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>
+                You have no non-group expenses.
+              </Text>
+            </View>
+          ) : (
+            nonGroupExpenses.map((item, index) => (
+              <Pressable
+                key={item.id}
+                style={[
+                  styles.groupRow,
+                  index !== nonGroupExpenses.length - 1 && styles.divider,
+                ]}
+              >
+                <View style={styles.groupIconWrap}>
+                  <Text style={styles.groupIconEmoji}>{item.icon}</Text>
+                </View>
+                <View style={styles.groupTextWrap}>
+                  <Text style={styles.groupName}>{item.title}</Text>
+                  <Text style={styles.groupMembers}>{Array.from(item.splitBetween.keys()).join(', ')}</Text>
+                </View>
+                <View style={styles.groupRight}>
+                  <Text style={styles.groupStatusLabel}>{getAmountLabel(NongroupExpenseAmount(item) || 0)}</Text>
+                  <Text style={[styles.groupAmount, { color: getAmountColor(NongroupExpenseAmount(item) || 0) }]}>
+                    {`${Math.abs(NongroupExpenseAmount(item))}`}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color="#9ca3af" style={styles.groupChevron} />
+              </Pressable>
+            ))
+          )}
+        </View>
+
         {/* ─── Your Groups ─── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeader}>Your Groups</Text>
@@ -329,30 +545,38 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.card}>
-          {group.map((item, index) => (
-            <Pressable
-              key={item.id}
-              style={[
-                styles.groupRow,
-                index !== group.length - 1 && styles.divider,
-              ]}
-            >
-              <View style={styles.groupIconWrap}>
-                <Text style={styles.groupIconEmoji}>{item.icon}</Text>
-              </View>
-              <View style={styles.groupTextWrap}>
-                <Text style={styles.groupName}>{item.name}</Text>
-                <Text style={styles.groupMembers}>{item.members}</Text>
-              </View>
-              <View style={styles.groupRight}>
-                <Text style={styles.groupStatusLabel}>{item.amountLabel}</Text>
-                <Text style={[styles.groupAmount, { color: item.amountColor }]}>
-                  {item.amount}
-                </Text>
-              </View>
-              <ChevronRight size={16} color="#9ca3af" style={styles.groupChevron} />
-            </Pressable>
-          ))}
+          {group.length === 0 ? (
+            <View style={{ padding: 16 }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>
+                You are not part of any groups yet.
+              </Text>
+            </View>
+          ) : (
+            group.map((item, index) => (
+              <Pressable
+                key={item.id}
+                style={[
+                  styles.groupRow,
+                  index !== group.length - 1 && styles.divider,
+                ]}
+              >
+                <View style={styles.groupIconWrap}>
+                  <Text style={styles.groupIconEmoji}>{item.icon}</Text>
+                </View>
+                <View style={styles.groupTextWrap}>
+                  <Text style={styles.groupName}>{item.name}</Text>
+                  <Text style={styles.groupMembers}>{item.members}</Text>
+                </View>
+                <View style={styles.groupRight}>
+                  <Text style={styles.groupStatusLabel}>{item.amountLabel}</Text>
+                  <Text style={[styles.groupAmount, { color: item.amountColor }]}>
+                    {item.amount}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color="#9ca3af" style={styles.groupChevron} />
+              </Pressable>
+            ))
+          )}
         </View>
 
         {/* ─── Recent Activity ─── */}
@@ -406,98 +630,199 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* ─── Add Expense Modal ─── */}
-      <Modal transparent visible={isModalOpen} animationType="slide" onRequestClose={closeModal}>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add expense</Text>
+      <Modal transparent visible={isModalOpen} animationType="fade" onRequestClose={closeModalFully}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill}>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Amount</Text>
-              <TextInput
-                value={amount}
-                onChangeText={setAmount}
-                style={styles.fieldInput}
-                placeholder="0"
-                keyboardType="decimal-pad"
-              />
-            </View>
+          <View style={styles.centeredOverlay}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View style={styles.floatingCard}>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Category</Text>
-              <TextInput
-                value={category}
-                onChangeText={setCategory}
-                style={styles.fieldInput}
-                placeholder="Dinner, Rent, Taxi"
-              />
-            </View>
+                {/* ─── Step: Choice ─── */}
+                {modalStep === 'choice' && (
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Date</Text>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                style={styles.fieldInput}
-                placeholder="YYYY-MM-DD"
-              />
-            </View>
+                  <>
+                    <Text style={styles.modalTitle}>What do you want to add?</Text>
+                    <Text style={styles.modalSubtitle}>Choose an option to continue</Text>
 
-            <View style={styles.typeRow}>
-              <Pressable
-                style={[
-                  styles.typeButton,
-                  transactionType === 'expense' && styles.typeButtonActive,
-                ]}
-                onPress={() => setTransactionType('expense')}
-              >
-                <Text
-                  style={[
-                    styles.typeButtonText,
-                    transactionType === 'expense' && styles.typeButtonTextActive,
-                  ]}
-                >
-                  Expense
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.typeButton,
-                  transactionType === 'income' && styles.typeButtonActive,
-                ]}
-                onPress={() => setTransactionType('income')}
-              >
-                <Text
-                  style={[
-                    styles.typeButtonText,
-                    transactionType === 'income' && styles.typeButtonTextActive,
-                  ]}
-                >
-                  Income
-                </Text>
-              </Pressable>
-            </View>
+                    <Pressable
+                      style={styles.choiceCard}
+                      onPress={() => setModalStep('group')}
+                    >
+                      <View style={styles.choiceIconWrap}>
+                        <Users size={22} color="#148a46" />
+                      </View>
+                      <View style={styles.choiceTextWrap}>
+                        <Text style={styles.choiceTitle}>Create a Group</Text>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                      </View>
+                      <ChevronRight size={18} color="#9ca3af" />
+                    </Pressable>
 
-            <View style={styles.modalActions}>
-              <Pressable style={styles.secondaryButton} onPress={closeModal}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isSaving ? 'Saving...' : 'Save'}
-                </Text>
-              </Pressable>
-            </View>
+                    <Pressable
+                      style={styles.choiceCard}
+                      onPress={() => setModalStep('expense')}
+                    >
+                      <View style={styles.choiceIconWrap}>
+                        <Plus size={22} color="#148a46" />
+                      </View>
+                      <View style={styles.choiceTextWrap}>
+                        <Text style={styles.choiceTitle}>Split an Expense</Text>
+
+                      </View>
+                      <ChevronRight size={18} color="#9ca3af" />
+                    </Pressable>
+
+                    <Pressable style={styles.secondaryButton} onPress={closeModalFully}>
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </Pressable>
+                  </>
+
+                )}
+
+                {/* ─── Step: Create Group ─── */}
+                {modalStep === 'group' && (
+                  <>
+                    <Text style={styles.modalTitle}>Create a group</Text>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Group name</Text>
+                      <TextInput
+                        value={groupName}
+                        onChangeText={setGroupName}
+                        style={styles.fieldInput}
+                        placeholder="Goa Trip, Flatmates, etc."
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Add members</Text>
+                      <View style={styles.addRow}>
+                        <TextInput
+                          value={groupMemberInput}
+                          onChangeText={setGroupMemberInput}
+                          style={[styles.fieldInput, { flex: 1 }]}
+                          placeholder="Friend's name or email"
+                          onSubmitEditing={addGroupMember}
+                        />
+                        <Pressable style={styles.addButton} onPress={addGroupMember}>
+                          <Plus size={18} color="#ffffff" />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {groupMembers.length > 0 && (
+                      <View style={styles.chipsWrap}>
+                        {groupMembers.map((m) => (
+                          <Pressable key={m} style={styles.chip} onPress={() => removeGroupMember(m)}>
+                            <Text style={styles.chipText}>{m} ✕</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+
+                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                    <View style={styles.modalActions}>
+                      <Pressable style={styles.secondaryButton} onPress={() => setModalStep('choice')}>
+                        <Text style={styles.secondaryButtonText}>Back</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
+                        onPress={handleCreateGroup}
+                        disabled={isSaving}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {isSaving ? 'Creating...' : 'Create Group'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+
+                {/* ─── Step: Split Expense (non-group) ─── */}
+                {modalStep === 'expense' && (
+                  <>
+                    <Text style={styles.modalTitle}>Split an expense</Text>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Amount</Text>
+                      <TextInput
+                        value={amount}
+                        onChangeText={setAmount}
+                        style={styles.fieldInput}
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Category</Text>
+                      <TextInput
+                        value={category}
+                        onChangeText={setCategory}
+                        style={styles.fieldInput}
+                        placeholder="Dinner, Taxi, Movie"
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Date</Text>
+                      <TextInput
+                        value={date}
+                        onChangeText={setDate}
+                        style={styles.fieldInput}
+                        placeholder="YYYY-MM-DD"
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Split with</Text>
+                      <View style={styles.addRow}>
+                        <TextInput
+                          value={expenseFriendInput}
+                          onChangeText={setExpenseFriendInput}
+                          style={[styles.fieldInput, { flex: 1 }]}
+                          placeholder="Friend's name or email"
+                          onSubmitEditing={addExpenseFriend}
+                        />
+                        <Pressable style={styles.addButton} onPress={addExpenseFriend}>
+                          <Plus size={18} color="#ffffff" />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {expenseFriends.length > 0 && (
+                      <View style={styles.chipsWrap}>
+                        {expenseFriends.map((f) => (
+                          <Pressable key={f} style={styles.chip} onPress={() => removeExpenseFriend(f)}>
+                            <Text style={styles.chipText}>{f} ✕</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+
+                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                    <View style={styles.modalActions}>
+                      <Pressable style={styles.secondaryButton} onPress={() => setModalStep('choice')}>
+                        <Text style={styles.secondaryButtonText}>Back</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
+                        onPress={handleCreateExpenseWithFriends}
+                        disabled={isSaving}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {isSaving ? 'Saving...' : 'Save'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            </KeyboardAvoidingView>
           </View>
-        </KeyboardAvoidingView>
+        </BlurView>
       </Modal>
     </SafeAreaView>
   );
@@ -827,7 +1152,7 @@ const styles = StyleSheet.create({
     gap: Spacing.base,
   },
   modalTitle: {
-    fontSize: FontSizes.lg,
+    fontSize: 20,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
@@ -911,5 +1236,89 @@ const styles = StyleSheet.create({
     color: Colors.expense,
     fontSize: FontSizes.sm,
     fontWeight: '600',
+  },
+  centeredOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  floatingCard: {
+    width: 320,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    gap: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  modalSubtitle: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    marginTop: -8,
+  },
+  choiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e9f3ec',
+    backgroundColor: '#fafdfb',
+  },
+  choiceIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#eaf6ee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  choiceTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  choiceSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  addRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(20, 138, 70, 0.1)',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#148a46',
   },
 });

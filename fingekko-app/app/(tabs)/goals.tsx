@@ -52,7 +52,11 @@ export default function TabIndex() {
         if (!token) {
           return;
         }
-        const response = await apiRequest<HomeResponse>('/api/home', {}, token);
+        const response = await apiRequest<HomeResponse>(
+          {method: 'get',
+          url: '/api/home',
+          token,}
+        );
         if (isActive) {
           setHomeData(response);
         }
