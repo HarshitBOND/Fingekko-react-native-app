@@ -46,6 +46,13 @@ app.get('/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', db: getDbStatus() });
 });
 
+app.get("/", (req: Request,res: Response)=>{
+  res.json({
+    status:"ok",
+    message : "Fingekko API is running"
+  })
+})
+
 app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 // app.use('/api/auth', authRoutes);

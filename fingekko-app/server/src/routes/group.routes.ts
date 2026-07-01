@@ -1,16 +1,15 @@
 import { Router } from "express";
 import express, {Request, Response} from "express";
 
-const app= express();
 const groupRoute= Router();
 
-app.use(express.json());
+groupRoute.use(express.json());
 
-app.get("/",(req: Request ,res: Response)=>{
+groupRoute.get("/",(req: Request ,res: Response)=>{
     res.send("Hello backend is running");
 })
 
-app.get("/api/groups", (req: Request, res: Response) => {
+groupRoute.get("/api/groups", (req: Request, res: Response) => {
   const groups = [
     {
       id: "goa",
