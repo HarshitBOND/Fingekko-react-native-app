@@ -4,8 +4,8 @@ interface IGroup {
   name: string;
   description: string;
   currency: string;
-  createdBy: Types.ObjectId;
-  members: Types.ObjectId[];
+  createdBy:string;
+  members: string[];
   isArchived?: boolean;
 }
 
@@ -14,8 +14,8 @@ const groupSchema = new mongoose.Schema<IGroup>(
     name: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     currency: { type: String, required: true, default: "INR" },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    createdBy: { type: String , required: true },
+    members: [{ type: String}],
     isArchived: { type: Boolean, default: false },
   },
   { timestamps: true }
