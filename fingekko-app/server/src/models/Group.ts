@@ -12,7 +12,7 @@ interface IGroup {
 const groupSchema = new mongoose.Schema<IGroup>(
   {
     name: { type: String, required: true, trim: true },
-    description: { type: String, required: true, trim: true },
+    description: { type: String, trim: true },
     currency: { type: String, required: true, default: "INR" },
     createdBy: { type: String , required: true },
     members: [{ type: String}],

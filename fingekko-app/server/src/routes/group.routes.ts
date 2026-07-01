@@ -39,7 +39,7 @@ groupRoute.post("/", async (req: Request, res: Response) => {
     const data = {
       name: req.body.name,
       description: req.body.description || "",
-      createdBy: req.user.id,
+      createdBy: userId,
       members: [...(req.body.members ?? []), userId],
     }
     const group = await groupRepository.createGroup(data);
