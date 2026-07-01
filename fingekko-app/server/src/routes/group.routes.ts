@@ -5,11 +5,7 @@ const groupRoute= Router();
 
 groupRoute.use(express.json());
 
-groupRoute.get("/",(req: Request ,res: Response)=>{
-    res.send("Hello backend is running");
-})
-
-groupRoute.get("/api/groups", (req: Request, res: Response) => {
+groupRoute.get("/", (req: Request, res: Response) => {
   const groups = [
     {
       id: "goa",
