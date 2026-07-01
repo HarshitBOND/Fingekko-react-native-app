@@ -1,14 +1,16 @@
-import dotenv from "dotenv";
-import express , {Request, Response , NextFunction}from "express";
+import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
-import helmet from "helmet";
+import dotenv from "dotenv";
+import express, { NextFunction, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import morgan from "morgan";
 import { connectDb, getDbStatus } from "./db.js";
 import clerkWebhookRoutes from "./routes/clerkWebhook.js";
+import expenseRoutes from "./routes/communityExpense.routes.js";
+import friendRoutes from "./routes/friends.routes.js";
+import groupRoutes from "./routes/group.routes.js";
 import homeRoutes from "./routes/home.js";
-import groupRoutes from "./routes/group.routes.js"
-import { clerkMiddleware } from "@clerk/express";
 
 dotenv.config();
 
@@ -63,6 +65,8 @@ app.get("/", (req: Request,res: Response)=>{
 // app.use('/api/auth', authRoutes);
 app.use('/api', homeRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/friends", friendRoutes);
+app.use("/api/expenses", expenseRoutes);
 
 
 
