@@ -8,6 +8,7 @@ import { connectDb, getDbStatus } from "./db.js";
 import clerkWebhookRoutes from "./routes/clerkWebhook.js";
 import homeRoutes from "./routes/home.js";
 import groupRoutes from "./routes/group.routes.js"
+import { clerkMiddleware } from "@clerk/express";
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use(morgan('dev'));
 
 app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
 app.use(express.json({ limit: '1mb' }));
+app.use(clerkMiddleware());
 
 
 app.get('/health', (req: Request, res: Response) => {
