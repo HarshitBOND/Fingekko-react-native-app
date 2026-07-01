@@ -57,13 +57,24 @@ app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebho
 app.use(express.json({ limit: '1mb' }));
 // app.use('/api/auth', authRoutes);
 app.use('/api', homeRoutes);
+app.use("/api/groups", groupRoutes);
+
+
+
+
+
+
+
+
+
+
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err);
   return res.status(500).json({ error: 'Unexpected server error.' });
 });
 
-app.use("/api/groups", groupRoutes);
+
 
 connectDb()
   .then(() => {

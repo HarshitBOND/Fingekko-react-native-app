@@ -10,20 +10,16 @@ groupRoute.get("/", (req: Request, res: Response) => {
     {
       id: "goa",
       name: "Goa Trip",
-      members: "4 members",
+      members: ["Alice","Bob"],
       icon: "👥",
-      amountLabel: "You are owed",
-      amount: "₹12250",
-      amountColor: "#148a46",
+      balance: 50000,
     },
     {
       id: "cafe",
       name: "Weekend Cafe",
-      members: "3 members",
+      members: ["Riya", "Shreya", "BehanKiLodi"],
       icon: "☕",
-      amountLabel: "You owe",
-      amount: "₹320",
-      amountColor: "#eb5a4f",
+      balance: 320,
     },
   ];
 

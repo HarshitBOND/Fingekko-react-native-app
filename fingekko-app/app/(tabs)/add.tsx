@@ -30,6 +30,7 @@ type GroupFromAPI = {
   id: string;
   name: string;
   members: string[];
+  icon: string ;
   balance: number;
 };
 
@@ -142,8 +143,8 @@ export default function HomeScreen() {
           id: g.id,
           name: g.name,
           members: `${g.members.length} members`,
-          icon: '👥',
-          amountLabel: g.balance >= 0 ? 'You are owed' : 'You owe',
+          icon: g.icon,
+          amountLabel: g.balance >0 ? 'You are owed' : g.balance < 0 ? 'You owe' : 'You are settled up',
           amount: `₹${Math.abs(g.balance)}`,
           amountColor: g.balance >= 0 ? '#148a46' : '#eb5a4f',
         }));
