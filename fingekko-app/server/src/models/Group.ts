@@ -6,6 +6,7 @@ interface IGroup {
   currency: string;
   createdBy:string;
   members: string[];
+  icon: string;
   isArchived?: boolean;
 }
 
@@ -16,6 +17,7 @@ const groupSchema = new mongoose.Schema<IGroup>(
     currency: { type: String, required: true, default: "INR" },
     createdBy: { type: String , required: true },
     members: [{ type: String}],
+    icon: { type: String, default: "Coins"},
     isArchived: { type: Boolean, default: false },
   },
   { timestamps: true }

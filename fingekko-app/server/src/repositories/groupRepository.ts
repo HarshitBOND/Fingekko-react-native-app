@@ -6,6 +6,7 @@ interface GroupDTO {
   currency: string;
   createdBy: string;
   members: string[];
+  icon: string;
   isArchived?: boolean;
 }
 
