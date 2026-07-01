@@ -1,12 +1,16 @@
 import { Router } from "express";
 import { Request, Response } from "express";
 import groupRepository from "../repositories/groupRepository.js";
-
+import { getAuth } from "@clerk/express"
 const groupRoute = Router();
 
 groupRoute.get("/", async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const { userId } = getAuth(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const groups = await groupRepository.getGroupsByUser(userId);
 
@@ -25,21 +29,25 @@ groupRoute.get("/", async (req: Request, res: Response) => {
   }
 });
 
-groupRoute.post("/", async(req: Request, res: Response)=>{
-  try{
+groupRoute.post("/", async (req: Request, res: Response) => {
+  try {
+    const { userId } = getAuth(req);
 
-    const data= {
+    if (!userId) {
+      return res.status(500).json({ message: "unauthorized" })
+    }
+    const data = {
       name: req.body.name,
       description: req.body.description || "",
       createdBy: req.user.id,
-      members: [...req.body.members, req.user.id],
+      members: [...(req.body.members ?? []), userId],
     }
     const group = await groupRepository.createGroup(data);
 
     res.status(201).json(group);
-  }catch(error){
+  } catch (error) {
     console.log(error);
-    res.status(500).json({message:"failed to create group"});
+    res.status(500).json({ message: "failed to create group" });
   }
 })
 
