@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
-import ExpenseRepository from "../repositories/expenseRepository";
-import groupRepository from "../repositories/groupRepository";
+import ExpenseRepository from "../repositories/expenseRepository.js";
+import groupRepository from "../repositories/groupRepository.js";
 
 type CreateExpenseInput = {
   groupId: string;

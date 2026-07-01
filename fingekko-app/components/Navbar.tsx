@@ -33,10 +33,6 @@ export default function Navbar() {
             style={styles.logoImage}
           />
         </View>
-
-        <Text style={styles.logoText}>
-          FinGekko
-        </Text>
       </View>
 
       <View style={styles.headerActions}>
@@ -73,7 +69,7 @@ const styles = StyleSheet.create({
   },
 
   logoBadge: {
-    width: 48,
+    width:102,
     height: 48,
     borderRadius: 16,
     backgroundColor: 'transparent',
@@ -85,8 +81,8 @@ const styles = StyleSheet.create({
   },
 
   logoImage: {
-    width: 48,
-    height: 48,
+    width: 102,
+    height: 72,
     resizeMode: 'contain',
   },
 

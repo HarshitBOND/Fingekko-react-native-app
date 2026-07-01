@@ -1,4 +1,4 @@
-const { mongoose } = require('../db');
+import {mongoose} from '../db.js';
 
 const goalSchema = new mongoose.Schema(
   {
@@ -12,4 +12,4 @@ const goalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.models.Goal || mongoose.model('Goal', goalSchema);
+export default mongoose.models.Goal || mongoose.model('Goal', goalSchema);

@@ -1,4 +1,4 @@
-import Expense from '../models/Expense';
+import Expense from '../models/Expense.js';
 import { Types } from 'mongoose';
 
 interface ExpenseDTO {

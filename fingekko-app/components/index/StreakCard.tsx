@@ -66,7 +66,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
 
       {/* header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Flame size={20} color={Theme.primaryDark} />
+        <Flame size={20} color={Theme.primary} />
         <Text style={styles.streakHeaderText}>You&apos;re on a roll!</Text>
       </View>
 
@@ -93,7 +93,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       <View style={styles.bestStreakRow}>
         <View style={styles.bestStreakIconWrap}>
           {/* TODO: replace with <Image source={require('../../assets/images/bestStreakIcon.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Flame size={18} color={Theme.primaryDark} />
+          <Flame size={18} color={Theme.primary} />
         </View>
         <View>
           <Text style={styles.bestStreakTitle}>Best Streak</Text>
@@ -105,7 +105,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       <View style={styles.geckoMotivRow}>
         <View style={styles.geckoAvatarWrap}>
           {/* TODO: replace with <Image source={require('../../assets/images/geckoStreakAvatar.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Star size={18} color={Theme.primaryDark} />
+          <Star size={18} color={Theme.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.geckoMotivLine}>Discipline today.</Text>

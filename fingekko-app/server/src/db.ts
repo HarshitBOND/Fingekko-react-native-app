@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose"
 
 let isConnected = false;
 let usingMemory = false;
@@ -34,4 +34,4 @@ function getDbStatus() {
   return { isConnected, usingMemory };
 }
 
-module.exports = { connectDb, getDbStatus, mongoose };
+export { connectDb, getDbStatus, mongoose };

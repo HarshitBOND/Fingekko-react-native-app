@@ -1,6 +1,6 @@
-const jwt = require('jsonwebtoken');
+/*import jwt from "jsonwebtoken";
 
-function sanitizeUser(user) {
+export function sanitizeUser(user: any) {
   if (!user) {
     return null;
   }
@@ -16,7 +16,7 @@ function sanitizeUser(user) {
   return safe;
 }
 
-function generateToken(user) {
+export function generateToken(user: any){
   const secret = process.env.JWT_SECRET || 'dev_secret_change_me';
   const subject = user.id ?? user._id?.toString();
   const payload = {
@@ -27,6 +27,4 @@ function generateToken(user) {
   return jwt.sign(payload, secret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
-}
-
-module.exports = { sanitizeUser, generateToken };
+}*/

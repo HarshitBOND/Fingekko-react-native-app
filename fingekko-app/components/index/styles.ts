@@ -141,7 +141,7 @@ export const styles = StyleSheet.create({
   calDayDone: { backgroundColor: Theme.primary },
   calDayText: { color: Theme.whiteSoft, fontSize: 10, fontWeight: '700' },
   calDayTextDone: { color: Theme.white },
-  suggestionsBar: { backgroundColor: Theme.darkSection, borderRadius: 20, marginTop: 10, paddingVertical: 12, paddingRight: 12, paddingLeft: 10, borderWidth: 1, borderColor: 'rgba(249,255,250,0.08)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, shadowColor: Theme.shadow, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 4 },
+  suggestionsBar: { backgroundColor: '#aadcb6', borderRadius: 20, marginTop: 10, paddingVertical: 12, paddingRight: 12, paddingLeft: 10, borderWidth: 1, borderColor: 'rgba(249,255,250,0.08)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, shadowColor: Theme.shadow, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 4 },
   suggIconWrap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(191,231,193,0.18)' },
   seeImpactBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 14, backgroundColor: Theme.primaryDark, paddingHorizontal: 8, paddingVertical: 4 },
 });

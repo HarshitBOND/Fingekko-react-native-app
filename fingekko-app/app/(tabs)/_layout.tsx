@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect, Tabs, usePathname } from 'expo-router';
-import { BarChart, Home, Plus, Target, User } from 'lucide-react-native';
+import { BarChart, Home, Plus, Target, User, Repeat } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -51,14 +51,14 @@ export default function TabLayout() {
 
   const activeColor =
   pathname.startsWith('/insights')
-    ? '#5aabf6' // blue
+    ? '#10B981' // blue
     : pathname.startsWith('/goals')
-    ? '#F97316' // orange
+    ? '#10B981' // orange
     : pathname.startsWith('/profile')
-    ? '#A855F7' // purple
+    ? '#10B981' // purple
     : pathname.startsWith('/add')
     ? '#10B981' // emerald
-    : '#22C55E'; // default green
+    : '#10B981'; // default green
 
   return (
     <Tabs
@@ -99,7 +99,7 @@ export default function TabLayout() {
             <View style={[styles.addButton,
               { backgroundColor: activeColor , shadowColor: activeColor} // Slightly transparent when not focused
             ]}>
-              <Plus size={24} color={Colors.textLight} />
+              <Repeat size={24} color={Colors.textLight} />
             </View>
           ),
         }}

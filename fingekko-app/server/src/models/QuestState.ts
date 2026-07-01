@@ -1,4 +1,4 @@
-const { mongoose } = require('../db');
+import {mongoose } from '../db.js';
 
 const questEntrySchema = new mongoose.Schema(
   {
@@ -19,4 +19,4 @@ const questStateSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.models.QuestState || mongoose.model('QuestState', questStateSchema);
+export default mongoose.models.QuestState || mongoose.model('QuestState', questStateSchema);

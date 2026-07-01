@@ -1,147 +1,120 @@
 import { apiRequest } from '@/utils/api';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-    ArrowDownLeft,
-    ArrowUpRight,
-    ChevronRight,
-    CircleDollarSign,
-    Plus,
-    ReceiptText,
-    Search,
-    Sparkles,
-    Users,
-    Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChevronRight,
+  Menu,
+  Plus,
+  Users,
 } from 'lucide-react-native';
-import { type ElementType, useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, FontSizes, Spacing } from '../../constants/Colors';
 
-type StatCard = {
-  label: string;
-  amount: string;
-  detail: string;
-  icon: ElementType;
-  tint: string;
-  background: string;
+type GroupFromAPI = {
+  id: string;
+  name: string;
+  members: string[];
+  balance: number;
 };
 
-type GroupCard = {
+
+type GroupItem = {
+  id: string;
   name: string;
   members: string;
-  avatars: string[];
-  amount: string;
+  icon: string;
   amountLabel: string;
-  tint: string;
-};
-
-type ActivityCard = {
-  name: string;
-  detail: string;
   amount: string;
   amountColor: string;
-  icon: ElementType;
-  iconBackground: string;
-  iconColor: string;
 };
 
-const OVERVIEW_CARDS: StatCard[] = [
-  {
-    label: 'You are owed',
-    amount: '₹1,250',
-    detail: 'from 2 people',
-    icon: ArrowDownLeft,
-    tint: '#148a46',
-    background: '#edf9f1',
-  },
-  {
-    label: 'You owe',
-    amount: '₹850',
-    detail: 'to 1 person',
-    icon: ArrowUpRight,
-    tint: '#eb5a4f',
-    background: '#fff0ef',
-  },
-  {
-    label: 'Total balance',
-    amount: '₹400',
-    detail: 'Net balance',
-    icon: Wallet,
-    tint: '#8b5cf6',
-    background: '#f2edff',
-  },
-];
+type ActivityItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  meta: string;
+  amount?: string;
+  amountColor?: string;
+  iconType: 'up' | 'down' | 'group';
+  hasChevron?: boolean;
+};
 
-const GROUPS: GroupCard[] = [
+const GROUPS: GroupItem[] = [
   {
+    id: 'goa',
     name: 'Goa Trip',
     members: '4 members',
-    avatars: ['🌴', '🧢', '☀️', '🧉'],
+    icon: '👥',
+    amountLabel: 'You are owed',
     amount: '₹1,250',
-    amountLabel: 'You are owed',
-    tint: '#148a46',
+    amountColor: '#148a46',
   },
   {
-    name: 'Roommates',
+    id: 'cafe',
+    name: 'Weekend Cafe',
     members: '3 members',
-    avatars: ['🏠', '🪴', '☕'],
-    amount: '₹850',
+    icon: '☕',
     amountLabel: 'You owe',
-    tint: '#eb5a4f',
-  },
-  {
-    name: 'Weekend Dinner',
-    members: '5 members',
-    avatars: ['🍕', '🍝', '🥤', '🧡', '🍰'],
     amount: '₹320',
-    amountLabel: 'You are owed',
-    tint: '#148a46',
-  },
-];
-
-const ACTIVITY: ActivityCard[] = [
-  {
-    name: 'Weekend Dinner',
-    detail: 'You paid ₹1,600',
-    amount: '₹320',
-    amountColor: '#148a46',
-    icon: ReceiptText,
-    iconBackground: '#fff1e2',
-    iconColor: '#f97316',
-  },
-  {
-    name: 'Goa Trip',
-    detail: 'Alex paid ₹2,500',
-    amount: '₹750',
-    amountColor: '#148a46',
-    icon: CircleDollarSign,
-    iconBackground: '#edf5ff',
-    iconColor: '#3b82f6',
-  },
-  {
-    name: 'Groceries',
-    detail: 'You paid ₹1,200',
-    amount: '₹450',
     amountColor: '#eb5a4f',
-    icon: Sparkles,
-    iconBackground: '#fff1f4',
-    iconColor: '#f43f5e',
+  },
+  {
+    id: 'pg',
+    name: 'PG Expenses',
+    members: '2 members',
+    icon: '🏠',
+    amountLabel: 'You are settled up',
+    amount: '₹0',
+    amountColor: '#148a46',
   },
 ];
 
-export default function AddScreen() {
+const ACTIVITY: ActivityItem[] = [
+  {
+    id: 'act1',
+    title: 'You added an expense',
+    subtitle: 'Dinner at Beach Shack',
+    meta: 'Goa Trip • 2h ago',
+    amount: '₹2,480',
+    amountColor: '#111827',
+    iconType: 'up',
+  },
+  {
+    id: 'act2',
+    title: 'Rohan paid you back',
+    subtitle: 'Cafe Coffee Day',
+    meta: 'Weekend Cafe • Yesterday',
+    amount: '₹160',
+    amountColor: '#148a46',
+    iconType: 'down',
+  },
+  {
+    id: 'act3',
+    title: 'New group created',
+    subtitle: 'Office Team Lunch',
+    meta: '3 members • 2 days ago',
+    iconType: 'group',
+    hasChevron: true,
+  },
+];
+
+export default function HomeScreen() {
   const { getToken, isSignedIn } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [amount, setAmount] = useState('');
@@ -150,6 +123,42 @@ export default function AddScreen() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [group, setGroup] = useState<GroupItem[]>([]);
+
+  const { user } = useUser();
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const token = await getToken();
+        if (!token) throw new Error('Missing auth token');
+
+        const response = await apiRequest<GroupFromAPI[]>({
+          method: 'get',
+          url: '/api/groups',
+          token,
+        });
+        const formattedGroups: GroupItem[] = response.map((g) => ({
+          id: g.id,
+          name: g.name,
+          members: `${g.members.length} members`,
+          icon: '👥',
+          amountLabel: g.balance >= 0 ? 'You are owed' : 'You owe',
+          amount: `₹${Math.abs(g.balance)}`,
+          amountColor: g.balance >= 0 ? '#148a46' : '#eb5a4f',
+        }));
+
+        setGroup(formattedGroups);
+      } catch (err) {
+        console.error('Error fetching groups:', err);
+        Alert.alert('Error', 'Failed to load groups');
+      }
+    };
+
+    if (isSignedIn) {
+      fetchGroups();
+    }
+  }, [isSignedIn, getToken]);
 
   const openModal = () => {
     setError('');
@@ -192,15 +201,19 @@ export default function AddScreen() {
         throw new Error('Missing auth token');
       }
 
-      await apiRequest('/api/transactions', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: transactionType,
-          amount: amountValue,
-          category: category.trim(),
-          date: date.trim(),
-        }),
-      }, token);
+      /*await apiRequest(
+        '/api/transactions',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            type: transactionType,
+            amount: amountValue,
+            category: category.trim(),
+            date: date.trim(),
+          }),
+        },
+        token,
+      );*/
 
       setAmount('');
       setCategory('');
@@ -215,198 +228,183 @@ export default function AddScreen() {
     }
   };
 
+  const renderActivityIcon = (type: ActivityItem['iconType']) => {
+    if (type === 'up') {
+      return (
+        <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
+          <ArrowUpRight size={18} color="#148a46" />
+        </View>
+      );
+    }
+    if (type === 'down') {
+      return (
+        <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
+          <ArrowDownLeft size={18} color="#148a46" />
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
+        <Users size={18} color="#148a46" />
+      </View>
+    );
+  };
+
+
+
   return (
-    <SafeAreaView style={styles.page}>
-      <LinearGradient
-        colors={['#f1fbf4', '#fbfdfb', '#f8faf8']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      <View style={styles.orbTopLeft} />
-      <View style={styles.orbBottomRight} />
-
+    <SafeAreaView style={styles.page} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.container}
       >
-        <View style={styles.topBar}>
-          <View style={styles.brandBlock}>
-            <Text style={styles.brandTitle}>Splitwise</Text>
-            <View style={styles.brandBadge}>
-              <Users size={12} color="#16813f" />
-              <Text style={styles.brandBadgeText}>shared expenses</Text>
+        {/* ─── Hero / Header with background image ─── */}
+        <View style={styles.heroSection}>
+          <LinearGradient
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            colors={[
+              'rgba(34,197,94,0.25)',
+              'rgba(34,197,94,0.08)',
+              'transparent'
+            ]}
+            locations={[0, 0.35, 1]}
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                width: 250,
+                height: 250,
+                top: -80,
+                left: -80,
+                borderRadius: 200,
+              },
+            ]}
+          />
+          {/* Top bar */}
+          <View style={styles.topBar}>
+            <View style={styles.brandRow}>
+              <View style={styles.logoCircle}>
+                <Text style={styles.logoEmoji}>🌿</Text>
+              </View>
+              <Text style={styles.brandTitle}>GekkoSplit</Text>
             </View>
-          </View>
-
-          <View style={styles.topBarActions}>
-            <Pressable style={styles.iconButton}>
-              <Search size={18} color="#1f2937" />
+            <Pressable style={styles.menuButton}>
+              <Menu size={20} color="#1f2937" />
             </Pressable>
-            <Pressable style={styles.primaryIconButton} onPress={openModal}>
-              <Plus size={18} color="#ffffff" />
-            </Pressable>
           </View>
+
+          {/* Greeting */}
+          <View style={styles.greetingBlock}>
+            <Text style={styles.greetingSmall}>Good Morning,</Text>
+            <View style={styles.greetingNameRow}>
+              <Text style={styles.greetingName}>{user?.fullName || 'User'}</Text>
+              <Text style={styles.greetingLeaf}>🌿</Text>
+            </View>
+            <Text style={styles.greetingTagline}>
+              {'Split expenses, not friendships.\nKeep it simple, keep it fair.'}
+            </Text>
+          </View>
+
         </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>Track shared expenses</Text>
-            <Text style={styles.heroTitleAccent}>and settle dues easily.</Text>
+        {/* ─── Add New Expense CTA Card ─── */}
+        <Pressable style={styles.addExpenseCard} onPress={openModal}>
+          <View style={styles.addExpenseIconWrap}>
+            <Plus size={24} color="#148a46" />
           </View>
-
-          <View style={styles.heroIllustration}>
-            <View style={[styles.heroAvatar, styles.heroAvatarLeft]}>
-              <Text style={styles.heroAvatarEmoji}>🧑‍🤝‍🧑</Text>
-            </View>
-            <View style={[styles.heroAvatar, styles.heroAvatarRight]}>
-              <Text style={styles.heroAvatarEmoji}>🧾</Text>
-            </View>
-            <View style={styles.heroSparkleOne} />
-            <View style={styles.heroSparkleTwo} />
-            <View style={styles.heroNoteBubble}>
-              <Text style={styles.heroNoteText}>Split</Text>
-            </View>
+          <View style={styles.addExpenseCopy}>
+            <Text style={styles.addExpenseTitle}>Add New Expense</Text>
+            <Text style={styles.addExpenseSubtitle}>
+              Add an expense and{'\n'}split with your group
+            </Text>
           </View>
-        </View>
+          <ChevronRight size={18} color="#9ca3af" />
+        </Pressable>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Overview</Text>
-          <View style={styles.overviewRow}>
-            {OVERVIEW_CARDS.map((card) => {
-              const Icon = card.icon;
-
-              return (
-                <View key={card.label} style={styles.overviewCard}>
-                  <View style={[styles.overviewIconWrap, { backgroundColor: card.background }]}>
-                    <Icon size={16} color={card.tint} />
-                  </View>
-                  <Text style={[styles.overviewAmount, { color: card.tint }]}>{card.amount}</Text>
-                  <Text style={styles.overviewLabel}>{card.label}</Text>
-                  <Text style={styles.overviewDetail}>{card.detail}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
+        {/* ─── Your Groups ─── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeader}>Your Groups</Text>
           <Text style={styles.sectionLink}>View all</Text>
         </View>
 
         <View style={styles.card}>
-          {GROUPS.map((group, index) => (
-            <View key={group.name} style={[styles.groupRow, index !== GROUPS.length - 1 && styles.divider]}>
-              <View style={styles.groupLeft}>
-                <View style={styles.groupAvatarWrap}>
-                  {group.avatars.slice(0, 3).map((avatar, avatarIndex) => (
-                    <View
-                      key={`${group.name}-${avatar}`}
-                      style={[
-                        styles.groupAvatar,
-                        {
-                          backgroundColor: avatarIndex === 0 ? '#dcfce7' : avatarIndex === 1 ? '#eef2ff' : '#ffe4e6',
-                          marginLeft: avatarIndex === 0 ? 0 : -8,
-                          zIndex: 3 - avatarIndex,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.groupAvatarEmoji}>{avatar}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.groupTextWrap}>
-                  <Text style={styles.groupName}>{group.name}</Text>
-                  <Text style={styles.groupMembers}>{group.members}</Text>
-                  <View style={styles.memberDots}>
-                    {group.avatars.map((avatar, avatarIndex) => (
-                      <View
-                        key={`${group.name}-dot-${avatarIndex}`}
-                        style={[
-                          styles.memberDot,
-                          {
-                            marginLeft: avatarIndex === 0 ? 0 : -6,
-                            backgroundColor:
-                              avatarIndex % 3 === 0 ? '#d1fae5' : avatarIndex % 3 === 1 ? '#dbeafe' : '#fce7f3',
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                </View>
+          {group.map((item, index) => (
+            <Pressable
+              key={item.id}
+              style={[
+                styles.groupRow,
+                index !== group.length - 1 && styles.divider,
+              ]}
+            >
+              <View style={styles.groupIconWrap}>
+                <Text style={styles.groupIconEmoji}>{item.icon}</Text>
               </View>
-
+              <View style={styles.groupTextWrap}>
+                <Text style={styles.groupName}>{item.name}</Text>
+                <Text style={styles.groupMembers}>{item.members}</Text>
+              </View>
               <View style={styles.groupRight}>
-                <Text style={styles.groupStatusLabel}>{group.amountLabel}</Text>
-                <Text style={[styles.groupAmount, { color: group.tint }]}>{group.amount}</Text>
-                <ChevronRight size={16} color="#9ca3af" />
+                <Text style={styles.groupStatusLabel}>{item.amountLabel}</Text>
+                <Text style={[styles.groupAmount, { color: item.amountColor }]}>
+                  {item.amount}
+                </Text>
               </View>
-            </View>
+              <ChevronRight size={16} color="#9ca3af" style={styles.groupChevron} />
+            </Pressable>
           ))}
         </View>
 
-        <LinearGradient
-          colors={['#ecf9ef', '#f7fbf8']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.bannerCard}
-        >
-          <View style={styles.bannerLeft}>
-            <View style={styles.bannerIconWrap}>
-              <Text style={styles.bannerIcon}>₹</Text>
-            </View>
-            <View style={styles.bannerCopy}>
-              <Text style={styles.bannerTitle}>Split any expense in seconds!</Text>
-              <Text style={styles.bannerText}>Add an expense, split it with friends and settle up.</Text>
-            </View>
-          </View>
-
-          <View style={styles.bannerActions}>
-            <Pressable style={styles.bannerPrimaryButton} onPress={openModal}>
-              <Text style={styles.bannerPrimaryButtonText}>+ Add Expense</Text>
-            </Pressable>
-            <Pressable style={styles.bannerSecondaryButton}>
-              <Text style={styles.bannerSecondaryButtonText}>How it works</Text>
-            </Pressable>
-          </View>
-        </LinearGradient>
-
+        {/* ─── Recent Activity ─── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeader}>Recent Activity</Text>
           <Text style={styles.sectionLink}>View all</Text>
         </View>
 
         <View style={styles.card}>
-          {ACTIVITY.map((item, index) => {
-            const Icon = item.icon;
-
-            return (
-              <View
-                key={item.name}
-                style={[styles.activityRow, index !== ACTIVITY.length - 1 && styles.divider]}
-              >
-                <View style={[styles.activityIconWrap, { backgroundColor: item.iconBackground }]}>
-                  <Icon size={16} color={item.iconColor} />
-                </View>
-
-                <View style={styles.activityTextWrap}>
-                  <Text style={styles.activityTitle}>{item.name}</Text>
-                  <Text style={styles.activityDetail}>{item.detail}</Text>
-                </View>
-
-                <View style={styles.activityAmountWrap}>
-                  <Text style={[styles.activityStatus, { color: item.amountColor }]}>You are owed</Text>
-                  <Text style={[styles.activityAmount, { color: item.amountColor }]}>{item.amount}</Text>
-                </View>
+          {ACTIVITY.map((item, index) => (
+            <View
+              key={item.id}
+              style={[
+                styles.activityRow,
+                index !== ACTIVITY.length - 1 && styles.divider,
+              ]}
+            >
+              {renderActivityIcon(item.iconType)}
+              <View style={styles.activityTextWrap}>
+                <Text style={styles.activityTitle}>{item.title}</Text>
+                <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
+                <Text style={styles.activityMeta}>{item.meta}</Text>
               </View>
-            );
-          })}
+              {item.amount ? (
+                <Text style={[styles.activityAmount, { color: item.amountColor }]}>
+                  {item.amount}
+                </Text>
+              ) : (
+                item.hasChevron && <ChevronRight size={16} color="#9ca3af" />
+              )}
+            </View>
+          ))}
+        </View>
+
+        {/* ─── Footer Banner ─── */}
+        <View style={styles.footerBanner}>
+          <ImageBackground
+            source={require('../../assets/images/bgadd.png')}
+            style={styles.footerBannerBg}
+            resizeMode="cover"
+            imageStyle={styles.footerBannerBgImage}
+          >
+            <View style={styles.footerBannerOverlay} />
+            <View style={styles.footerBannerContent}>
+              <Text style={styles.footerBannerTitle}>Stay light.</Text>
+              <Text style={styles.footerBannerTitle}>We'll handle the splits.</Text>
+              <Text style={styles.footerBannerWave}>{'〜'}</Text>
+            </View>
+          </ImageBackground>
         </View>
       </ScrollView>
 
+      {/* ─── Add Expense Modal ─── */}
       <Modal transparent visible={isModalOpen} animationType="slide" onRequestClose={closeModal}>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -507,424 +505,314 @@ export default function AddScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#f7fbf7',
+    backgroundColor: '#f5f8f5',
   },
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: 40,
+    gap: 16,
+  },
+
+  // ── Hero ──
+  heroSection: {
+    width: '100%',
+  },
+  heroBg: {
+    width: '100%',
+    minHeight: 280,
     paddingBottom: 32,
-    gap: 14,
   },
-  orbTopLeft: {
-    position: 'absolute',
-    top: -36,
-    left: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(34, 197, 94, 0.08)',
+  heroBgImage: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
-  orbBottomRight: {
-    position: 'absolute',
-    right: -52,
-    bottom: 110,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(16, 185, 129, 0.07)',
-  },
+
+  // ── Top Bar ──
   topBar: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  brandBlock: {
-    gap: 4,
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  logoEmoji: {
+    fontSize: 18,
   },
   brandTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
     letterSpacing: -0.2,
   },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#edf9f1',
-    borderWidth: 1,
-    borderColor: '#d6f2df',
-  },
-  brandBadgeText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
-    color: '#16813f',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  topBarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconButton: {
+  menuButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+
+  // ── Greeting ──
+  greetingBlock: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    gap: 4,
+  },
+  greetingSmall: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  greetingNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  greetingName: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -1,
+  },
+  greetingLeaf: {
+    fontSize: 28,
+    marginTop: 4,
+  },
+  greetingTagline: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 19,
+    marginTop: 6,
+  },
+
+  // ── Add Expense CTA ──
+  addExpenseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    gap: 14,
     borderWidth: 1,
-    borderColor: '#e8efe9',
+    borderColor: '#e9f3ec',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  primaryIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  heroCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e9f3ec',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 6,
-    overflow: 'hidden',
-  },
-  heroCopy: {
-    flex: 1,
-    paddingRight: 12,
-    gap: 2,
-  },
-  heroTitle: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.4,
-  },
-  heroTitleAccent: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '800',
-    color: '#15803d',
-    letterSpacing: -0.4,
-  },
-  heroIllustration: {
-    width: 118,
-    height: 112,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroAvatar: {
-    position: 'absolute',
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ffffff',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowRadius: 14,
     elevation: 4,
   },
-  heroAvatarLeft: {
-    left: 0,
-    top: 16,
-    backgroundColor: '#dcfce7',
-    transform: [{ rotate: '-6deg' }],
-  },
-  heroAvatarRight: {
-    right: 4,
-    top: 8,
-    backgroundColor: '#fef3c7',
-    transform: [{ rotate: '8deg' }],
-  },
-  heroAvatarEmoji: {
-    fontSize: 26,
-  },
-  heroSparkleOne: {
-    position: 'absolute',
-    right: 8,
-    bottom: 24,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#86efac',
-  },
-  heroSparkleTwo: {
-    position: 'absolute',
-    right: 38,
-    top: 14,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#22c55e',
-  },
-  heroNoteBubble: {
-    position: 'absolute',
-    right: 12,
-    bottom: 0,
-    minWidth: 52,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#ffffff',
+  addExpenseIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#eaf6ee',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#d1fae5',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    borderColor: '#d4edda',
   },
-  heroNoteText: {
+  addExpenseCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  addExpenseTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  addExpenseSubtitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#15803d',
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e9f3ec',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-  sectionLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  overviewRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  overviewCard: {
-    flex: 1,
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: '#f8fbf9',
-    gap: 5,
-  },
-  overviewIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overviewAmount: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  overviewLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  overviewDetail: {
-    fontSize: 10,
     color: '#6b7280',
+    lineHeight: 17,
   },
+
+  // ── Section Headers ──
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 4,
+    paddingHorizontal: 16,
   },
   sectionHeader: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#111827',
   },
   sectionLink: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#16813f',
+    color: '#148a46',
   },
-  groupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+
+  // ── Card ──
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e9f3ec',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 3,
   },
   divider: {
     borderBottomWidth: 1,
-    borderBottomColor: '#eef4ef',
+    borderBottomColor: '#f0f5f1',
   },
-  groupLeft: {
-    flex: 1,
+
+  // ── Groups ──
+  groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 15,
     gap: 12,
   },
-  groupAvatarWrap: {
+  groupIconWrap: {
     width: 42,
     height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    borderRadius: 21,
+    backgroundColor: '#eaf6ee',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#ffffff',
+    borderColor: '#d4edda',
   },
-  groupAvatarEmoji: {
-    fontSize: 16,
+  groupIconEmoji: {
+    fontSize: 18,
   },
   groupTextWrap: {
     flex: 1,
-    gap: 1,
+    gap: 2,
   },
   groupName: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#111827',
   },
   groupMembers: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#6b7280',
-    marginBottom: 6,
-  },
-  memberDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  memberDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ffffff',
   },
   groupRight: {
     alignItems: 'flex-end',
     gap: 2,
   },
   groupStatusLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
     color: '#6b7280',
+    fontWeight: '500',
   },
   groupAmount: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
-  bannerCard: {
-    borderRadius: 22,
-    padding: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#daf0df',
+  groupChevron: {
+    marginLeft: 4,
   },
-  bannerLeft: {
+
+  // ── Activity ──
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 14,
     gap: 12,
   },
-  bannerIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: '#eaf8ee',
+  activityIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d6f2df',
   },
-  bannerIcon: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#16813f',
-  },
-  bannerCopy: {
+  activityTextWrap: {
     flex: 1,
-    gap: 4,
+    gap: 1,
   },
-  bannerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#14532d',
+  activityTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
   },
-  bannerText: {
+  activitySubtitle: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  activityMeta: {
     fontSize: 11,
-    lineHeight: 16,
-    color: '#4b5563',
+    color: '#9ca3af',
   },
-  bannerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  bannerPrimaryButton: {
-    flex: 1,
-    backgroundColor: '#16813f',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerPrimaryButtonText: {
-    fontSize: 12,
+  activityAmount: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#ffffff',
+    letterSpacing: -0.2,
   },
-  bannerSecondaryButton: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#dbeee0',
+
+  // ── Footer Banner ──
+  footerBanner: {
+    marginHorizontal: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
-  bannerSecondaryButtonText: {
-    fontSize: 12,
+  footerBannerBg: {
+    minHeight: 130,
+    justifyContent: 'flex-end',
+  },
+  footerBannerBgImage: {
+    borderRadius: 20,
+  },
+  footerBannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(240, 250, 242, 0.45)',
+    borderRadius: 20,
+  },
+  footerBannerContent: {
+    padding: 20,
+    paddingBottom: 18,
+  },
+  footerBannerTitle: {
+    fontSize: 20,
     fontWeight: '800',
-    color: '#166534',
+    color: '#111827',
+    letterSpacing: -0.3,
+    lineHeight: 28,
   },
+  footerBannerWave: {
+    fontSize: 20,
+    color: '#148a46',
+    marginTop: 8,
+  },
+
+  // ── Modal ──
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -1022,44 +910,5 @@ const styles = StyleSheet.create({
     color: Colors.expense,
     fontSize: FontSizes.sm,
     fontWeight: '600',
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
-  },
-  activityIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  activityTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  activityDetail: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
-  activityAmountWrap: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  activityStatus: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  activityAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.2,
   },
 });

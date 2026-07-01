@@ -1,11 +1,11 @@
-const { createRemoteJWKSet, jwtVerify } = require('jose');
+import {createRemoteJWKSet, jwtVerify} from 'jose';
 
 const PUBLISHABLE_KEY_PREFIXES = ['pk_test_', 'pk_live_'];
 
-let cachedIssuer = null;
-let cachedJwks = null;
+let cachedIssuer: string | null = null;
+let cachedJwks: { issuer: string; jwks: any } | null = null;
 
-function decodePublishableKey(key) {
+function decodePublishableKey(key: string | undefined): string | null {
   if (!key) {
     return null;
   }
@@ -62,7 +62,7 @@ function getClerkIssuer() {
   return cachedIssuer;
 }
 
-function getClerkJwks(issuer) {
+function getClerkJwks(issuer: string | null) {
   if (!issuer) {
     return null;
   }
@@ -77,7 +77,15 @@ function getClerkJwks(issuer) {
   return cachedJwks.jwks;
 }
 
-async function verifyClerkToken(token) {
+async function verifyClerkToken(token:string) {
+  if(!token) {
+    throw new Error('Token is required for verification.');
+  } 
+
+  if(typeof token !== 'string') {
+    throw new Error('Token must be a string.');
+  }
+
   const issuer = getClerkIssuer();
   if (!issuer) {
     throw new Error('Clerk issuer is not configured.');
@@ -92,7 +100,7 @@ async function verifyClerkToken(token) {
   return payload;
 }
 
-function extractClerkProfile(payload) {
+function extractClerkProfile(payload: any) {
   if (!payload) {
     return null;
   }
@@ -119,7 +127,7 @@ function extractClerkProfile(payload) {
   };
 }
 
-module.exports = {
+export  {
   decodePublishableKey,
   getClerkIssuer,
   verifyClerkToken,

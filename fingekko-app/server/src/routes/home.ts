@@ -1,18 +1,18 @@
-const express = require('express');
-const authMiddleware = require('../middleware/auth');
-const { createGoal, listGoals } = require('../repositories/goalRepository');
-const { getQuestState, setQuestState } = require('../repositories/questRepository');
-const { createTransaction, listTransactions } = require('../repositories/transactionRepository');
-const { sanitizeUser } = require('../utils/auth');
+import express , {Request, Response} from 'express';
+import authMiddleware from "../middleware/auth.js";
+import { createGoal, listGoals } from '../repositories/goalRepository.js';
+import {getQuestState, setQuestState } from '../repositories/questRepository.js';
+import { createTransaction, listTransactions } from '../repositories/transactionRepository.js';
+
 
 const router = express.Router();
 
-router.get('/me', authMiddleware, (req, res) => {
-  return res.json({ user: sanitizeUser(req.user) });
+router.get('/me', authMiddleware, (req: Request, res: Response) => {
+  return res.json({ user: req.user });
 });
 
-router.get('/home', authMiddleware, (req, res) => {
-  const safeUser = sanitizeUser(req.user);
+router.get('/home', authMiddleware, (req: Request, res: Response) => {
+  const safeUser = (req.user);
   const stats = safeUser.stats ?? {};
 
   return res.json({
@@ -36,11 +36,11 @@ router.get('/home', authMiddleware, (req, res) => {
   });
 });
 
-router.get('/profile', authMiddleware, (req, res) => {
-  return res.json({ user: sanitizeUser(req.user) });
+router.get('/profile', authMiddleware, (req: Request, res: Response) => {
+  return res.json({ user: (req.user) });
 });
 
-router.get('/transactions', authMiddleware, async (req, res, next) => {
+router.get('/transactions', authMiddleware, async (req: Request, res: Response, next: Function) => {
   try {
     const userId = req.user.id ?? req.user._id?.toString();
     const transactions = await listTransactions(userId);
@@ -50,7 +50,7 @@ router.get('/transactions', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.post('/transactions', authMiddleware, async (req, res, next) => {
+router.post('/transactions', authMiddleware, async (req: Request, res: Response, next: Function) => {
   const { type, amount, category, date } = req.body ?? {};
 
   if (!type || !['income', 'expense'].includes(type)) {
@@ -160,4 +160,4 @@ router.put('/quests/state', authMiddleware, async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;
