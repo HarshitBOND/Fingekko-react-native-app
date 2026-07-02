@@ -1,7 +1,7 @@
 import type { FriendRelationship, FriendSearchResponse, FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
-import { Check, Mail, Search, UserPlus, Users, X } from 'lucide-react-native';
+import { Check, Handshake, Mail, Search, UserPlus, Users, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -45,8 +45,8 @@ function FriendCard({
           {item.status === 'accepted'
             ? 'Connected'
             : item.direction === 'incoming'
-            ? 'Incoming request'
-            : 'Outgoing request'}
+              ? 'Incoming request'
+              : 'Outgoing request'}
         </Text>
       </View>
 
@@ -72,16 +72,16 @@ function FriendCard({
 
 export default function FriendsScreen() {
   const { getToken, isSignedIn } = useAuth();
-  const [email, setEmail] = useState('');
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
     incomingRequests: [],
     outgoingRequests: [],
   });
-  const [searchResult, setSearchResult] = useState<FriendSearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const getTokenRef = useRef(getToken);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FriendSearchResponse[]>([]);
 
   useEffect(() => {
     getTokenRef.current = getToken;
@@ -119,32 +119,32 @@ export default function FriendsScreen() {
     };
   }, [isSignedIn]);
 
-  const searchByEmail = async () => {
-    const trimmedEmail = email.trim();
-
-    if (!trimmedEmail) {
-      setMessage('Enter an email address first.');
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
       return;
     }
 
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const token = await getTokenRef.current();
-      if (!token) {
-        return;
+    const handle = setTimeout(async () => {
+      const token = await getToken();
+      if (!token) return;
+      setSearchLoading(true);
+      try {
+        const response = await apiRequest<FriendSearchResponse[]>({
+          method: 'get',
+          url: `/api/friends/search?q=${encodeURIComponent(searchQuery.trim())}`,
+          token,
+        });
+        setSearchResults(response);
+      } catch (error) {
+        console.error('Error searching users:', error);
+      } finally {
+        setSearchLoading(false);
       }
+    }, 350);
 
-      const result = await apiRequest<FriendSearchResponse>(`/api/friends/search?email=${encodeURIComponent(trimmedEmail)}`, {}, token);
-      setSearchResult(result);
-    } catch (error: any) {
-      setSearchResult(null);
-      setMessage(error.message.includes('404') ? 'No user found for that email.' : 'Search failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   const sendRequest = async (targetEmail: string) => {
     const token = await getTokenRef.current();
@@ -221,57 +221,111 @@ export default function FriendsScreen() {
           </View>
           <Text style={styles.title}>Friends</Text>
           <Text style={styles.subtitle}>
-            Search people by email, send requests, accept connections, and split expenses with your circle.
+            Connect with friends, manage shared expenses, and settle up with ease.
           </Text>
         </View>
 
         <View style={styles.searchCard}>
-          <Text style={styles.sectionTitle}>Search by email</Text>
+          <Text style={styles.sectionTitle}>Search Friends</Text>
           <View style={styles.searchRow}>
-            <Mail size={18} color="#64748b" />
+            <Handshake size={18} color="#64748b" />
             <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="friend@example.com"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
               autoCapitalize="none"
-              keyboardType="email-address"
+              placeholder='Search people...'
               style={styles.searchInput}
             />
           </View>
 
-          <Pressable style={styles.searchButton} onPress={searchByEmail}>
-            {loading ? <ActivityIndicator color="#ffffff" /> : <Search size={18} color="#ffffff" />}
-            <Text style={styles.searchButtonText}>Find person</Text>
-          </Pressable>
 
-          {searchResult ? (
-            <View style={styles.resultCard}>
-              <View>
-                <Text style={styles.name}>{searchResult.user.name}</Text>
-                <Text style={styles.email}>{searchResult.user.email}</Text>
-              </View>
-
-              {searchResult.relationship?.status === 'accepted' ? (
-                <View style={styles.acceptedPill}>
-                  <Check size={14} color="#14532d" />
-                  <Text style={styles.acceptedPillText}>Already friends</Text>
-                </View>
-              ) : (
-                <Pressable style={styles.primaryButton} onPress={() => sendRequest(searchResult.user.email)}>
-                  <UserPlus size={16} color="#ffffff" />
-                  <Text style={styles.primaryButtonText}>
-                    {searchResult.relationship?.status === 'pending' && searchResult.relationship.direction === 'outgoing'
-                      ? 'Request sent'
-                      : 'Add friend'}
-                  </Text>
-                </Pressable>
-              )}
+          {searchLoading && (
+            <View style={{ marginTop: 10 }}>
+              <ActivityIndicator size="small" color="#166534" />
             </View>
-          ) : null}
+          )}
+
+          {!searchLoading &&
+            searchQuery.trim() !== "" &&
+            searchResults.length === 0 && (
+              <Text style={styles.emptyText}>No results found.</Text>
+            )}
+
+          {searchResults.length > 0 && (
+            <View style={styles.resultsContainer}>
+              <ScrollView
+                style={{ maxHeight: 300 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {searchResults.map((result) => {
+                  const relationship = result.relationship;
+                  const isAccepted = relationship?.status === "accepted";
+                  const isPendingOutgoing =
+                    relationship?.status === "pending" &&
+                    relationship.direction === "outgoing";
+
+                  return (
+                    <View key={result.user.id} style={styles.cardRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                          {result.user.name
+                            .split(" ")
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((part) => part[0]?.toUpperCase())
+                            .join("") || "F"}
+                        </Text>
+                      </View>
+
+                      <View style={styles.cardBody}>
+                        <Text style={styles.name}>{result.user.name}</Text>
+                        <Text style={styles.email}>{result.user.email}</Text>
+                      </View>
+
+                      {isAccepted ? (
+                        <View style={styles.acceptedPill}>
+                          <Check size={14} color="#14532d" />
+                          <Text style={styles.acceptedPillText}>Friends</Text>
+                        </View>
+                      ) : (
+                        <Pressable
+                          style={[
+                            styles.primaryButton,
+                            isPendingOutgoing && {
+                              backgroundColor: "#dcfce7",
+                            },
+                          ]}
+                          onPress={() => sendRequest(result.user.email)}
+                          disabled={isPendingOutgoing}
+                        >
+                          {isPendingOutgoing ? (
+                            <Handshake size={16} color="#166534" />
+                          ) : (
+                            <UserPlus size={16} color="#ffffff" />
+                          )}
+
+                          <Text
+                            style={[
+                              styles.primaryButtonText,
+                              isPendingOutgoing && {
+                                color: "#166534",
+                              },
+                            ]}
+                          >
+                            {isPendingOutgoing ? "Request sent" : "Add Friend"}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
           {message ? <Text style={styles.message}>{message}</Text> : null}
         </View>
-
         <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>Incoming requests</Text>
           {friends.incomingRequests.length === 0 ? (
@@ -306,6 +360,13 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
+  resultsContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    overflow: "hidden",
+  },
   page: {
     flex: 1,
     backgroundColor: '#f4f7f2',
@@ -339,7 +400,7 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 12,
-    fontSize: 30,
+    fontSize: 48,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -439,8 +500,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   emptyText: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: 17,
+    color: '#b7bfce',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+    fontWeight: '600',
   },
   cardRow: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import friendRepository from '../repositories/friendRepository.js';
-import { findByEmail , searchUsers } from '../repositories/userRepository.js';
+import { findByEmail, searchUsers } from '../repositories/userRepository.js';
 
 
 const router = Router();
@@ -195,9 +195,13 @@ router.delete('/:friendshipId', async (req: Request, res: Response) => {
     if (!friendship) {
       return res.status(404).json({ message: 'Friendship not found' });
     }
+    const requesterId =
+      friendship.requester?._id?.toString?.() ??
+      friendship.requester.toString();
 
-    const requesterId = friendship.requester.toString();
-    const addresseeId = friendship.addressee.toString();
+    const addresseeId =
+      friendship.addressee?._id?.toString?.() ??
+      friendship.addressee.toString();
 
     if (requesterId !== currentUserId && addresseeId !== currentUserId) {
       return res.status(403).json({ message: 'You cannot remove this friendship' });

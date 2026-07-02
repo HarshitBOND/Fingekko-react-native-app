@@ -1,6 +1,7 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+
 import {
     Briefcase,
     Car,
@@ -16,6 +17,7 @@ import {
     UserPlus,
     Utensils,
     X,
+    Handshake
 } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -31,6 +33,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
+import { useFocusEffect } from 'expo-router';
+import { BackHandler } from 'react-native';
+import { useCallback } from 'react';
+import { Use } from 'react-native-svg';
 
 // Same icon set used on YourGroups so a group created here renders consistently there.
 const ICONS = {
@@ -74,6 +80,7 @@ type SearchResult = {
 
 export default function AddNewGroup() {
     const router = useRouter();
+
     const { getToken } = useAuth();
     const { user } = useUser();
 
@@ -82,6 +89,9 @@ export default function AddNewGroup() {
 
     const [friends, setFriends] = useState<Friend[]>([]);
     const [friendsLoading, setFriendsLoading] = useState(false);
+
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+    const [pendingRequestsId, setPendingRequestsId] = useState<Friend[]>([]);
 
     // Selected members are stored as plain user records (FriendOfMine), since that's
     // what the backend needs for group creation (actual user ids, not friendship ids).
@@ -94,6 +104,73 @@ export default function AddNewGroup() {
     const [pendingRequestIds, setPendingRequestIds] = useState<string[]>([]);
 
     const [creating, setCreating] = useState(false);
+
+    const resetGroupCreation = () => {
+        setSelectedMembers([]);
+        setGroupName('');
+        setSelectedIcon('Users');
+        setSearchQuery('');
+        setSearchResults([]);
+        setPendingRequestIds([]);
+        setMembersModalVisible(false);
+    };
+
+    function toggleGroupMember(userId: string) {
+        setSelectedUsers((prev) =>
+            prev.includes(userId)
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId]
+        );
+    }
+
+    async function handleSendFriendRequest(userId: string) {
+        if (pendingRequestIds.includes(userId)) return;
+
+        try {
+            const token = await getToken();
+
+            await fetch("/api/friends/request", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ userId }),
+            });
+
+            setPendingRequestIds((prev) => [...prev, userId]);
+        } catch (err) {
+            console.log("Friend request failed:", err);
+        }
+    }
+
+    // THE FIX: reset on focus AND on blur (cleanup). Resetting only on focus
+    // leaves a tiny window where the old selectedMembers/groupName can still
+    // render before the effect fires. Resetting on blur (when you leave the
+    // screen) guarantees it's already clean before you ever come back to it.
+    useFocusEffect(
+        useCallback(() => {
+            // reset state every time this screen becomes focused
+            resetGroupCreation();
+
+            // handle hardware back
+            const onBackPress = () => {
+                router.replace('/(tabs)/YourGroups');
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener(
+                'hardwareBackPress',
+                onBackPress
+            );
+
+            // cleanup: also reset when this screen loses focus (navigating away)
+            return () => {
+                subscription.remove();
+                resetGroupCreation();
+            };
+        }, [])
+    );
 
     const fetchFriends = async () => {
         const token = await getToken();
@@ -151,8 +228,7 @@ export default function AddNewGroup() {
     // `id` here is always the underlying user's id, never a friendship record id.
     const isSelected = (id: string) => selectedMembers.some((m) => m.id === id);
 
-    const toggleFriendSelection = (friend: Friend) => {
-        const member = friend.friend;
+    const toggleMember = (member: FriendOfMine) => {
         setSelectedMembers((prev) =>
             prev.some((m) => m.id === member.id)
                 ? prev.filter((m) => m.id !== member.id)
@@ -212,13 +288,16 @@ export default function AddNewGroup() {
                     members: selectedMembers.map((m) => m.id),
                 },
             });
-            router.back();
+            resetGroupCreation();
+            router.replace('/(tabs)/YourGroups');
         } catch (error) {
             console.error('Error creating group:', error);
         } finally {
             setCreating(false);
         }
     };
+
+
 
     return (
         <SafeAreaView style={styles.page} edges={['top']}>
@@ -243,12 +322,12 @@ export default function AddNewGroup() {
 
                     <View style={styles.topBar}>
                         <View style={styles.brandRow}>
-                            <Pressable style={styles.logoCircle} onPress={() => router.back()}>
+                            <Pressable style={styles.logoCircle} onPress={() => router.replace('/(tabs)/YourGroups')}>
                                 <ChevronLeft size={20} color="#148a46" />
                             </Pressable>
                             <Text style={styles.brandTitle}>New Group</Text>
                         </View>
-                        <Pressable style={styles.menuButton} onPress={() => router.back()}>
+                        <Pressable style={styles.menuButton} onPress={() => router.replace('/(tabs)/YourGroups')}>
                             <Menu size={20} color="#1f2937" />
                         </Pressable>
                     </View>
@@ -383,7 +462,9 @@ export default function AddNewGroup() {
                                 {friendsLoading ? (
                                     <ActivityIndicator style={{ marginTop: 20 }} color="#148a46" />
                                 ) : friends.length === 0 ? (
+
                                     <Text style={styles.emptyText}>You don't have any friends added yet.</Text>
+
                                 ) : (
                                     friends.map((friend) => {
                                         const selected = isSelected(friend.friend.id);
@@ -391,7 +472,7 @@ export default function AddNewGroup() {
                                             <Pressable
                                                 key={friend.id}
                                                 style={styles.friendRow}
-                                                onPress={() => toggleFriendSelection(friend)}
+                                                onPress={() => toggleMember(friend.friend)}
                                             >
                                                 <View style={styles.avatarCircle}>
                                                     <Text style={styles.avatarInitial}>
@@ -405,7 +486,7 @@ export default function AddNewGroup() {
                                                     )}
                                                 </View>
                                                 <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                                                    {selected && <Check size={14} color="#ffffff" />}
+                                                    {selected ? <Check size={14} color="#ffffff" /> : <UserPlus size={14} color="#148a46" />}
                                                 </View>
                                             </Pressable>
                                         );
@@ -438,28 +519,31 @@ export default function AddNewGroup() {
                                                         <Text style={styles.friendUsername}>@{result.user.email}</Text>
                                                     )}
                                                 </View>
+                                                <View style ={{ flexDirection: 'row', alignItems: 'center', gap: 20 , justifyContent: 'flex-end', marginRight: 10 }}>
                                                 <Pressable
-                                                    style={[
-                                                        styles.addPersonButton,
-                                                        (requested || added) && styles.addPersonButtonDisabled,
-                                                    ]}
-                                                    onPress={() => sendFriendRequestAndAdd(result)}
-                                                    disabled={requested || added}
+                                                    
+                                                    onPress={() => handleSendFriendRequest(result.user.id)}
+                                                    disabled={requested}
                                                 >
-                                                    {requested || added ? (
-                                                        <Check size={14} color="#148a46" />
+                                                    {requested ? (
+                                                        <Handshake size={18} color="#EAB308" />
                                                     ) : (
-                                                        <UserPlus size={14} color="#ffffff" />
+                                                        <Handshake size={18} color="#374151" />
                                                     )}
-                                                    <Text
-                                                        style={[
-                                                            styles.addPersonText,
-                                                            (requested || added) && styles.addPersonTextDisabled,
-                                                        ]}
-                                                    >
-                                                        {requested || added ? 'Added' : 'Add'}
-                                                    </Text>
+
                                                 </Pressable>
+                                                <Pressable
+                                                
+                                                    onPress={() => toggleMember(result.user)}
+                                                >
+                                                    {added ? (
+                                                        <Check size={18} color="#148a46" />
+                                                    ) : (
+                                                        <UserPlus size={18} color="#374151" />
+                                                    )}
+
+                                                </Pressable>
+                                                </View>
                                             </View>
                                         );
                                     })
@@ -762,10 +846,13 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     emptyText: {
-        fontSize: 13,
-        color: '#9ca3af',
+        fontSize: 30,
+        color: '#494f5a',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginHorizontal: 20,
         marginTop: 8,
+        fontWeight: '600',
     },
     friendRow: {
         flexDirection: 'row',
