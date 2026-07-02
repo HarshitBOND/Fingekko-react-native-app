@@ -19,11 +19,16 @@ const friendshipSchema = new mongoose.Schema(
       enum: ['pending', 'accepted', 'declined'],
       default: 'pending',
     },
+    // Order-independent key ("<lowerId>:<higherId>") so a friendship between
+    // two users can only ever exist once, regardless of who requested whom.
+    pairKey: {
+      type: String,
+      required: true,
+      unique: true,
+    },
   },
   { timestamps: true }
 );
-
-friendshipSchema.index({ requester: 1, addressee: 1 }, { unique: true });
 
 const Friendship = mongoose.models.Friendship || mongoose.model('Friendship', friendshipSchema);
 

@@ -64,7 +64,12 @@ async function findAcceptedFriendship(firstId: string, secondId: string) {
 }
 
 async function createFriendRequest(requesterId: string, addresseeId: string) {
-  return Friendship.create({ requester: requesterId, addressee: addresseeId, status: 'pending' });
+  return Friendship.create({
+    requester: requesterId,
+    addressee: addresseeId,
+    status: 'pending',
+    pairKey: pairKey(requesterId, addresseeId),
+  });
 }
 
 async function updateStatus(friendshipId: string, status: 'pending' | 'accepted' | 'declined') {
