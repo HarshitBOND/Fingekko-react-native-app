@@ -45,15 +45,31 @@ const ICONS = {
 
 const ICON_KEYS = Object.keys(ICONS) as (keyof typeof ICONS)[];
 
-type Friend = {
+// ---- Types matching the backend exactly ----
+
+type FriendOfMine = {
     id: string;
     name: string;
-    username?: string;
-    avatarUrl?: string;
+    email: string;
+    avatarKey: string;
 };
 
-type SearchResult = Friend & {
-    isFriend?: boolean;
+type Friend = {
+    id: string; // friendship record id (NOT the other user's id)
+    status: 'accepted' | 'pending' | 'declined';
+    direction: 'accepted' | 'incoming' | 'outgoing';
+    friend: FriendOfMine;
+};
+
+type FriendsResponse = {
+    friends: Friend[];
+    incomingRequests: Friend[];
+    outgoingRequests: Friend[];
+};
+
+type SearchResult = {
+    user: FriendOfMine;
+    relationship: Friend | null;
 };
 
 export default function AddNewGroup() {
@@ -67,7 +83,9 @@ export default function AddNewGroup() {
     const [friends, setFriends] = useState<Friend[]>([]);
     const [friendsLoading, setFriendsLoading] = useState(false);
 
-    const [selectedMembers, setSelectedMembers] = useState<Friend[]>([]);
+    // Selected members are stored as plain user records (FriendOfMine), since that's
+    // what the backend needs for group creation (actual user ids, not friendship ids).
+    const [selectedMembers, setSelectedMembers] = useState<FriendOfMine[]>([]);
 
     const [membersModalVisible, setMembersModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -85,12 +103,12 @@ export default function AddNewGroup() {
         }
         setFriendsLoading(true);
         try {
-            const response = await apiRequest<Friend[]>({
+            const response = await apiRequest<FriendsResponse>({
                 method: 'get',
                 url: '/api/friends',
                 token,
             });
-            setFriends(response);
+            setFriends(response.friends);
         } catch (error) {
             console.error('Error fetching friends:', error);
         } finally {
@@ -130,17 +148,19 @@ export default function AddNewGroup() {
         return () => clearTimeout(handle);
     }, [searchQuery]);
 
+    // `id` here is always the underlying user's id, never a friendship record id.
     const isSelected = (id: string) => selectedMembers.some((m) => m.id === id);
 
     const toggleFriendSelection = (friend: Friend) => {
+        const member = friend.friend;
         setSelectedMembers((prev) =>
-            prev.some((m) => m.id === friend.id)
-                ? prev.filter((m) => m.id !== friend.id)
-                : [...prev, friend]
+            prev.some((m) => m.id === member.id)
+                ? prev.filter((m) => m.id !== member.id)
+                : [...prev, member]
         );
     };
 
-    const sendFriendRequestAndAdd = async (person: SearchResult) => {
+    const sendFriendRequestAndAdd = async (result: SearchResult) => {
         const token = await getToken();
         if (!token) {
             console.error('No token available for API request.');
@@ -151,12 +171,12 @@ export default function AddNewGroup() {
                 method: 'post',
                 url: '/api/friends/request',
                 token,
-                data: { userId: person.id },
+                data: { email: result.user.email },
             });
-            setPendingRequestIds((prev) => [...prev, person.id]);
+            setPendingRequestIds((prev) => [...prev, result.user.id]);
             // Add them to the group immediately even though the friend request is only pending.
             setSelectedMembers((prev) =>
-                prev.some((m) => m.id === person.id) ? prev : [...prev, person]
+                prev.some((m) => m.id === result.user.id) ? prev : [...prev, result.user]
             );
         } catch (error) {
             console.error('Error sending friend request:', error);
@@ -169,8 +189,8 @@ export default function AddNewGroup() {
 
     const combinedSearchList = useMemo(() => {
         // Hide search results that are already in the friends list to avoid duplicate rows.
-        const friendIds = new Set(friends.map((f) => f.id));
-        return searchResults.filter((r) => !friendIds.has(r.id));
+        const friendIds = new Set(friends.map((f) => f.friend.id));
+        return searchResults.filter((r) => !friendIds.has(r.user.id));
     }, [searchResults, friends]);
 
     const createGroup = async () => {
@@ -366,7 +386,7 @@ export default function AddNewGroup() {
                                     <Text style={styles.emptyText}>You don't have any friends added yet.</Text>
                                 ) : (
                                     friends.map((friend) => {
-                                        const selected = isSelected(friend.id);
+                                        const selected = isSelected(friend.friend.id);
                                         return (
                                             <Pressable
                                                 key={friend.id}
@@ -375,13 +395,13 @@ export default function AddNewGroup() {
                                             >
                                                 <View style={styles.avatarCircle}>
                                                     <Text style={styles.avatarInitial}>
-                                                        {friend.name.charAt(0).toUpperCase()}
+                                                        {friend.friend.name.charAt(0).toUpperCase()}
                                                     </Text>
                                                 </View>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.friendName}>{friend.name}</Text>
-                                                    {friend.username && (
-                                                        <Text style={styles.friendUsername}>@{friend.username}</Text>
+                                                    <Text style={styles.friendName}>{friend.friend.name}</Text>
+                                                    {friend.friend.email && (
+                                                        <Text style={styles.friendUsername}>@{friend.friend.email}</Text>
                                                     )}
                                                 </View>
                                                 <View style={[styles.checkbox, selected && styles.checkboxActive]}>
@@ -400,20 +420,22 @@ export default function AddNewGroup() {
                                 {combinedSearchList.length === 0 && !searchLoading ? (
                                     <Text style={styles.emptyText}>No matching people found.</Text>
                                 ) : (
-                                    combinedSearchList.map((person) => {
-                                        const requested = pendingRequestIds.includes(person.id);
-                                        const added = isSelected(person.id);
+                                    combinedSearchList.map((result) => {
+                                        const requested =
+                                            pendingRequestIds.includes(result.user.id) ||
+                                            result.relationship?.status === 'pending';
+                                        const added = isSelected(result.user.id);
                                         return (
-                                            <View key={person.id} style={styles.friendRow}>
+                                            <View key={result.user.id} style={styles.friendRow}>
                                                 <View style={styles.avatarCircle}>
                                                     <Text style={styles.avatarInitial}>
-                                                        {person.name.charAt(0).toUpperCase()}
+                                                        {result.user.name.charAt(0).toUpperCase()}
                                                     </Text>
                                                 </View>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.friendName}>{person.name}</Text>
-                                                    {person.username && (
-                                                        <Text style={styles.friendUsername}>@{person.username}</Text>
+                                                    <Text style={styles.friendName}>{result.user.name}</Text>
+                                                    {result.user.email && (
+                                                        <Text style={styles.friendUsername}>@{result.user.email}</Text>
                                                     )}
                                                 </View>
                                                 <Pressable
@@ -421,7 +443,7 @@ export default function AddNewGroup() {
                                                         styles.addPersonButton,
                                                         (requested || added) && styles.addPersonButtonDisabled,
                                                     ]}
-                                                    onPress={() => sendFriendRequestAndAdd(person)}
+                                                    onPress={() => sendFriendRequestAndAdd(result)}
                                                     disabled={requested || added}
                                                 >
                                                     {requested || added ? (
@@ -442,36 +464,6 @@ export default function AddNewGroup() {
                                         );
                                     })
                                 )}
-
-                                {friends
-                                    .filter((f) =>
-                                        f.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
-                                    )
-                                    .map((friend) => {
-                                        const selected = isSelected(friend.id);
-                                        return (
-                                            <Pressable
-                                                key={friend.id}
-                                                style={styles.friendRow}
-                                                onPress={() => toggleFriendSelection(friend)}
-                                            >
-                                                <View style={styles.avatarCircle}>
-                                                    <Text style={styles.avatarInitial}>
-                                                        {friend.name.charAt(0).toUpperCase()}
-                                                    </Text>
-                                                </View>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={styles.friendName}>{friend.name}</Text>
-                                                    {friend.username && (
-                                                        <Text style={styles.friendUsername}>@{friend.username}</Text>
-                                                    )}
-                                                </View>
-                                                <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                                                    {selected && <Check size={14} color="#ffffff" />}
-                                                </View>
-                                            </Pressable>
-                                        );
-                                    })}
                             </>
                         )}
                     </ScrollView>

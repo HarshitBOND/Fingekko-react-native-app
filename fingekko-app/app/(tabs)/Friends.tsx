@@ -4,13 +4,13 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Check, Mail, Search, UserPlus, Users, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

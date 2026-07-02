@@ -70,10 +70,22 @@ async function updateByclerkId(
 ) {
   return User.findOneAndUpdate({ clerkId }, update, { new: true }).lean();
 }
+
+
+async function searchUsers(query: string) {
+  return User.find({
+    $or: [
+      { name: { $regex: query, $options: "i" } },
+      { email: { $regex: query, $options: "i" } },
+    ],
+  }).lean();
+}
+
 export {
   createUser,
   findByEmail,
   findByClerkId,
   updateByclerkId,
   updateById,
+  searchUsers,
 };

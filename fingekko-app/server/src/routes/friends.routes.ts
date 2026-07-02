@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import friendRepository from '../repositories/friendRepository.js';
-import { findByEmail } from '../repositories/userRepository.js';
+import { findByEmail , searchUsers } from '../repositories/userRepository.js';
 import { getAuth } from '@clerk/express';
 import {  findByClerkId} from '../repositories/userRepository.js';
 
@@ -76,31 +76,37 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const currentUserId = await getCurrentUserId(req);
-    const email = String(req.query.email ?? '').trim().toLowerCase();
 
-    if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
+    const query = String(req.query.q ?? "").trim();
+
+    if (!query) {
+      return res.json([]);
     }
 
-    const user = (await findByEmail(email)) as any;
+    const users = await searchUsers(query);
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const results = await Promise.all(
+      users
+        .filter((user: any) => user._id.toString() !== currentUserId)
+        .map(async (user: any) => {
+          const relationship = await friendRepository.findByPair(
+            currentUserId,
+            user._id.toString()
+          );
 
-    if (user._id.toString() === currentUserId) {
-      return res.status(400).json({ message: 'You cannot add yourself' });
-    }
+          return {
+            user: serializeUser(user),
+            relationship: relationship
+              ? serializeFriendship(relationship, currentUserId)
+              : null,
+          };
+        })
+    );
 
-    const relationship = await friendRepository.findByPair(currentUserId, String(user._id));
-
-    return res.json({
-      user: serializeUser(user),
-      relationship: relationship ? serializeFriendship(relationship, currentUserId) : null,
-    });
+    return res.json(results);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: 'Failed to search user' });
+    return res.status(500).json({ message: "Failed to search users" });
   }
 });
 
