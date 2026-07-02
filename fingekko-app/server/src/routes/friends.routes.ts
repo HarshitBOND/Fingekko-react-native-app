@@ -2,29 +2,19 @@ import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import friendRepository from '../repositories/friendRepository.js';
 import { findByEmail , searchUsers } from '../repositories/userRepository.js';
-import { getAuth } from '@clerk/express';
-import {  findByClerkId} from '../repositories/userRepository.js';
+
 
 const router = Router();
 
 router.use(authMiddleware);
 
 
-async function getCurrentUserId(req: Request) {
-  const { userId } = getAuth(req);
-  try{
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-    const user= await findByClerkId(userId);
-    if(!user){
-      throw new Error('User not found');
-    }
-    return user._id.toString();
-  } catch (error) {
-    console.error(error);
-    throw new Error('Failed to get current user ID');
+async function getCurrentUserId(req: any) {
+  if (!req.user) {
+    throw new Error("User not authenticated");
   }
+
+  return req.user.id ?? req.user._id?.toString();
 }
 
 function serializeUser(user: any) {

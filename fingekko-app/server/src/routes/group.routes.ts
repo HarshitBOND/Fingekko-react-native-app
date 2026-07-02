@@ -1,7 +1,10 @@
-import { getAuth } from "@clerk/express";
+
 import { Request, Response, Router } from "express";
 import groupRepository from "../repositories/groupRepository.js";
+import authMiddleware from "../middleware/auth.js";
+
 const groupRoute = Router();
+groupRoute.use(authMiddleware);
 
 function resolveGroupId(groupId: string | string[] | undefined) {
   return Array.isArray(groupId) ? groupId[0] : groupId;
@@ -9,7 +12,7 @@ function resolveGroupId(groupId: string | string[] | undefined) {
 
 groupRoute.get("/", async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.clerkId;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -35,7 +38,7 @@ groupRoute.get("/", async (req: Request, res: Response) => {
 
 groupRoute.post("/", async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.clerkId;
 
     if (!userId) {
       return res.status(500).json({ message: "unauthorized" })
@@ -58,7 +61,7 @@ groupRoute.post("/", async (req: Request, res: Response) => {
 
 groupRoute.get("/:groupId", async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.clerkId;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -97,7 +100,7 @@ groupRoute.get("/:groupId", async (req: Request, res: Response) => {
 
 groupRoute.delete("/:groupId", async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.clerkId;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -130,7 +133,7 @@ groupRoute.delete("/:groupId", async (req: Request, res: Response) => {
 
 groupRoute.post("/:groupId/leave", async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.clerkId;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
