@@ -38,6 +38,63 @@ export type ProfileResponse = {
 	user: ApiUser;
 };
 
+export type FriendStatus = 'pending' | 'accepted' | 'declined';
+
+export type ApiFriend = {
+	id: string;
+	name: string;
+	email: string;
+	avatarKey?: string;
+};
+
+export type FriendRelationship = {
+	id: string;
+	status: FriendStatus;
+	direction: 'incoming' | 'outgoing' | 'accepted';
+	friend: ApiFriend;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type FriendsResponse = {
+	friends: FriendRelationship[];
+	incomingRequests: FriendRelationship[];
+	outgoingRequests: FriendRelationship[];
+};
+
+export type FriendSearchResponse = {
+	user: ApiFriend;
+	relationship: FriendRelationship | null;
+};
+
+export type SplitParticipant = {
+	userId: ApiFriend;
+	amount: number;
+	settled: boolean;
+};
+
+export type CommunityExpense = {
+	id: string;
+	description: string;
+	amount: number;
+	expenseDate: string;
+	currency: string;
+	notes: string;
+	createdBy: ApiFriend;
+	paidBy: ApiFriend;
+	participants: SplitParticipant[];
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type CommunityExpensesResponse = {
+	expenses: CommunityExpense[];
+};
+
+export type CommunityExpenseResponse = {
+	expense: CommunityExpense;
+};
+
 export type ApiTransaction = {
 	id: string;
 	type: 'income' | 'expense';

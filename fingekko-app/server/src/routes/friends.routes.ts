@@ -2,14 +2,29 @@ import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import friendRepository from '../repositories/friendRepository.js';
 import { findByEmail } from '../repositories/userRepository.js';
+import { getAuth } from '@clerk/express';
+import {  findByClerkId} from '../repositories/userRepository.js';
 
 const router = Router();
 
 router.use(authMiddleware);
 
-function getCurrentUserId(req: Request) {
-  const user = req.user as any;
-  return user?._id?.toString?.() || user?.id?.toString?.() || '';
+
+async function getCurrentUserId(req: Request) {
+  const { userId } = getAuth(req);
+  try{
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    const user= await findByClerkId(userId);
+    if(!user){
+      throw new Error('User not found');
+    }
+    return user._id.toString();
+  } catch (error) {
+    console.error(error);
+    throw new Error('Failed to get current user ID');
+  }
 }
 
 function serializeUser(user: any) {
@@ -42,7 +57,7 @@ function serializeFriendship(friendship: any, currentUserId: string) {
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
 
     const friendships = await friendRepository.listForUser(currentUserId);
     const serialized = friendships.map((friendship) => serializeFriendship(friendship, currentUserId));
@@ -60,7 +75,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/search', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
     const email = String(req.query.email ?? '').trim().toLowerCase();
 
     if (!email) {
@@ -91,7 +106,7 @@ router.get('/search', async (req: Request, res: Response) => {
 
 router.post('/request', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
     const email = String(req.body?.email ?? '').trim().toLowerCase();
 
     if (!email) {
@@ -136,7 +151,7 @@ router.post('/request', async (req: Request, res: Response) => {
 
 router.put('/:friendshipId/accept', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
     const friendship = await friendRepository.findById(String(req.params.friendshipId));
 
     if (!friendship) {
@@ -157,7 +172,7 @@ router.put('/:friendshipId/accept', async (req: Request, res: Response) => {
 
 router.put('/:friendshipId/decline', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
     const friendship = await friendRepository.findById(String(req.params.friendshipId));
 
     if (!friendship) {
@@ -178,7 +193,7 @@ router.put('/:friendshipId/decline', async (req: Request, res: Response) => {
 
 router.delete('/:friendshipId', async (req: Request, res: Response) => {
   try {
-    const currentUserId = getCurrentUserId(req);
+    const currentUserId = await getCurrentUserId(req);
     const friendship = await friendRepository.findById(String(req.params.friendshipId));
 
     if (!friendship) {

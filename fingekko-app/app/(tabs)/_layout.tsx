@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect, Tabs, usePathname } from 'expo-router';
-import { BarChart, Home, Plus, Target, User, Repeat } from 'lucide-react-native';
+import { BarChart, Home, Repeat, Target, User } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -129,6 +129,42 @@ export default function TabLayout() {
           href: null,
         }}
       />
+
+      <Tabs.Screen
+        name="AddNewExpense"     // matches app/(tabs)/AddNewExpense.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="YourGroups"     // matches app/(tabs)/YourGroups.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="Friends"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="NonGroupExpenses"     // matches app/(tabs)/NonGroupExpenses.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="GroupExpenses"     // matches app/(tabs)/GroupExpenses.tsx
+        options={{
+          href: null,
+        }}
+      />
+
 
     </Tabs>
   );
