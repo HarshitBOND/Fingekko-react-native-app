@@ -9,6 +9,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@clerk/backend": "^3.10.0",
     "@clerk/express": "^2.1.35",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
