@@ -19,16 +19,56 @@ const participantSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const paidBySchema = new mongoose.Schema(
+  {
+    userId:{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    }
+  },
+  { _id: false }
+);
+
+const historySchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum : ['UPDATED', 'DELETED', 'CREATED', 'SETTLED'] ,
+      required: true,
+    },
+    performedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    performedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+
 const communityExpenseSchema = new mongoose.Schema(
   {
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Group',
+      required: true,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
     paidBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: [paidBySchema],
       required: true,
     },
     description: {
@@ -38,10 +78,6 @@ const communityExpenseSchema = new mongoose.Schema(
     },
     amount: {
       type: Number,
-      required: true,
-    },
-    expenseDate: {
-      type: String,
       required: true,
     },
     currency: {
@@ -56,6 +92,21 @@ const communityExpenseSchema = new mongoose.Schema(
       type: [participantSchema],
       default: [],
     },
+    history: {
+      type: [historySchema],
+      default: [],
+    },
+    isDeleted:{
+      type: Boolean,
+      default: false
+    },
+    deletedBy:{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    deletedAt:{
+      type: Date,
+    }
   },
   { timestamps: true }
 );

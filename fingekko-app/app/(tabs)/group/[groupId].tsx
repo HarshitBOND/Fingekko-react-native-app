@@ -2,26 +2,26 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-    Briefcase,
-    Car,
-    CircleHelp,
-    Coins,
-    Home,
-    Plane,
-    Users,
-    Utensils,
+  Briefcase,
+  Car,
+  CircleHelp,
+  Coins,
+  Home,
+  Plane,
+  Users,
+  Utensils,
 } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
@@ -90,13 +90,17 @@ const EXPENSES = [
 ];
 
 type GroupItem = {
+  id: string;
+  name: string;
+  description?: string;
+  members: {
     id: string;
     name: string;
-    description?: string;
-    members: string[];
-    icon: string;
-    createdBy: string;
-    balance?: number;
+    email: string;
+  }[]
+  icon: string;
+  createdBy: string;
+  balance?: number;
 };
 
 const GROUP_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
@@ -142,7 +146,7 @@ function PressableAction({ icon, label, onPress }: PressableActionProps) {
   );
 }
 
-export default function GroupDetailScreen( ) {
+export default function GroupDetailScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const membersY = useRef(0);
   const [settleUpVisible, setSettleUpVisible] = useState(false);
@@ -174,7 +178,7 @@ export default function GroupDetailScreen( ) {
       console.error('Error fetching group details:', error);
     } finally {
       setLoading(false);
-    }   
+    }
   }
 
   useEffect(() => {
@@ -206,9 +210,9 @@ export default function GroupDetailScreen( ) {
   const handleSettleUp = () => {
     setSettleUpVisible(true);
   };
-  
- 
-  
+
+
+
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -224,7 +228,7 @@ export default function GroupDetailScreen( ) {
         </Pressable>
 
         <View style={styles.avatarLg}>
-          <Text style={styles.avatarLgText}>H</Text>
+          <GroupIcon size={24} color={COLORS.green} />
         </View>
 
         <View style={{ flex: 1 }}>
@@ -282,24 +286,56 @@ export default function GroupDetailScreen( ) {
         </View>
 
         {/* Group summary */}
-        <Text style={styles.sectionTitle}>Group summary</Text>
+        <Text style={styles.sectionTitle}>Group Overview</Text>
+
         <View style={styles.summaryCard}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Group ID</Text>
-            <Text style={styles.summaryValue}>{group?.id ?? '—'}</Text>
-          </View>
-          <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Members</Text>
-            <Text style={[styles.summaryValue, styles.greenText]}>{memberCount}</Text>
+            <Text style={[styles.summaryValue, styles.greenText]}>
+              {memberCount}
+            </Text>
           </View>
+
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Icon</Text>
-            <Text style={styles.summaryValue}>{group?.icon ?? 'Coins'}</Text>
+            <Text style={styles.summaryLabel}>Your Role</Text>
+            <Text style={[styles.summaryValue, styles.greenText]}>
+              {isCreator ? 'Creator' : 'Member'}
+            </Text>
           </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Expenses</Text>
+            <Text style={styles.summaryValue}>
+              Coming Soon
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Total Spent</Text>
+            <Text style={styles.summaryValue}>
+              ₹0
+            </Text>
+          </View>
+
           <View style={styles.summaryDivider} />
+
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Role</Text>
-            <Text style={[styles.summaryValue, styles.greenText]}>{isCreator ? 'Creator' : 'Member'}</Text>
+            <Text style={styles.summaryLabel}>Created By</Text>
+            <Text style={styles.summaryValue}>
+              {isCreator ? 'You' : 'Another member'}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Settlement Status</Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                { color: COLORS.green }
+              ]}
+            >
+              All Settled
+            </Text>
           </View>
         </View>
 
@@ -323,31 +359,53 @@ export default function GroupDetailScreen( ) {
         <View onLayout={(evt) => { membersY.current = evt.nativeEvent.layout.y; }}>
           <Text style={styles.sectionTitle}>Members ({memberCount})</Text>
           <View style={styles.listCard}>
-            {(group?.members ?? []).map((memberId, i) => (
-              <React.Fragment key={memberId}>
-                <View style={styles.memberRow}>
-                  <View style={styles.avatarSm}>
-                    <Text style={styles.avatarSmText}>{(memberId === userId ? 'You' : memberId.slice(0, 2)).toUpperCase()}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.memberNameRow}>
-                      <Text style={styles.memberName}>{memberId === userId ? 'You' : memberId}</Text>
-                      {memberId === userId && (
-                        <View style={styles.youBadge}>
-                          <Text style={styles.youBadgeText}>You</Text>
-                        </View>
-                      )}
+            {(group?.members ?? []).map((member, i) => {
+              const isYou = member.id === userId;
+
+              return (
+                <React.Fragment key={member.id}>
+                  <View style={styles.memberRow}>
+                    <View style={styles.avatarSm}>
+                      <Text style={styles.avatarSmText}>
+                        {(isYou ? "You" : member.name).slice(0, 2).toUpperCase()}
+                      </Text>
                     </View>
-                    <Text style={styles.memberSub}>{memberId === userId ? 'Current account' : 'Member ID'}</Text>
+
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.memberNameRow}>
+                        <Text style={styles.memberName}>
+                          {isYou ? "You" : member.name}
+                        </Text>
+
+                        {isYou && (
+                          <View style={styles.youBadge}>
+                            <Text style={styles.youBadgeText}>You</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={styles.memberSub}>
+                        {member.email}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.memberRightLabel}>
+                        {isYou ? "Current user" : "Member"}
+                      </Text>
+
+                      <Text style={styles.memberAmount}>
+                        {member.id.slice(0, 6)}...
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.memberRightLabel}>{memberId === userId ? 'Current user' : 'Member'}</Text>
-                    <Text style={styles.memberAmount}>{memberId.slice(0, 6)}...</Text>
-                  </View>
-                </View>
-                {i < (group?.members.length ?? 0) - 1 && <View style={styles.rowDivider} />}
-              </React.Fragment>
-            ))}
+
+                  {i < (group?.members.length ?? 0) - 1 && (
+                    <View style={styles.rowDivider} />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -360,7 +418,7 @@ export default function GroupDetailScreen( ) {
         onRequestClose={() => setSettleUpVisible(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setSettleUpVisible(false)}>
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <Pressable style={styles.modalSheet} onPress={() => { }}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Settle Up</Text>
 

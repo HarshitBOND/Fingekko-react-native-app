@@ -6,221 +6,134 @@ type ParticipantShare = {
   userId: string;
   amount: number;
 };
-
-type CreateCommunityExpenseInput = {
-  description: string;
+type SplitResults = {
+  userId: string;
   amount: number;
-  expenseDate: string;
-  paidBy: string;
-  splitType: 'equalPaidByYou' | 'unequalPaidByYou' | 'equalPaidByOthers' | 'unequalPaidByOthers' | 'fullyOwedPaidByYou' | 'fullyOwedPaidByOthers';
-  participantIds: ParticipantShare[];
-  notes?: string;
-  currency?: string;
+}
+
+type UserBalance = {
+  userId: string;
+  netBalance: number;
 };
 
+type Settlement = {
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+};
+
+
+///////////////helper function to get a amount rounded to 2 decimal places ................
 function roundTwo(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function splitEvenly(amount: number, participantCount: number) {
+
+/////////////used to split the amount equally amound the participants and return the array of amounts for each participant ................
+function splitEvenly(amount: number, participantId: string[]) {
+  const participantCount = participantId.length;
   const cents = Math.round(amount * 100);
   const base = Math.floor(cents / participantCount);
-  const remainder = cents % participantCount;
+  let remainder = cents % participantCount;
 
-  return Array.from({ length: participantCount }, (_, index) =>
-    roundTwo((base + (index < remainder ? 1 : 0)) / 100)
-  );
+  const result: SplitResults[] = [];
+
+  for (let i = 0; i < participantCount; i++) {
+    let share = base;
+    if (remainder > 0) {
+      share++;
+      remainder--;
+    }
+    result.push({ userId: participantId[i], amount: roundTwo(share / 100) });
+  }
+  return result;
 }
 
-function splitUnevenly(
-  totalAmount: number,
-  participantShares: ParticipantShare[]
-): ParticipantShare[] {
-  if (participantShares.length === 0) {
-    throw new Error('At least one participant is required');
+function PaidBy(amount: number, participantIds: string[], userId: string): SplitResults[] {
+  const result: SplitResults[] = [];
+  const participantCount = participantIds.length;
+  const cents = Math.round(amount * 100);
+
+  if (participantCount <= 1) {
+    return [{ userId, amount: 0 }];
   }
 
-  let total = 0;
+  const base = Math.floor(cents / (participantCount - 1));
+  let remainder = cents % (participantCount - 1);
 
-  for (const share of participantShares) {
-    if (!Number.isFinite(share.amount)) {
-      throw new Error('Invalid amount');
-    }
 
-    if (share.amount < 0) {
-      throw new Error('Amount cannot be negative');
-    }
 
-    total += roundTwo(share.amount);
-  }
-
-  total = roundTwo(total);
-
-  if (total !== roundTwo(totalAmount)) {
-    throw new Error(
-      `Split amounts (${total}) do not equal expense amount (${roundTwo(totalAmount)})`
-    );
-  }
-
-  return participantShares.map((share) => ({
-    userId: share.userId,
-    amount: roundTwo(share.amount),
-  }));
-}
-
-/**
- * Builds the final per-participant amount list based on splitType.
- * Returns shares keyed by userId so callers don't need to worry about ordering.
- */
-function buildShares(
-  userId: string,
-  paidBy: string,
-  splitType: CreateCommunityExpenseInput['splitType'],
-  amount: number,
-  participantIds: ParticipantShare[]
-): Map<string, number> {
-  const shareMap = new Map<string, number>();
-
-  const isPaidByYou = splitType.endsWith('PaidByYou');
-
-  if (isPaidByYou && paidBy !== userId) {
-    throw new Error(`Split type "${splitType}" requires paidBy to be the current user`);
-  }
-  if (!isPaidByYou && paidBy === userId) {
-    throw new Error(`Split type "${splitType}" requires paidBy to be someone other than the current user`);
-  }
-
-  switch (splitType) {
-    case 'equalPaidByYou':
-    case 'equalPaidByOthers': {
-      const others = participantIds.map((p) => p.userId);
-      const allParticipants = [userId, ...others];
-      const shares = splitEvenly(amount, allParticipants.length);
-      allParticipants.forEach((id, index) => shareMap.set(id, shares[index]));
-      break;
-    }
-
-    case 'unequalPaidByYou':
-    case 'unequalPaidByOthers':
-    case 'fullyOwedPaidByYou':
-    case 'fullyOwedPaidByOthers': {
-      // participantIds carry explicit amounts that must sum to the full expense.
-      // The payer's own consumption is 0 in these modes.
-      const shares = splitUnevenly(amount, participantIds);
-      shareMap.set(userId, 0);
-      shares.forEach((s) => shareMap.set(s.userId, s.amount));
-      break;
-    }
-
-    default:
-      throw new Error('Invalid split type');
-  }
-
-  return shareMap;
-}
-
-async function assertFriendsOrSelf(userId: string, participantIds: string[]) {
-  for (const participantId of participantIds) {
-    if (participantId === userId) {
+  for (let i = 0; i < participantCount; i++) {
+    let share = base;
+    if (participantIds[i] === userId) {
       continue;
     }
+    if (remainder > 0) {
+      share++;
+      remainder--;
+    }
+    result.push({ userId: participantIds[i], amount: roundTwo(share / 100) });
+  }
 
-    const friendship = await friendRepository.findAcceptedFriendship(userId, participantId);
-    if (!friendship) {
-      throw new Error('One or more selected people are not accepted friends');
+  // Add the payer's share as 0
+  result.push({ userId, amount: 0 });
+
+  return result;
+}
+
+
+export function simplifyDebts(
+  balances: UserBalance[]
+): Settlement[] {
+  const debtors: UserBalance[] = [];
+  const creditors: UserBalance[] = [];
+
+  const EPSILON = 0.01; // Define a small epsilon value for floating-point comparison
+
+  for (const balance of balances) {
+    if (balance.netBalance < 0) {
+      debtors.push({
+        userId: balance.userId,
+        netBalance: -balance.netBalance,
+      });
+    } else if (balance.netBalance > 0) {
+      creditors.push({
+        userId: balance.userId,
+        netBalance: balance.netBalance,
+      });
     }
   }
+
+  const settlements: Settlement[] = [];
+
+  let debtorIndex = 0;
+  let creditorIndex = 0;
+
+  while (
+    debtorIndex < debtors.length &&
+    creditorIndex < creditors.length
+  ) {
+    const debtor = debtors[debtorIndex];
+    const creditor = creditors[creditorIndex];
+
+    const amount = Math.min(
+      debtor.netBalance,
+      creditor.netBalance
+    );
+
+    settlements.push({
+      fromUserId: debtor.userId,
+      toUserId: creditor.userId,
+      amount,
+    });
+
+    debtor.netBalance -= amount;
+    creditor.netBalance -= amount;
+
+    if (debtor.netBalance <= EPSILON) debtorIndex++;
+    if (creditor.netBalance <= EPSILON) creditorIndex++;
+  }
+
+  return settlements;
 }
 
-function validateCommonFields(input: CreateCommunityExpenseInput) {
-  const description = input.description.trim();
-
-  if (!description) {
-    throw new Error('Description is required');
-  }
-
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
-    throw new Error('Amount must be greater than 0');
-  }
-
-  if (!input.expenseDate.trim()) {
-    throw new Error('Expense date is required');
-  }
-
-  return description;
-}
-
-export async function createCommunityExpense(userId: string, input: CreateCommunityExpenseInput) {
-  const description = validateCommonFields(input);
-
-  const uniqueParticipantIds = Array.from(
-    new Set([userId, ...(input.participantIds ?? []).map((p) => p.userId)])
-  );
-
-  await assertFriendsOrSelf(userId, uniqueParticipantIds);
-
-  const paidBy = input.paidBy;
-
-  if (!uniqueParticipantIds.includes(paidBy)) {
-    throw new Error('Payer must be one of the participants');
-  }
-
-  const shareMap = buildShares(userId, paidBy, input.splitType, input.amount, input.participantIds ?? []);
-
-  return communityExpenseRepository.createExpense({
-    createdBy: new Types.ObjectId(userId).toString(),
-    paidBy: new Types.ObjectId(paidBy).toString(),
-    description,
-    amount: roundTwo(input.amount),
-    expenseDate: input.expenseDate,
-    currency: input.currency || 'INR',
-    notes: input.notes?.trim() || '',
-    participants: uniqueParticipantIds.map((participantId) => ({
-      userId: new Types.ObjectId(participantId).toString(),
-      amount: shareMap.get(participantId) ?? 0,
-      settled: participantId === paidBy,
-    })),
-  });
-}
-
-export async function updateCommunityExpense(userId: string, expenseId: string, input: CreateCommunityExpenseInput) {
-  const expense = await communityExpenseRepository.findById(expenseId);
-
-  if (!expense) {
-    throw new Error('Expense not found');
-  }
-
-  if (expense.createdBy._id.toString() !== userId) {
-    throw new Error('Only the creator can update this expense');
-  }
-
-  const description = validateCommonFields(input);
-
-  const uniqueParticipantIds = Array.from(
-    new Set([userId, ...(input.participantIds ?? []).map((p) => p.userId)])
-  );
-
-  await assertFriendsOrSelf(userId, uniqueParticipantIds);
-
-  const paidBy = input.paidBy;
-
-  if (!uniqueParticipantIds.includes(paidBy)) {
-    throw new Error('Payer must be one of the participants');
-  }
-
-  const shareMap = buildShares(userId, paidBy, input.splitType, input.amount, input.participantIds ?? []);
-
-  return communityExpenseRepository.updateExpense(expenseId, {
-    description,
-    amount: roundTwo(input.amount),
-    expenseDate: input.expenseDate,
-    paidBy: new Types.ObjectId(paidBy).toString(),
-    currency: input.currency || 'INR',
-    notes: input.notes?.trim() || '',
-    participants: uniqueParticipantIds.map((participantId) => ({
-      userId: new Types.ObjectId(participantId).toString(),
-      amount: shareMap.get(participantId) ?? 0,
-      settled: participantId === paidBy,
-    })),
-  });
-}

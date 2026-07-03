@@ -86,6 +86,9 @@ export default function AddNewExpense() {
 
   const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [selectedSplit, setSelectedSplit] = useState<'equal' | 'custom'>('equal');
+
+  const [splitMethod, setSplitMethod]= useState<boolean>(false);
 
   const getTokenRef = useRef(getToken);
 
@@ -149,7 +152,11 @@ export default function AddNewExpense() {
         if (active) {
           setGroup(response);
           // auto-select every group member by default
-          setSelectedUserIds(response.members.map((m) => String(m.id)));
+          setSelectedUserIds(
+            response.members.map((m: any) =>
+              typeof m === 'string' ? m : String(m.id)
+            )
+          );
         }
       } catch (fetchError) {
         if (active) {
@@ -172,11 +179,21 @@ export default function AddNewExpense() {
   // ---- unified people source ----
   const peopleList: Person[] = useMemo(() => {
     if (isGroupMode) {
-      return (group?.members ?? []).map((m) => ({
-        id: String(m.id ?? ''),
-        name: m.name || String(m.id ?? 'Not a friend'),
-        email: m.email || '',
-      }));
+      return (group?.members ?? []).map((m: any) => {
+        if (typeof m === 'string') {
+          return {
+            id: m,
+            name: m,
+            email: '',
+          };
+        }
+
+        return {
+          id: String(m.id),
+          name: m.name ?? String(m.id),
+          email: m.email ?? '',
+        };
+      });
     }
 
     return friends.friends.map((f) => ({
@@ -220,16 +237,6 @@ export default function AddNewExpense() {
     const amountValue = Number(amount);
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setError('Enter a valid amount.');
-      return;
-    }
-
-    if (!description.trim()) {
-      setError('Description is required.');
-      return;
-    }
-
-    if (!date.trim()) {
-      setError('Date is required.');
       return;
     }
 
@@ -281,7 +288,7 @@ export default function AddNewExpense() {
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.push('/(tabs)/group/[groupId]')}>
+        <Pressable style={styles.headerButton} onPress={() => router.push(`/(tabs)/group/${groupId}`)}>
           <ArrowLeft size={20} color="#148a46" />
         </Pressable>
         <Text style={styles.headerTitle}>Add Expense</Text>
@@ -364,6 +371,46 @@ export default function AddNewExpense() {
               placeholderTextColor="#9ca3af"
               multiline
             />
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Split Method</Text>
+
+          <View style={styles.splitContainer}>
+            <Pressable
+              style={[
+                styles.splitButton,
+                selectedSplit === 'equal' && styles.splitButtonActive,
+              ]}
+              onPress={() => setSelectedSplit('equal')}
+            >
+              <Text
+                style={[
+                  styles.splitButtonText,
+                  selectedSplit === 'equal' && styles.splitButtonTextActive,
+                ]}
+              >
+                Split Equally
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.splitButton,
+                selectedSplit === 'custom' && styles.splitButtonActive,
+              ]}
+              onPress={() => setSplitMethod(true)}
+            >
+              <Text
+                style={[
+                  styles.splitButtonText,
+                  selectedSplit === 'custom' && styles.splitButtonTextActive,
+                ]}
+              >
+                Custom Split
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -468,11 +515,73 @@ export default function AddNewExpense() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Custom Split Modal */}
+      <Modal visible={splitMethod} animationType="slide" transparent onRequestClose={() => setSplitMethod(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSplitMethod(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Custom Split</Text>
+
+            <ScrollView style={styles.modalList}>
+              {selectedPeople.map((person) => {
+                return (
+                  <View key={person.id} style={styles.friendRow}>
+                    <View style={styles.friendIdentity}>
+                      <Text style={styles.friendName}>{person.name}</Text>
+                      {person.email ? <Text style={styles.friendEmail}>{person.email}</Text> : null}
+                    </View>
+                    <TextInput
+                      style={[styles.fieldInput, { width: 80, textAlign: 'right' }]}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <Pressable style={styles.modalDoneButton} onPress={() => setSplitMethod(false)}>
+              <Text style={styles.modalDoneText}>Done</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  splitContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+},
+
+splitButton: {
+  width: '48%',
+  height: 52,
+  borderRadius: 14,
+  borderWidth: 1,
+  borderColor: '#e4efe7',
+  backgroundColor: '#fff',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+splitButtonActive: {
+  backgroundColor: '#5aad65',
+  borderColor: '#a5c7b3',
+},
+
+splitButtonText: {
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#148a46',
+},
+
+splitButtonTextActive: {
+  color: '#fff',
+},
   page: {
     flex: 1,
     backgroundColor: '#f5f8f5',
