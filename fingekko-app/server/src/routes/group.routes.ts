@@ -13,7 +13,7 @@ function resolveGroupId(groupId: string | string[] | undefined) {
 groupRoute.get("/", async (req: Request, res: Response) => {
   try {
     const userId = req.auth?.clerkId;
-
+    console.log(req.auth);
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
