@@ -62,6 +62,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const event = wh.verify(payload, verifyHeaders) as ClerkWebhookEvent;
 
     if (event.type === "user.created") {
+      console.log(JSON.stringify(event, null, 2));
       const { data } = event as ClerkUserCreatedEvent;
       const { id, email_addresses, first_name, last_name } = data;
 

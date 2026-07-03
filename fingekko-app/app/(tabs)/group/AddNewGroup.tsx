@@ -187,7 +187,6 @@ export default function AddNewGroup() {
                 token,
             });
             setFriends(response.friends);
-            console.log(response.friends);
         } catch (error) {
             console.error('Error fetching friends:', error);
         } finally {
