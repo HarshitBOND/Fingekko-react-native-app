@@ -7,6 +7,8 @@ function looksLikeJwt(token: string): boolean {
 }
 
 async function resolveUserFromClerk(payload: any) {
+  console.log("JWT PAYLOAD");
+console.dir(payload, { depth: null });
   const profile = extractClerkProfile(payload);
 
   if (!profile?.clerkId) {
