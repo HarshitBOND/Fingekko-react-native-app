@@ -32,7 +32,7 @@ class GroupRepository {
   }
 
   async getGroupsByUser(userId: string) {
-    return Group.find({ members: userId });
+    return Group.find({ members: { $in: [userId] } });
   }
 }
 

@@ -13,7 +13,7 @@ function resolveGroupId(groupId: string | string[] | undefined) {
 groupRoute.get("/", async (req: Request, res: Response) => {
   try {
     const userId = req.auth?.clerkId;
-    
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -44,11 +44,17 @@ groupRoute.post("/", async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(500).json({ message: "unauthorized" })
     }
+    const rawMembers = req.body.members ?? [];
+
+    const members = Array.from(
+      new Set([...rawMembers, userId])
+    ).filter((m) => typeof m === "string" && m.trim() !== "");
+
     const data = {
       name: req.body.name,
       description: req.body.description || "",
       createdBy: userId,
-      members: [...(req.body.members ?? []), userId],
+      members,
       icon: req.body.icon || "Coins",
     }
     const group = await groupRepository.createGroup(data);
@@ -80,7 +86,7 @@ groupRoute.get("/:groupId", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    if (!group.members.some((m) => m.toString() === userId)){
+    if (!group.members.some((m) => m.toString() === userId)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
