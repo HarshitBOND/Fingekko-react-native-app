@@ -2,6 +2,7 @@
 import { Request, Response, Router } from "express";
 import groupRepository from "../repositories/groupRepository.js";
 import authMiddleware from "../middleware/auth.js";
+import User from "../models/User.js";
 
 const groupRoute = Router();
 groupRoute.use(authMiddleware);
@@ -90,11 +91,25 @@ groupRoute.get("/:groupId", async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    const users = await User.find({
+      clerkId: { $in: group.members },
+    }).select("clerkId name email");
+
+    const members = group.members.map((clerkId) => {
+      const user = users.find((u) => u.clerkId === clerkId);
+
+      return {
+        id: clerkId,
+        name: user?.name ?? "Unknown",
+        email: user?.email ?? "",
+      };
+    });
+
     res.json({
       id: group._id.toString(),
       name: group.name,
       description: group.description,
-      members: group.members.map((m) => m.toString()),
+      members,
       createdBy: group.createdBy.toString(),
       icon: group.icon,
       balance: 0,
