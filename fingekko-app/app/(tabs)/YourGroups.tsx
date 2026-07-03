@@ -202,14 +202,9 @@ export default function YourGroups() {
 
                 <View style={styles.card}>
                     {groups.length === 0 ? (
-                        <View style={{ padding: 16 }}>
-                            <Text style={{ fontSize: 14, color: '#6b7280' }}>You are not part of any groups yet.</Text>
-                            <Pressable
-                                style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#10B981', borderRadius: 6 }}
-                                onPress={() => router.push('/(tabs)/group/AddNewGroup')}
-                            >
-                                <Text style={{ color: '#ffffff', fontWeight: '600' }}>Create a Group</Text>
-                            </Pressable>
+                        <View style={{ padding: 18 , justifyContent: 'center', alignItems: 'center'}}>
+                            <Text style={{ fontSize: 26, color: '#6b7280' }}>You are not part of any groups yet  . . . . .</Text>
+                            
                         </View>
                     ) : (
                         groups.map((item, index) => (

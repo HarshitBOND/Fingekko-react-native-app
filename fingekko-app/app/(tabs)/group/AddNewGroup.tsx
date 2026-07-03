@@ -55,6 +55,7 @@ const ICON_KEYS = Object.keys(ICONS) as (keyof typeof ICONS)[];
 
 type FriendOfMine = {
     id: string;
+    clerkId: string ;
     name: string;
     email: string;
     avatarKey: string;
@@ -186,6 +187,7 @@ export default function AddNewGroup() {
                 token,
             });
             setFriends(response.friends);
+            console.log(response.friends);
         } catch (error) {
             console.error('Error fetching friends:', error);
         } finally {
@@ -285,7 +287,7 @@ export default function AddNewGroup() {
                 data: {
                     name: groupName.trim(),
                     icon: selectedIcon,
-                    members: selectedMembers.map((m) => m.id),
+                    members: selectedMembers.map((m) => m.clerkId),
                 },
             });
             resetGroupCreation();

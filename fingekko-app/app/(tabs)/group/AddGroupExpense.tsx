@@ -174,7 +174,7 @@ export default function AddNewExpense() {
     if (isGroupMode) {
       return (group?.members ?? []).map((m) => ({
         id: String(m.id ?? ''),
-        name: m.name || String(m.id ?? 'Unknown'),
+        name: m.name || String(m.id ?? 'Not a friend'),
         email: m.email || '',
       }));
     }
