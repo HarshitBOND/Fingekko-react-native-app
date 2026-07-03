@@ -31,14 +31,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // NOTE: swap this out for the real illustration when you have it.
 // Suggested path: assets/wallet.png
-const WALLET_ILLUSTRATION = require('../../assets/images/bgadd.png');
+const WALLET_ILLUSTRATION = require('../../../assets/images/bgadd.png');
 
 const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Other'];
+
+// ---- shared "person" shape so friends & group members render the same way ----
+type Person = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+// Shape expected from GET /api/groups/:groupId
+// NOTE: today groupRoute.ts only returns `members: string[]` (raw ids).
+// This type assumes the backend is extended to populate + serialize
+// members as { id, name, email }[]. Until that ships, `name`/`email`
+// will be missing and the UI falls back to showing the id.
+type GroupDetailsResponse = {
+  id: string;
+  name: string;
+  members: Partial<Person>[];
+};
 
 export default function AddNewExpense() {
   const { getToken, isSignedIn } = useAuth();
   const router = useRouter();
-  const { groupId } = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const { groupId: groupIdParam } = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupId = Array.isArray(groupIdParam) ? groupIdParam[0] : groupIdParam;
+  const isGroupMode = Boolean(groupId);
 
   // ---- form state (unchanged field names -> unchanged API payload) ----
   const [description, setDescription] = useState('');
@@ -47,17 +67,24 @@ export default function AddNewExpense() {
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>('');
 
+  // friends (used when NOT in group mode)
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
     incomingRequests: [],
     outgoingRequests: [],
   });
-  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
+
+  // group (used when in group mode)
+  const [group, setGroup] = useState<GroupDetailsResponse | null>(null);
+  const [loadingGroup, setLoadingGroup] = useState(false);
+
+  // renamed from selectedFriendIds -> selectedUserIds (scales to both friends & group members)
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [friendPickerOpen, setFriendPickerOpen] = useState(false);
+  const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
 
   const getTokenRef = useRef(getToken);
@@ -66,23 +93,21 @@ export default function AddNewExpense() {
     getTokenRef.current = getToken;
   }, [getToken]);
 
+  // ---- load friends (only relevant outside group mode) ----
   useEffect(() => {
+    if (isGroupMode) return;
     let active = true;
 
     const loadFriends = async () => {
-      if (!isSignedIn) {
-        return;
-      }
+      if (!isSignedIn) return;
 
       setLoadingFriends(true);
 
       try {
         const token = await getTokenRef.current();
-        if (!token) {
-          return;
-        }
+        if (!token) return;
 
-        const response = await apiRequest<FriendsResponse>(`/api/friends`, {}, token);
+        const response = await apiRequest<FriendsResponse>('/api/friends', {}, token);
 
         if (active) {
           setFriends(response);
@@ -103,27 +128,91 @@ export default function AddNewExpense() {
     return () => {
       active = false;
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, isGroupMode]);
 
-  const acceptedFriends = useMemo(() => friends.friends, [friends.friends]);
+  // ---- load group + auto-select all members (only relevant in group mode) ----
+  useEffect(() => {
+    if (!isGroupMode || !groupId) return;
+    let active = true;
 
-  const selectedFriends = useMemo(
-    () => acceptedFriends.filter((f) => selectedFriendIds.includes(f.friend.id)),
-    [acceptedFriends, selectedFriendIds]
+    const loadGroup = async () => {
+      if (!isSignedIn) return;
+
+      setLoadingGroup(true);
+
+      try {
+        const token = await getTokenRef.current();
+        if (!token) return;
+
+        const response = await apiRequest<GroupDetailsResponse>(`/api/groups/${groupId}`, {}, token);
+
+        if (active) {
+          setGroup(response);
+          // auto-select every group member by default
+          setSelectedUserIds(response.members.map((m) => String(m.id)));
+        }
+      } catch (fetchError) {
+        if (active) {
+          setError('Unable to load group members for splitting.');
+        }
+      } finally {
+        if (active) {
+          setLoadingGroup(false);
+        }
+      }
+    };
+
+    loadGroup();
+
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn, isGroupMode, groupId]);
+
+  // ---- unified people source ----
+  const peopleList: Person[] = useMemo(() => {
+    if (isGroupMode) {
+      return (group?.members ?? []).map((m) => ({
+        id: String(m.id ?? ''),
+        name: m.name || String(m.id ?? 'Unknown'),
+        email: m.email || '',
+      }));
+    }
+
+    return friends.friends.map((f) => ({
+      id: f.friend.id,
+      name: f.friend.name,
+      email: f.friend.email,
+    }));
+  }, [isGroupMode, group, friends.friends]);
+
+  const loadingPeople = isGroupMode ? loadingGroup : loadingFriends;
+
+  const selectedPeople = useMemo(
+    () => peopleList.filter((p) => selectedUserIds.includes(p.id)),
+    [peopleList, selectedUserIds]
   );
 
-  const toggleFriend = (friendId: string) => {
-    setSelectedFriendIds((current) =>
-      current.includes(friendId) ? current.filter((id) => id !== friendId) : [...current, friendId]
+  const allSelected = peopleList.length > 0 && selectedUserIds.length === peopleList.length;
+
+  const toggleUser = (userId: string) => {
+    setSelectedUserIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
     );
   };
 
-  const friendsSummaryLabel = useMemo(() => {
-    if (loadingFriends) return 'Loading friends...';
-    if (selectedFriends.length === 0) return 'Select friends to split with';
-    if (selectedFriends.length === 1) return selectedFriends[0].friend.name;
-    return `${selectedFriends[0].friend.name} + ${selectedFriends.length - 1} more`;
-  }, [selectedFriends, loadingFriends]);
+  const toggleSelectAll = () => {
+    setSelectedUserIds(allSelected ? [] : peopleList.map((p) => p.id));
+  };
+
+  const peopleSummaryLabel = useMemo(() => {
+    if (loadingPeople) return isGroupMode ? 'Loading group members...' : 'Loading friends...';
+    if (selectedPeople.length === 0) {
+      return isGroupMode ? 'Select group members' : 'Select friends to split with';
+    }
+    if (selectedPeople.length === 1) return selectedPeople[0].name;
+    return `${selectedPeople[0].name} + ${selectedPeople.length - 1} more`;
+  }, [selectedPeople, loadingPeople, isGroupMode]);
 
   const handleSave = async () => {
     setError('');
@@ -161,12 +250,15 @@ export default function AddNewExpense() {
           description: description.trim(),
           amount: amountValue,
           expenseDate: date,
-          participantIds: selectedFriendIds,
+          participantIds: selectedUserIds,
           notes: notes.trim(),
           currency: 'INR',
-          // NOTE: `category` is not part of the original payload shape.
-          // Keep it only if your backend Expense schema accepts it,
-          // otherwise strip this line before shipping.
+          // NOTE: groupId is only useful once the backend route/service
+          // actually reads it (see callout above the code) — currently
+          // it will be silently ignored by createCommunityExpense.
+          ...(isGroupMode ? { groupId } : {}),
+          // NOTE: category isn't part of the original Expense schema either —
+          // drop this line if you don't add it on the backend.
           category: category || undefined,
         },
       });
@@ -177,7 +269,8 @@ export default function AddNewExpense() {
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
       setCategory('');
-      setSelectedFriendIds([]);
+      // group mode: reset back to "everyone selected"; friend mode: clear
+      setSelectedUserIds(isGroupMode ? peopleList.map((p) => p.id) : []);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
     } finally {
@@ -188,7 +281,7 @@ export default function AddNewExpense() {
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.back()}>
+        <Pressable style={styles.headerButton} onPress={() => router.push('/(tabs)/group/[groupId]')}>
           <ArrowLeft size={20} color="#148a46" />
         </Pressable>
         <Text style={styles.headerTitle}>Add Expense</Text>
@@ -201,14 +294,14 @@ export default function AddNewExpense() {
             <Wallet size={22} color="#148a46" />
           </View>
           <View style={styles.balanceCopy}>
-            <Text style={styles.balanceLabel}>Available Balance</Text>
-            <Text style={styles.balanceValue}>₹ 12,450.00</Text>
+            <Text style={styles.balanceLabel}>Create</Text>
+            <Text style={styles.balanceValue}>New Group Expense</Text>
           </View>
           <Image source={WALLET_ILLUSTRATION} style={styles.balanceImage} resizeMode="contain" />
         </View>
 
-        {groupId ? (
-          <Text style={styles.groupHint}>Group: {Array.isArray(groupId) ? groupId[0] : groupId}</Text>
+        {isGroupMode ? (
+          <Text style={styles.groupHint}> {group?.name ?? 'Your Squad'}</Text>
         ) : null}
 
         <View style={styles.fieldGroup}>
@@ -245,42 +338,13 @@ export default function AddNewExpense() {
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Category</Text>
-          <Pressable style={styles.inputWrap} onPress={() => setCategoryPickerOpen(true)}>
-            <View style={styles.iconBubble}>
-              <ShoppingBag size={18} color="#148a46" />
-            </View>
-            <Text style={[styles.fieldInput, !category && styles.placeholderText]}>
-              {category || 'Select category'}
-            </Text>
-            <ChevronDown size={18} color="#9ca3af" />
-          </Pressable>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Date</Text>
-          <View style={styles.inputWrap}>
-            <View style={styles.iconBubble}>
-              <Calendar size={18} color="#148a46" />
-            </View>
-            <TextInput
-              value={date}
-              onChangeText={setDate}
-              style={styles.fieldInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-        </View>
-
-        <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Split With</Text>
-          <Pressable style={styles.inputWrap} onPress={() => setFriendPickerOpen(true)}>
+          <Pressable style={styles.inputWrap} onPress={() => setPeoplePickerOpen(true)}>
             <View style={styles.iconBubble}>
               <Users size={18} color="#148a46" />
             </View>
-            <Text style={[styles.fieldInput, selectedFriends.length === 0 && styles.placeholderText]}>
-              {friendsSummaryLabel}
+            <Text style={[styles.fieldInput, selectedPeople.length === 0 && styles.placeholderText]}>
+              {peopleSummaryLabel}
             </Text>
             <ChevronDown size={18} color="#9ca3af" />
           </Pressable>
@@ -317,31 +381,42 @@ export default function AddNewExpense() {
         </Pressable>
       </ScrollView>
 
-      {/* Friends multi-select modal */}
-      <Modal visible={friendPickerOpen} animationType="slide" transparent onRequestClose={() => setFriendPickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setFriendPickerOpen(false)}>
+      {/* People (friends OR group members) multi-select modal */}
+      <Modal visible={peoplePickerOpen} animationType="slide" transparent onRequestClose={() => setPeoplePickerOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPeoplePickerOpen(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Friends</Text>
+
+            <View style={styles.modalTitleRow}>
+              <Text style={styles.modalTitle}>{isGroupMode ? 'Group Members' : 'Select Friends'}</Text>
+              {peopleList.length > 0 ? (
+                <Pressable onPress={toggleSelectAll}>
+                  <Text style={styles.selectAllText}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
 
             <ScrollView style={styles.modalList}>
-              {loadingFriends ? (
+              {loadingPeople ? (
                 <ActivityIndicator color="#148a46" style={{ marginVertical: 20 }} />
-              ) : acceptedFriends.length === 0 ? (
+              ) : peopleList.length === 0 ? (
                 <View style={styles.emptyFriendsBox}>
                   <Users size={18} color="#148a46" />
-                  <Text style={styles.helperText}>Add friends first to split expenses with them.</Text>
+                  <Text style={styles.helperText}>
+                    {isGroupMode
+                      ? 'No members found in this group.'
+                      : 'Add friends first to split expenses with them.'}
+                  </Text>
                 </View>
               ) : (
-                acceptedFriends.map((friendship) => {
-                  const friendId = friendship.friend.id;
-                  const selected = selectedFriendIds.includes(friendId);
+                peopleList.map((person) => {
+                  const selected = selectedUserIds.includes(person.id);
 
                   return (
-                    <Pressable key={friendship.id} style={styles.friendRow} onPress={() => toggleFriend(friendId)}>
+                    <Pressable key={person.id} style={styles.friendRow} onPress={() => toggleUser(person.id)}>
                       <View style={styles.friendIdentity}>
-                        <Text style={styles.friendName}>{friendship.friend.name}</Text>
-                        <Text style={styles.friendEmail}>{friendship.friend.email}</Text>
+                        <Text style={styles.friendName}>{person.name}</Text>
+                        {person.email ? <Text style={styles.friendEmail}>{person.email}</Text> : null}
                       </View>
                       {selected ? (
                         <CheckSquare2 size={22} color="#148a46" />
@@ -354,8 +429,8 @@ export default function AddNewExpense() {
               )}
             </ScrollView>
 
-            <Pressable style={styles.modalDoneButton} onPress={() => setFriendPickerOpen(false)}>
-              <Text style={styles.modalDoneText}>Done ({selectedFriendIds.length})</Text>
+            <Pressable style={styles.modalDoneButton} onPress={() => setPeoplePickerOpen(false)}>
+              <Text style={styles.modalDoneText}>Done ({selectedUserIds.length})</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -463,7 +538,7 @@ const styles = StyleSheet.create({
     height: 64,
   },
   groupHint: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '600',
     color: '#148a46',
   },
@@ -617,11 +692,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     marginBottom: 12,
   },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 12,
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#148a46',
   },
   modalList: {
     marginBottom: 8,

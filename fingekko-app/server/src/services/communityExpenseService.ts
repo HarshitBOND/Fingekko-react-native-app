@@ -2,11 +2,18 @@ import { Types } from 'mongoose';
 import communityExpenseRepository from '../repositories/communityExpenseRepository.js';
 import friendRepository from '../repositories/friendRepository.js';
 
+type ParticipantShare = {
+  userId: string;
+  amount: number;
+};
+
 type CreateCommunityExpenseInput = {
   description: string;
   amount: number;
   expenseDate: string;
-  participantIds: string[];
+  paidBy: string;
+  splitType: 'equalPaidByYou' | 'unequalPaidByYou' | 'equalPaidByOthers' | 'unequalPaidByOthers' | 'fullyOwedPaidByYou' | 'fullyOwedPaidByOthers';
+  participantIds: ParticipantShare[];
   notes?: string;
   currency?: string;
 };
@@ -25,7 +32,107 @@ function splitEvenly(amount: number, participantCount: number) {
   );
 }
 
-export async function createCommunityExpense(userId: string, input: CreateCommunityExpenseInput) {
+function splitUnevenly(
+  totalAmount: number,
+  participantShares: ParticipantShare[]
+): ParticipantShare[] {
+  if (participantShares.length === 0) {
+    throw new Error('At least one participant is required');
+  }
+
+  let total = 0;
+
+  for (const share of participantShares) {
+    if (!Number.isFinite(share.amount)) {
+      throw new Error('Invalid amount');
+    }
+
+    if (share.amount < 0) {
+      throw new Error('Amount cannot be negative');
+    }
+
+    total += roundTwo(share.amount);
+  }
+
+  total = roundTwo(total);
+
+  if (total !== roundTwo(totalAmount)) {
+    throw new Error(
+      `Split amounts (${total}) do not equal expense amount (${roundTwo(totalAmount)})`
+    );
+  }
+
+  return participantShares.map((share) => ({
+    userId: share.userId,
+    amount: roundTwo(share.amount),
+  }));
+}
+
+/**
+ * Builds the final per-participant amount list based on splitType.
+ * Returns shares keyed by userId so callers don't need to worry about ordering.
+ */
+function buildShares(
+  userId: string,
+  paidBy: string,
+  splitType: CreateCommunityExpenseInput['splitType'],
+  amount: number,
+  participantIds: ParticipantShare[]
+): Map<string, number> {
+  const shareMap = new Map<string, number>();
+
+  const isPaidByYou = splitType.endsWith('PaidByYou');
+
+  if (isPaidByYou && paidBy !== userId) {
+    throw new Error(`Split type "${splitType}" requires paidBy to be the current user`);
+  }
+  if (!isPaidByYou && paidBy === userId) {
+    throw new Error(`Split type "${splitType}" requires paidBy to be someone other than the current user`);
+  }
+
+  switch (splitType) {
+    case 'equalPaidByYou':
+    case 'equalPaidByOthers': {
+      const others = participantIds.map((p) => p.userId);
+      const allParticipants = [userId, ...others];
+      const shares = splitEvenly(amount, allParticipants.length);
+      allParticipants.forEach((id, index) => shareMap.set(id, shares[index]));
+      break;
+    }
+
+    case 'unequalPaidByYou':
+    case 'unequalPaidByOthers':
+    case 'fullyOwedPaidByYou':
+    case 'fullyOwedPaidByOthers': {
+      // participantIds carry explicit amounts that must sum to the full expense.
+      // The payer's own consumption is 0 in these modes.
+      const shares = splitUnevenly(amount, participantIds);
+      shareMap.set(userId, 0);
+      shares.forEach((s) => shareMap.set(s.userId, s.amount));
+      break;
+    }
+
+    default:
+      throw new Error('Invalid split type');
+  }
+
+  return shareMap;
+}
+
+async function assertFriendsOrSelf(userId: string, participantIds: string[]) {
+  for (const participantId of participantIds) {
+    if (participantId === userId) {
+      continue;
+    }
+
+    const friendship = await friendRepository.findAcceptedFriendship(userId, participantId);
+    if (!friendship) {
+      throw new Error('One or more selected people are not accepted friends');
+    }
+  }
+}
+
+function validateCommonFields(input: CreateCommunityExpenseInput) {
   const description = input.description.trim();
 
   if (!description) {
@@ -40,33 +147,38 @@ export async function createCommunityExpense(userId: string, input: CreateCommun
     throw new Error('Expense date is required');
   }
 
-  const uniqueParticipants = Array.from(new Set([userId, ...(input.participantIds ?? [])]));
+  return description;
+}
 
-  for (const participantId of uniqueParticipants) {
-    if (participantId === userId) {
-      continue;
-    }
+export async function createCommunityExpense(userId: string, input: CreateCommunityExpenseInput) {
+  const description = validateCommonFields(input);
 
-    const friendship = await friendRepository.findAcceptedFriendship(userId, participantId);
-    if (!friendship) {
-      throw new Error('One or more selected people are not accepted friends');
-    }
+  const uniqueParticipantIds = Array.from(
+    new Set([userId, ...(input.participantIds ?? []).map((p) => p.userId)])
+  );
+
+  await assertFriendsOrSelf(userId, uniqueParticipantIds);
+
+  const paidBy = input.paidBy;
+
+  if (!uniqueParticipantIds.includes(paidBy)) {
+    throw new Error('Payer must be one of the participants');
   }
 
-  const shares = splitEvenly(input.amount, uniqueParticipants.length);
+  const shareMap = buildShares(userId, paidBy, input.splitType, input.amount, input.participantIds ?? []);
 
   return communityExpenseRepository.createExpense({
     createdBy: new Types.ObjectId(userId).toString(),
-    paidBy: new Types.ObjectId(userId).toString(),
+    paidBy: new Types.ObjectId(paidBy).toString(),
     description,
     amount: roundTwo(input.amount),
     expenseDate: input.expenseDate,
     currency: input.currency || 'INR',
     notes: input.notes?.trim() || '',
-    participants: uniqueParticipants.map((participantId, index) => ({
+    participants: uniqueParticipantIds.map((participantId) => ({
       userId: new Types.ObjectId(participantId).toString(),
-      amount: shares[index],
-      settled: participantId === userId,
+      amount: shareMap.get(participantId) ?? 0,
+      settled: participantId === paidBy,
     })),
   });
 }
@@ -82,45 +194,33 @@ export async function updateCommunityExpense(userId: string, expenseId: string, 
     throw new Error('Only the creator can update this expense');
   }
 
-  const description = input.description.trim();
+  const description = validateCommonFields(input);
 
-  if (!description) {
-    throw new Error('Description is required');
+  const uniqueParticipantIds = Array.from(
+    new Set([userId, ...(input.participantIds ?? []).map((p) => p.userId)])
+  );
+
+  await assertFriendsOrSelf(userId, uniqueParticipantIds);
+
+  const paidBy = input.paidBy;
+
+  if (!uniqueParticipantIds.includes(paidBy)) {
+    throw new Error('Payer must be one of the participants');
   }
 
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
-    throw new Error('Amount must be greater than 0');
-  }
-
-  if (!input.expenseDate.trim()) {
-    throw new Error('Expense date is required');
-  }
-
-  const uniqueParticipants = Array.from(new Set([userId, ...(input.participantIds ?? [])]));
-
-  for (const participantId of uniqueParticipants) {
-    if (participantId === userId) {
-      continue;
-    }
-
-    const friendship = await friendRepository.findAcceptedFriendship(userId, participantId);
-    if (!friendship) {
-      throw new Error('One or more selected people are not accepted friends');
-    }
-  }
-
-  const shares = splitEvenly(input.amount, uniqueParticipants.length);
+  const shareMap = buildShares(userId, paidBy, input.splitType, input.amount, input.participantIds ?? []);
 
   return communityExpenseRepository.updateExpense(expenseId, {
     description,
     amount: roundTwo(input.amount),
     expenseDate: input.expenseDate,
+    paidBy: new Types.ObjectId(paidBy).toString(),
     currency: input.currency || 'INR',
     notes: input.notes?.trim() || '',
-    participants: uniqueParticipants.map((participantId, index) => ({
+    participants: uniqueParticipantIds.map((participantId) => ({
       userId: new Types.ObjectId(participantId).toString(),
-      amount: shares[index],
-      settled: participantId === userId,
+      amount: shareMap.get(participantId) ?? 0,
+      settled: participantId === paidBy,
     })),
   });
 }

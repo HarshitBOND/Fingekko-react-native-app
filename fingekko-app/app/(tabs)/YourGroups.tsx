@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
+import { showConfirm } from '@/utils/showConfirm';
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 const ICONS = {
     Plane,
@@ -29,11 +31,11 @@ type GroupItem = {
 };
 
 type QuickAction = {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: React.ElementType;
-  href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses';
+    id: string;
+    title: string;
+    subtitle: string;
+    icon: React.ElementType;
+    href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses';
 };
 
 const GROUPS: GroupItem[] = [
@@ -92,6 +94,8 @@ export default function YourGroups() {
     const router = useRouter();
     const [groups, setGroups] = useState<GroupItem[]>([]);
 
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
     const { user } = useUser();
     const { getToken } = useAuth();
@@ -238,8 +242,14 @@ export default function YourGroups() {
                                     <Text style={[styles.groupAmount, { color: item.amountColor }]}>{item.amount}</Text>
                                 </View>
                                 {item.createdBy === user?.id && (
-                                    <Pressable onPress={() => deleteGroup(item.id)} style={{ marginRight: 8 }}>
-                                        <Trash size={16} color="#eb5a4f" />
+                                    <Pressable onPress={() => {
+                                        setSelectedGroupId(item.id);
+                                        setShowDeleteDialog(true);
+                                    }
+                                    } style={{ marginRight: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(235,90,79,0.05)' }}>
+                                            <Trash size={16} color="#eb5a4f" />
+                                        </View>
                                     </Pressable>
                                 )}
                                 <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(20,138,70,0.05)' }}>
@@ -285,7 +295,27 @@ export default function YourGroups() {
                     </ImageBackground>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+            <ConfirmDialog
+                visible={showDeleteDialog}
+                title="Delete Group"
+                message="Are you sure you want to permanently delete this group? This action cannot be undone."
+                confirmText="Delete"
+                cancelText="Cancel"
+                destructive
+                onCancel={() => {
+                    setShowDeleteDialog(false);
+                    setSelectedGroupId(null);
+                }}
+                onConfirm={async () => {
+                    if (!selectedGroupId) return;
+
+                    await deleteGroup(selectedGroupId);
+
+                    setShowDeleteDialog(false);
+                    setSelectedGroupId(null);
+                }}
+            />
+        </SafeAreaView >
     );
 }
 

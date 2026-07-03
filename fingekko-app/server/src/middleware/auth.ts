@@ -35,10 +35,6 @@ async function resolveUserFromClerk(payload: any) {
     updates.email = profile.email;
   }
 
-  if (profile.name && user.name !== profile.name) {
-    updates.name = profile.name;
-  }
-
   if (Object.keys(updates).length > 0) {
     user = await updateByclerkId(profile.clerkId, updates);
   }

@@ -85,7 +85,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
             (existingByEmail as { id?: string; _id?: string }).id ??
             (existingByEmail as { id?: string; _id?: string })._id;
 
-          await updateByclerkId(existingId as string, {
+          await updateById(existingId as string, {
             clerkId: id,
             name ,
             email,

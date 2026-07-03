@@ -154,8 +154,14 @@ router.put('/:friendshipId/accept', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Friend request not found' });
     }
 
-    if (friendship.addressee.toString() !== currentUserId) {
-      return res.status(403).json({ message: 'Only the recipient can accept' });
+    const addresseeId =
+      friendship.addressee?._id?.toString?.() ||
+      friendship.addressee?.toString?.();
+
+    if (addresseeId !== currentUserId) {
+      return res
+        .status(403)
+        .json({ message: 'Only the recipient can accept' });
     }
 
     const updated = await friendRepository.updateStatus(friendship._id.toString(), 'accepted');
@@ -175,8 +181,14 @@ router.put('/:friendshipId/decline', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Friend request not found' });
     }
 
-    if (friendship.addressee.toString() !== currentUserId) {
-      return res.status(403).json({ message: 'Only the recipient can decline' });
+    const addresseeId =
+      friendship.addressee?._id?.toString?.() ||
+      friendship.addressee?.toString?.();
+
+    if (addresseeId !== currentUserId) {
+      return res
+        .status(403)
+        .json({ message: 'Only the recipient can decline' });
     }
 
     const updated = await friendRepository.updateStatus(friendship._id.toString(), 'declined');
@@ -196,12 +208,12 @@ router.delete('/:friendshipId', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Friendship not found' });
     }
     const requesterId =
-      friendship.requester?._id?.toString?.() ??
-      friendship.requester.toString();
+      friendship.requester?._id?.toString?.() ||
+      friendship.requester?.toString?.();
 
     const addresseeId =
-      friendship.addressee?._id?.toString?.() ??
-      friendship.addressee.toString();
+      friendship.addressee?._id?.toString?.() ||
+      friendship.addressee?.toString?.();
 
     if (requesterId !== currentUserId && addresseeId !== currentUserId) {
       return res.status(403).json({ message: 'You cannot remove this friendship' });

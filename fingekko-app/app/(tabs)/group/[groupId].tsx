@@ -198,7 +198,7 @@ export default function GroupDetailScreen( ) {
     }
 
     router.push({
-      pathname: '/(tabs)/AddExpense',
+      pathname: '/(tabs)/group/AddGroupExpense',
       params: { groupId: group.id },
     });
   };

@@ -89,13 +89,37 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
 
+    const splitType = req.body?.splitType;
+
+    const validSplitTypes = [
+      "equalPaidByYou",
+      "unequalPaidByYou",
+      "equalPaidByOthers",
+      "unequalPaidByOthers",
+      "fullyOwedPaidByYou",
+      "fullyOwedPaidByOthers",
+    ] as const;
+
+    if (!validSplitTypes.includes(splitType)) {
+      return res.status(400).json({
+        message: "Invalid split type",
+      });
+    }
+
     const expense = await createCommunityExpense(currentUserId, {
       description: String(req.body?.description ?? ''),
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
-      participantIds: Array.isArray(req.body?.participantIds) ? req.body.participantIds : [],
+      splitType: splitType,
+      participantIds: Array.isArray(req.body?.participantIds)
+        ? req.body.participantIds.map((p: any) => ({
+          userId: String(p.userId),
+          amount: Number(p.amount),
+        }))
+        : [],
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
+      paidBy: String(req.body?.paidBy ?? currentUserId),
     });
 
     const populated = await communityExpenseRepository.findById(expense._id.toString());
@@ -109,13 +133,38 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:expenseId', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
+
+    const splitType = req.body?.splitType;
+
+    const validSplitTypes = [
+      "equalPaidByYou",
+      "unequalPaidByYou",
+      "equalPaidByOthers",
+      "unequalPaidByOthers",
+      "fullyOwedPaidByYou",
+      "fullyOwedPaidByOthers",
+    ] as const;
+
+    if (!validSplitTypes.includes(splitType)) {
+      return res.status(400).json({
+        message: "Invalid split type",
+      });
+    }
     const updated = await updateCommunityExpense(currentUserId, String(req.params.expenseId), {
       description: String(req.body?.description ?? ''),
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
-      participantIds: Array.isArray(req.body?.participantIds) ? req.body.participantIds : [],
+      splitType: splitType,
+
+      participantIds: Array.isArray(req.body?.participantIds)
+        ? req.body.participantIds.map((p: any) => ({
+          userId: String(p.userId),
+          amount: Number(p.amount),
+        }))
+        : [],
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
+      paidBy: String(req.body?.paidBy ?? currentUserId),
     });
 
     return res.json({ expense: serializeExpense(updated) });

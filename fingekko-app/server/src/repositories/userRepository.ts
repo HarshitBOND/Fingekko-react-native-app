@@ -7,7 +7,9 @@ interface CreateUserData {
 }
 
 type UpdateUserData = Partial<{
+  clerkId: string;
   name: string;
+  email: string;
   monthlyIncome: number;
   currency: string;
 }>

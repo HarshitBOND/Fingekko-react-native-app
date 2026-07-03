@@ -36,6 +36,7 @@ async function updateExpense(
     description: string;
     amount: number;
     expenseDate: string;
+    paidBy: string;
     currency: string;
     notes: string;
     participants: { userId: string; amount: number; settled: boolean }[];
@@ -46,6 +47,8 @@ async function updateExpense(
     .populate('paidBy', 'name email avatarKey')
     .populate('participants.userId', 'name email avatarKey');
 }
+
+
 
 async function deleteExpense(expenseId: string) {
   return CommunityExpense.findByIdAndDelete(expenseId);
