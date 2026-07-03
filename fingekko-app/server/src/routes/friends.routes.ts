@@ -24,7 +24,7 @@ function serializeUser(user: any) {
 
   return {
     id: user._id?.toString?.() || user.id?.toString?.() || '',
-    clerk: user.clerkId,
+    clerkId: user.clerkId,
     name: user.name,
     email: user.email,
     avatarKey: user.avatarKey,
