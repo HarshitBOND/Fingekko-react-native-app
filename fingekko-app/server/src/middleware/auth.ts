@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { extractClerkProfile, verifyClerkToken } from '../utils/clerk.js';
 import { createUser, findByClerkId, findByEmail, updateByclerkId, updateById } from '../repositories/userRepository.js';
-import { clerkClient } from '../utils/clerkClient.js';
+import { clerkClient } from '../clerkClient.js';
 
 function looksLikeJwt(token: string): boolean {
   return token.split('.').length === 3;
