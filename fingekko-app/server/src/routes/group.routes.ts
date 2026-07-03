@@ -13,13 +13,14 @@ function resolveGroupId(groupId: string | string[] | undefined) {
 groupRoute.get("/", async (req: Request, res: Response) => {
   try {
     const userId = req.auth?.clerkId;
-    console.log(req.auth);
+    
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
     const groups = await groupRepository.getGroupsByUser(userId);
 
+    console.log("Fetched groups for user:", userId, groups);
     const response = groups.map((group) => ({
       id: group._id.toString(),
       name: group.name,
