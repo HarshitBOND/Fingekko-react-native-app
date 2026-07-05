@@ -1,11 +1,11 @@
 
 import { Colors, FontSizes } from '@/constants/Colors';
-import { BarChart3, Flame, Target, Zap } from 'lucide-react-native';
+import Icon from './ui/Icon';
 import { StyleSheet, Text, View } from 'react-native';
 import Divider from './Divider';
 
 type ProgressItem = {
-  icon: typeof Flame;
+  icon: string;
   value: string;
   label: string;
   color: string;
@@ -13,25 +13,25 @@ type ProgressItem = {
 
 const defaultProgressItems: ProgressItem[] = [
   {
-    icon: Flame,
+    icon: 'Flame',
     value: '12',
     label: 'Day Streak',
     color: '#16a34a',
   },
   {
-    icon: Zap,
+    icon: 'Zap',
     value: '320',
     label: 'Total XP',
     color: '#f59e0b',
   },
   {
-    icon: Target,
+    icon: 'Target',
     value: '3 / 4',
     label: 'Quests Done',
     color: '#10b981',
   },
   {
-    icon: BarChart3,
+    icon: 'BarChart3',
     value: '78%',
     label: 'Better than\nyesterday',
     color: '#8b5cf6',
@@ -41,11 +41,10 @@ const defaultProgressItems: ProgressItem[] = [
 export default function TodaysProgress({ items }: { items?: ProgressItem[] }) {
   const progressItems = items && items.length > 0 ? items : defaultProgressItems;
   const rowItems = progressItems.flatMap((item, index) => {
-    const Icon = item.icon;
     const content = (
       <View key={item.label} style={styles.item}>
         <View style={styles.valueRow}>
-          <Icon size={16} color={item.color} />
+          <Icon name={item.icon} size={16} color={item.color} />
           <Text style={styles.value}>{item.value}</Text>
         </View>
         <Text style={styles.label}>{item.label}</Text>

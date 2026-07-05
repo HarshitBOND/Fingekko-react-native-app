@@ -1,29 +1,35 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect, Tabs, usePathname } from 'expo-router';
-import { BarChart, Home, Repeat, Target, User } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 import { Colors } from '../../constants/Colors';
-
-
-
 
 // ─── Custom Tab Bar Icon Component ───────────────────────────────
 
 type TabIconProps = {
-  icon: React.ElementType; // Icon component from lucide-react-native
+  name: string;            // Icon name key
   label: string;           // Tab label text
   focused: boolean;        // Is this tab currently active?
   activeColor: string;
 };
 
-function TabIcon({ icon: Icon, label, focused, activeColor }: TabIconProps) {
+function TabIcon({ name, label, focused, activeColor }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
-      <Icon size={20} color={focused ? activeColor : Colors.tabBarInactive} />
+      <View style={[
+        styles.iconWrapper,
+        focused && styles.iconWrapperActive
+      ]}>
+        <Icon name={name} size={18} color={focused ? '#000000' : Colors.tabBarInactive} />
+      </View>
       <Text style={[
         styles.tabLabel,
-        { color: focused ? Colors.tabBarActive : Colors.tabBarInactive , textAlign: 'center'}
+        {
+          color: focused ? Colors.tabBarActive : Colors.tabBarInactive,
+          textAlign: 'center',
+          fontWeight: focused ? '800' : '600'
+        }
       ]} numberOfLines={1}>
         {label}
       </Text>
@@ -47,16 +53,7 @@ export default function TabLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  const activeColor =
-  pathname.startsWith('/insights')
-    ? '#10B981' // blue
-    : pathname.startsWith('/goals')
-    ? '#10B981' // orange
-    : pathname.startsWith('/profile')
-    ? '#10B981' // purple
-    : pathname.startsWith('/add')
-    ? '#10B981' // emerald
-    : '#10B981'; // default green
+  const activeColor = '#10B981'; // default green
 
   return (
     <Tabs
@@ -75,7 +72,7 @@ export default function TabLayout() {
         name="index"             // matches app/(tabs)/index.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Home} label="Home" focused={focused} activeColor={activeColor} />
+            <TabIcon name="Home" label="Home" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -84,7 +81,7 @@ export default function TabLayout() {
         name="insights"          // matches app/(tabs)/insights.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={BarChart} label="Insights" focused={focused} activeColor={activeColor} />
+            <TabIcon name="BarChart" label="Insights" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -94,10 +91,8 @@ export default function TabLayout() {
         name="add"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.addButton,
-              { backgroundColor: activeColor , shadowColor: activeColor} // Slightly transparent when not focused
-            ]}>
-              <Repeat size={24} color={Colors.textLight} />
+            <View style={styles.addButton}>
+              <Icon name="Repeat" size={24} color="#000000" />
             </View>
           ),
         }}
@@ -107,7 +102,7 @@ export default function TabLayout() {
         name="goals"             // matches app/(tabs)/goals.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Target} label="Goals" focused={focused} activeColor={activeColor} />
+            <TabIcon name="Target" label="Goals" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -116,7 +111,7 @@ export default function TabLayout() {
         name="profile"           // matches app/(tabs)/profile.tsx
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon={User} label="Profile" focused={focused} activeColor={activeColor} />
+            <TabIcon name="User" label="Profile" focused={focused} activeColor={activeColor} />
           ),
         }}
       />
@@ -163,9 +158,6 @@ export default function TabLayout() {
         }}
       />
 
-  
-
-
     </Tabs>
   );
 }
@@ -177,30 +169,41 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: Colors.tabBar,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    height: 70,              // Taller than default for better touch area
+    borderTopWidth: 2,
+    borderTopColor: '#000000',
+    height: 72,              // Taller than default for better touch area
     paddingBottom: 8,
     paddingTop: 8,
-    // Shadow (iOS)
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    // Shadow (Android)
-    elevation: 10,
   },
   tabIconContainer: {
     alignItems: 'center',    // center horizontally (like align-items in CSS)
     justifyContent: 'center',
     gap: 2,
   },
-  tabEmoji: {
-    fontSize: 20,
-  },
   tabLabel: {
     fontSize: 10,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  iconWrapper: {
+    width: 42,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  iconWrapperActive: {
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   // The big green + button in the center
   addButton: {
@@ -211,17 +214,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,        // Lifts it above the tab bar
+    borderWidth: 2,
+    borderColor: '#000000',
     // Shadow
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
     elevation: 8,
-  },
-  addButtonText: {
-    color: Colors.textLight,
-    fontSize: 28,
-    fontWeight: '300',
-    marginTop: -2,           // Fine-tune vertical centering
   },
 });

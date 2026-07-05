@@ -1,5 +1,5 @@
 import type { Transaction } from '@/constants/types';
-import { Check, ChevronLeft, ChevronRight, Flame, Star } from 'lucide-react-native';
+import Icon from '../ui/Icon';
 import { JSX, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { MONTH_NAMES, Theme, WEEK_DAY_LABELS } from './constants';
@@ -66,7 +66,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
 
       {/* header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Flame size={20} color={Theme.primary} />
+        <Icon name="Flame" size={20} color={Theme.primary} />
         <Text style={styles.streakHeaderText}>You&apos;re on a roll!</Text>
       </View>
 
@@ -82,7 +82,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
         {WEEK_DAY_LABELS.map((lbl, i) => (
           <View key={i} style={styles.weekDotCol}>
             <View style={[styles.weekDot, weekChecked[i] && styles.weekDotDone]}>
-              {weekChecked[i] ? <Check size={11} color="#fff" strokeWidth={3} /> : null}
+              {weekChecked[i] ? <Icon name="Check" size={11} color="#fff" /> : null}
             </View>
             <Text style={styles.weekDayLbl}>{lbl}</Text>
           </View>
@@ -93,7 +93,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       <View style={styles.bestStreakRow}>
         <View style={styles.bestStreakIconWrap}>
           {/* TODO: replace with <Image source={require('../../assets/images/bestStreakIcon.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Flame size={18} color={Theme.primary} />
+          <Icon name="Flame" size={18} color={Theme.primary} />
         </View>
         <View>
           <Text style={styles.bestStreakTitle}>Best Streak</Text>
@@ -105,7 +105,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       <View style={styles.geckoMotivRow}>
         <View style={styles.geckoAvatarWrap}>
           {/* TODO: replace with <Image source={require('../../assets/images/geckoStreakAvatar.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Star size={18} color={Theme.primary} />
+          <Icon name="Star" size={18} color={Theme.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.geckoMotivLine}>Discipline today.</Text>
@@ -124,7 +124,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
                 year:  prev.month === 0 ? prev.year - 1 : prev.year,
               }))}
             >
-              <ChevronLeft size={18} color={Theme.whiteSoft} />
+              <Icon name="ChevronLeft" size={18} color={Theme.whiteSoft} />
             </Pressable>
             <Pressable
               onPress={() => setCalendarMonth((prev) => ({
@@ -132,7 +132,7 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
                 year:  prev.month === 11 ? prev.year + 1 : prev.year,
               }))}
             >
-              <ChevronRight size={18} color={Theme.whiteSoft} />
+              <Icon name="ChevronRight" size={18} color={Theme.whiteSoft} />
             </Pressable>
           </View>
         </View>

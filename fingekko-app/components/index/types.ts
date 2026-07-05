@@ -1,11 +1,10 @@
 import type { Transaction } from '@/constants/types';
 import type { HomeResponse } from '@/types';
-import type { LucideIcon } from 'lucide-react-native';
 
 export type HomeStats = NonNullable<HomeResponse['stats']>;
 
 export type ProgressItem = {
-  icon: LucideIcon;
+  icon: string;
   value: string;
   label: string;
   color: string;

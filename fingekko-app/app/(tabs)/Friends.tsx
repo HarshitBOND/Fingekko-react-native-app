@@ -1,7 +1,6 @@
 import type { FriendRelationship, FriendSearchResponse, FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
-import { Check, Handshake, Users, UserPlus, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 import { Colors } from '../../constants/Colors';
 
 // ─── UTILITIES & HELPERS ──────────────────────────────────────────
@@ -250,7 +250,7 @@ const FriendCard = React.memo(({
               disabled={disabled}
               accessibilityLabel="Accept friend request"
             >
-              <Check size={16} color="#000000" />
+              <Icon name="Check" size={16} color="#000000" />
             </Pressable>
             <Pressable 
               style={[styles.rejectButton, disabled && styles.buttonDisabled]} 
@@ -258,7 +258,7 @@ const FriendCard = React.memo(({
               disabled={disabled}
               accessibilityLabel="Decline friend request"
             >
-              <X size={16} color="#000000" />
+              <Icon name="X" size={16} color="#000000" />
             </Pressable>
           </View>
         ) : (
@@ -301,7 +301,7 @@ const SearchResultCard = React.memo(({
 
       {isAccepted ? (
         <View style={styles.acceptedPill}>
-          <Check size={14} color="#000000" />
+          <Icon name="Check" size={14} color="#000000" />
           <Text style={styles.acceptedPillText}>Friends</Text>
         </View>
       ) : (
@@ -316,9 +316,9 @@ const SearchResultCard = React.memo(({
           accessibilityLabel={isPendingOutgoing ? "Request already sent" : "Add Friend"}
         >
           {isPendingOutgoing ? (
-            <Handshake size={16} color="#000000" />
+            <Icon name="Handshake" size={16} color="#000000" />
           ) : (
-            <UserPlus size={16} color="#000000" />
+            <Icon name="UserPlus" size={16} color="#000000" />
           )}
 
           <Text style={styles.primaryButtonText}>
@@ -339,7 +339,7 @@ const SearchBar = React.memo(({
   onChange: (text: string) => void;
 }) => (
   <View style={styles.searchRow}>
-    <Handshake size={18} color="#000000" />
+    <Icon name="Search" size={18} color="#000000" />
     <TextInput
       value={value}
       onChangeText={onChange}
@@ -422,7 +422,7 @@ export default function FriendsScreen() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
           <View style={styles.badge}>
-            <Users size={14} color="#000000" />
+            <Icon name="Users" size={14} color="#000000" />
             <Text style={styles.badgeText}>Community</Text>
           </View>
           <Text style={styles.title}>Friends</Text>

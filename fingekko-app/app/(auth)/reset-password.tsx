@@ -1,16 +1,16 @@
 import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignIn } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import { Eye, EyeOff } from 'lucide-react-native';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import Icon from '../../components/ui/Icon';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -100,76 +100,55 @@ export default function ResetPasswordScreen() {
           </Text>
 
           {stage === 'request' ? (
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                style={styles.input}
-                placeholder="you@example.com"
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
+            <Input
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
           ) : (
             <>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Verification code</Text>
-                <TextInput
-                  value={code}
-                  onChangeText={setCode}
-                  style={styles.input}
-                  placeholder="123456"
-                  keyboardType="number-pad"
-                />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Password</Text>
-
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    style={styles.passwordInput}
-                    placeholder="Your password"
-                    secureTextEntry={!isPasswordVisible}
-                  />
-
+              <Input
+                label="Verification code"
+                value={code}
+                onChangeText={setCode}
+                placeholder="123456"
+                keyboardType="number-pad"
+              />
+              <Input
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Your password"
+                secureTextEntry={!isPasswordVisible}
+                rightIcon={
                   <TouchableOpacity
                     onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                   >
-                    {isPasswordVisible ? (
-                      <Eye size={20} color={Colors.textSecondary} />
-                    ) : (
-                      <EyeOff size={20} color={Colors.textSecondary} />
-                    )}
+                    <Icon name={isPasswordVisible ? "Eye" : "EyeOff"} size={20} color={Colors.textSecondary} />
                   </TouchableOpacity>
-                </View>
-              </View>
+                }
+              />
             </>
           )}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <Pressable
-            style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            size="lg"
             onPress={stage === 'request' ? handleRequest : handleReset}
             disabled={isSubmitting}
+            loading={isSubmitting}
           >
-            <Text style={styles.primaryButtonText}>
-              {isSubmitting
-                ? stage === 'request'
-                  ? 'Sending...'
-                  : 'Resetting...'
-                : stage === 'request'
-                  ? 'Send reset code'
-                  : 'Reset password'}
-            </Text>
-          </Pressable>
+            {stage === 'request' ? 'Send code' : 'Reset password'}
+          </Button>
 
-          <Pressable style={styles.linkButton} onPress={() => router.back()}>
-            <Text style={styles.linkText}>Back to sign in</Text>
-          </Pressable>
+          <Button variant="ghost" size="md" onPress={() => router.back()}>
+            Back to sign in
+          </Button>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

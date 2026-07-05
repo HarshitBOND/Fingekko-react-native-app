@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Flame, Check } from 'lucide-react-native';
+import Icon from './ui/Icon';
 
 const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -25,7 +25,7 @@ export default function Streak({ compact = false, days = 12 }) {
         </View>
         <View style={styles.bestBox}>
           <View style={styles.iconWrap}>
-            <Flame size={small ? 18 : 22} color="#ff6b00" />
+            <Icon name="Flame" size={small ? 18 : 22} color="#ff6b00" />
           </View>
           <View>
             <Text style={styles.bestLabel}>Best</Text>
@@ -44,7 +44,7 @@ export default function Streak({ compact = false, days = 12 }) {
                 i === 6 ? styles.unfilled : styles.filled,
               ]}
             >
-              {i !== 6 && <Check size={small ? 12 : 14} color="#fff" />}
+              {i !== 6 && <Icon name="Check" size={small ? 12 : 14} color="#fff" />}
             </View>
             <Text style={[styles.weekLabel, small && styles.weekLabelSmall]}>{d}</Text>
           </View>

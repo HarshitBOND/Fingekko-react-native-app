@@ -1,8 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ArrowDownLeft, ChevronRight, Menu } from 'lucide-react-native';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 
 type NonGroupExpenseItem = {
   id: string;
@@ -79,12 +79,12 @@ export default function NonGroupExpenses() {
           <View style={styles.topBar}>
             <View style={styles.brandRow}>
               <View style={styles.logoCircle}>
-                <ArrowDownLeft size={18} color="#148a46" />
+                <Icon name="ArrowDownLeft" size={18} color="#148a46" />
               </View>
               <Text style={styles.brandTitle}>Non Group Expenses</Text>
             </View>
             <Pressable style={styles.menuButton} onPress={() => router.back()}>
-              <Menu size={20} color="#1f2937" />
+              <Icon name="Menu" size={20} color="#1f2937" />
             </Pressable>
           </View>
 
@@ -119,7 +119,7 @@ export default function NonGroupExpenses() {
                     <Text style={styles.groupStatusLabel}>{getAmountLabel(balance)}</Text>
                     <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>{Math.abs(balance)}</Text>
                   </View>
-                  <ChevronRight size={16} color="#9ca3af" style={styles.groupChevron} />
+                  <Icon name="ChevronRight" size={16} color="#9ca3af" style={styles.groupChevron} />
                 </View>
               );
             })

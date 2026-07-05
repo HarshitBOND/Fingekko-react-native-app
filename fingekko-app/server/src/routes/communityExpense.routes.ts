@@ -29,24 +29,51 @@ function toId(value: any) {
   return value?._id?.toString?.() || value?.toString?.() || '';
 }
 
-function serializeExpense(expense: any) {
+function paidByIncludes(expense: any, userId: string) {
+  return (expense.paidBy ?? []).some((entry: any) => toId(entry.userId) === userId);
+}
+
+function serializeExpense(expense: any, currentUserId?: string) {
+  const paidByList = (expense.paidBy ?? []).map((entry: any) => ({
+    userId: serializeUser(entry.userId),
+    amount: entry.amount,
+  }));
+
+  const participants = (expense.participants ?? []).map((participant: any) => ({
+    userId: serializeUser(participant.userId),
+    amount: participant.amount,
+    settled: participant.settled,
+  }));
+
+  const yourAmountPaid = currentUserId
+    ? roundTwo((expense.paidBy ?? []).filter((p: any) => toId(p.userId) === currentUserId).reduce((sum: number, p: any) => sum + p.amount, 0))
+    : 0;
+  const yourAmountOwed = currentUserId
+    ? roundTwo((expense.participants ?? []).filter((p: any) => toId(p.userId) === currentUserId).reduce((sum: number, p: any) => sum + p.amount, 0))
+    : 0;
+
   return {
     id: expense._id.toString(),
+    groupId: expense.groupId ? toId(expense.groupId) : null,
+    groupName: expense.groupId?.name ?? null,
     description: expense.description,
     amount: expense.amount,
-    expenseDate: expense.expenseDate,
+    expenseDate: expense.expenseDate?.toISOString?.() ?? expense.expenseDate ?? null,
     currency: expense.currency,
     notes: expense.notes,
     createdBy: serializeUser(expense.createdBy),
-    paidBy: serializeUser(expense.paidBy),
-    participants: (expense.participants ?? []).map((participant: any) => ({
-      userId: serializeUser(participant.userId),
-      amount: participant.amount,
-      settled: participant.settled,
-    })),
+    paidBy: paidByList,
+    participants,
+    yourAmountPaid,
+    yourAmountOwed,
+    netBalance: roundTwo(yourAmountPaid - yourAmountOwed),
     createdAt: expense.createdAt?.toISOString?.() || new Date(expense.createdAt).toISOString(),
     updatedAt: expense.updatedAt?.toISOString?.() || new Date(expense.updatedAt).toISOString(),
   };
+}
+
+function roundTwo(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 router.get('/', async (req: Request, res: Response) => {
@@ -89,7 +116,25 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
 
-    const splitType = req.body?.splitType;
+    let splitType = req.body?.splitType;
+    let participantIds = req.body?.participantIds || [];
+
+    // Transform string arrays to object format expected by the service
+    if (Array.isArray(participantIds)) {
+      participantIds = participantIds.map((p: any) => {
+        if (typeof p === 'string') {
+          return { userId: p, amount: 0 };
+        } else if (p && typeof p === 'object') {
+          return {
+            userId: String(p.userId || p.id || ''),
+            amount: Number(p.amount ?? 0),
+          };
+        }
+        return { userId: '', amount: 0 };
+      }).filter((p: any) => p.userId);
+    } else {
+      participantIds = [];
+    }
 
     const validSplitTypes = [
       "equalPaidByYou",
@@ -98,12 +143,10 @@ router.post('/', async (req: Request, res: Response) => {
       "unequalPaidByOthers",
       "fullyOwedPaidByYou",
       "fullyOwedPaidByOthers",
-    ] as const;
+    ];
 
-    if (!validSplitTypes.includes(splitType)) {
-      return res.status(400).json({
-        message: "Invalid split type",
-      });
+    if (!splitType || !validSplitTypes.includes(splitType)) {
+      splitType = "equalPaidByYou";
     }
 
     const expense = await createCommunityExpense(currentUserId, {
@@ -111,15 +154,11 @@ router.post('/', async (req: Request, res: Response) => {
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
       splitType: splitType,
-      participantIds: Array.isArray(req.body?.participantIds)
-        ? req.body.participantIds.map((p: any) => ({
-          userId: String(p.userId),
-          amount: Number(p.amount),
-        }))
-        : [],
+      participantIds,
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
       paidBy: String(req.body?.paidBy ?? currentUserId),
+      groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
     });
 
     const populated = await communityExpenseRepository.findById(expense._id.toString());
@@ -134,7 +173,24 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
 
-    const splitType = req.body?.splitType;
+    let splitType = req.body?.splitType;
+    let participantIds = req.body?.participantIds || [];
+
+    if (Array.isArray(participantIds)) {
+      participantIds = participantIds.map((p: any) => {
+        if (typeof p === 'string') {
+          return { userId: p, amount: 0 };
+        } else if (p && typeof p === 'object') {
+          return {
+            userId: String(p.userId || p.id || ''),
+            amount: Number(p.amount ?? 0),
+          };
+        }
+        return { userId: '', amount: 0 };
+      }).filter((p: any) => p.userId);
+    } else {
+      participantIds = [];
+    }
 
     const validSplitTypes = [
       "equalPaidByYou",
@@ -143,25 +199,18 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
       "unequalPaidByOthers",
       "fullyOwedPaidByYou",
       "fullyOwedPaidByOthers",
-    ] as const;
+    ];
 
-    if (!validSplitTypes.includes(splitType)) {
-      return res.status(400).json({
-        message: "Invalid split type",
-      });
+    if (!splitType || !validSplitTypes.includes(splitType)) {
+      splitType = "equalPaidByYou";
     }
+
     const updated = await updateCommunityExpense(currentUserId, String(req.params.expenseId), {
       description: String(req.body?.description ?? ''),
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
       splitType: splitType,
-
-      participantIds: Array.isArray(req.body?.participantIds)
-        ? req.body.participantIds.map((p: any) => ({
-          userId: String(p.userId),
-          amount: Number(p.amount),
-        }))
-        : [],
+      participantIds,
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
       paidBy: String(req.body?.paidBy ?? currentUserId),

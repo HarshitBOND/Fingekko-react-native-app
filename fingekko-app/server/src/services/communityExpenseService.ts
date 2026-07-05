@@ -82,6 +82,147 @@ function PaidBy(amount: number, participantIds: string[], userId: string): Split
 }
 
 
+type CreateExpenseInput = {
+  description: string;
+  amount: number;
+  expenseDate: string;
+  splitType: string;
+  participantIds: ParticipantShare[];
+  notes: string;
+  currency: string;
+  paidBy: string;
+  groupId?: string;
+};
+
+function buildParticipants(
+  splitType: string,
+  amount: number,
+  payerId: string,
+  participantIds: ParticipantShare[]
+) {
+  const allIds = Array.from(
+    new Set([...participantIds.map((p) => p.userId), payerId])
+  );
+
+  if (splitType === 'equalPaidByYou' || splitType === 'equalPaidByOthers') {
+    return splitEvenly(amount, allIds).map((share) => ({
+      userId: share.userId,
+      amount: share.amount,
+      settled: false,
+    }));
+  }
+
+  if (splitType === 'unequalPaidByYou' || splitType === 'unequalPaidByOthers') {
+    const providedTotal = roundTwo(
+      participantIds.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    );
+
+    if (Math.abs(providedTotal - amount) > 0.01) {
+      throw new Error('Split amounts must add up to the total amount.');
+    }
+
+    return allIds.map((id) => {
+      const match = participantIds.find((p) => p.userId === id);
+      return { userId: id, amount: roundTwo(match?.amount ?? 0), settled: false };
+    });
+  }
+
+  if (splitType === 'fullyOwedPaidByYou') {
+    return allIds
+      .filter((id) => id !== payerId)
+      .map((id) => ({ userId: id, amount: roundTwo(amount), settled: false }));
+  }
+
+  if (splitType === 'fullyOwedPaidByOthers') {
+    return allIds
+      .filter((id) => id !== payerId)
+      .map((id) => ({ userId: id, amount: 0, settled: false }))
+      .concat([{ userId: payerId, amount: roundTwo(amount), settled: false }]);
+  }
+
+  throw new Error('Unsupported split type.');
+}
+
+export async function createCommunityExpense(currentUserId: string, input: CreateExpenseInput) {
+  const payerId = input.paidBy || currentUserId;
+
+  if (!input.participantIds.length) {
+    throw new Error('At least one participant is required.');
+  }
+
+  const participants = buildParticipants(input.splitType, input.amount, payerId, input.participantIds);
+
+  return communityExpenseRepository.createExpense({
+    groupId: input.groupId,
+    createdBy: currentUserId,
+    paidBy: [{ userId: payerId, amount: input.amount }],
+    description: input.description,
+    amount: input.amount,
+    currency: input.currency,
+    notes: input.notes,
+    expenseDate: input.expenseDate,
+    participants,
+    history: [{ action: 'CREATED', performedBy: currentUserId }],
+  });
+}
+
+export async function updateCommunityExpense(
+  currentUserId: string,
+  expenseId: string,
+  input: CreateExpenseInput
+) {
+  const existing = await communityExpenseRepository.findById(expenseId);
+  if (!existing) {
+    throw new Error('Expense not found.');
+  }
+
+  const payerId = input.paidBy || currentUserId;
+  const participants = buildParticipants(input.splitType, input.amount, payerId, input.participantIds);
+
+  return communityExpenseRepository.updateExpense(
+    expenseId,
+    {
+      description: input.description,
+      amount: input.amount,
+      currency: input.currency,
+      notes: input.notes,
+      expenseDate: input.expenseDate,
+      paidBy: [{ userId: payerId, amount: input.amount }],
+      participants,
+    },
+    { action: 'UPDATED', performedBy: currentUserId }
+  );
+}
+
+export async function computeGroupBalances(groupId: string) {
+  const expenses = await communityExpenseRepository.listForGroup(groupId);
+
+  const balances = new Map<string, number>();
+
+  for (const expense of expenses) {
+    for (const payer of expense.paidBy ?? []) {
+      const id = payer.userId.toString();
+      balances.set(id, roundTwo((balances.get(id) ?? 0) + payer.amount));
+    }
+    for (const participant of expense.participants ?? []) {
+      const id = participant.userId.toString();
+      balances.set(id, roundTwo((balances.get(id) ?? 0) - participant.amount));
+    }
+  }
+
+  const result: UserBalance[] = Array.from(balances.entries()).map(([userId, netBalance]) => ({
+    userId,
+    netBalance,
+  }));
+
+  return {
+    balances: result,
+    settlements: simplifyDebts(result),
+    totalSpent: roundTwo(expenses.reduce((sum, e) => sum + e.amount, 0)),
+    expenseCount: expenses.length,
+  };
+}
+
 export function simplifyDebts(
   balances: UserBalance[]
 ): Settlement[] {

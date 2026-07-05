@@ -2,16 +2,6 @@ import { useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ChevronRight,
-  Handshake,
-  Menu,
-  Plus,
-  Scroll,
-  Users,
-} from 'lucide-react-native';
-import {
   ImageBackground,
   Pressable,
   ScrollView,
@@ -20,12 +10,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 
 type QuickAction = {
   id: string;
   title: string;
   subtitle: string;
-  icon: React.ElementType;
+  icon: string;
   href: '/(tabs)/Friends' | '/(tabs)/AddNewExpense' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses';
 };
 
@@ -45,28 +36,28 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: 'add-expense',
     title: 'Add New Expense',
     subtitle: 'Create a new expense entry',
-    icon: Plus,
+    icon: 'Plus',
     href: '/(tabs)/AddNewExpense',
   },
   {
     id: 'your-groups',
     title: 'Your Groups',
     subtitle: 'Open the groups screen',
-    icon: Users,
+    icon: 'Users',
     href: '/(tabs)/YourGroups',
   },
   {
     id: 'non-group-expenses',
     title: 'Non Group Expenses',
     subtitle: 'Open the non-group screen',
-    icon: ArrowDownLeft,
+    icon: 'ArrowDownLeft',
     href: '/(tabs)/NonGroupExpenses',
   },
   {
     id: 'friends',
     title: 'Friends',
     subtitle: 'Open the friends screen',
-    icon: Handshake,
+    icon: 'Handshake',
     href: '/(tabs)/Friends',
   },
 ];
@@ -108,20 +99,20 @@ export default function HomeScreen() {
     if (type === 'up') {
       return (
         <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
-          <ArrowUpRight size={18} color="#148a46" />
+          <Icon name="ArrowUpRight" size={18} color="#148a46" />
         </View>
       );
     }
     if (type === 'down') {
       return (
         <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
-          <ArrowDownLeft size={18} color="#148a46" />
+          <Icon name="ArrowDownLeft" size={18} color="#148a46" />
         </View>
       );
     }
     return (
       <View style={[styles.activityIconWrap, { backgroundColor: '#edf9f1' }]}>
-        <Users size={18} color="#148a46" />
+        <Icon name="Users" size={18} color="#148a46" />
       </View>
     );
   };
@@ -155,7 +146,7 @@ export default function HomeScreen() {
               <Text style={styles.brandTitle}>GekkoSplit</Text>
             </View>
             <Pressable style={styles.menuButton}>
-              <Menu size={20} color="#1f2937" />
+              <Icon name="Menu" size={20} color="#1f2937" />
             </Pressable>
           </View>
 
@@ -173,8 +164,6 @@ export default function HomeScreen() {
 
         <View style={styles.quickActionsGrid}>
           {QUICK_ACTIONS.map((action) => {
-            const ActionIcon = action.icon;
-
             return (
               <Pressable
                 key={action.id}
@@ -182,7 +171,7 @@ export default function HomeScreen() {
                 onPress={() => router.push(action.href)}
               >
                 <View style={styles.quickActionIconWrap}>
-                  <ActionIcon size={22} color="#148a46" />
+                  <Icon name={action.icon} size={22} color="#148a46" />
                 </View>
                 <Text style={styles.quickActionTitle}>{action.title}</Text>
                 <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
@@ -213,7 +202,7 @@ export default function HomeScreen() {
                   {item.amount}
                 </Text>
               ) : (
-                item.hasChevron && <ChevronRight size={16} color="#9ca3af" />
+                item.hasChevron && <Icon name="ChevronRight" size={16} color="#9ca3af" />
               )}
             </View>
           ))}

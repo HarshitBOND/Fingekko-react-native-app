@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-expo';
-import { Bell, TextAlignStart } from 'lucide-react-native';
+import Icon from './ui/Icon';
 import { View, Text, StyleSheet, Image } from 'react-native';
 
 export default function Navbar() {
@@ -23,7 +23,7 @@ export default function Navbar() {
     <View style={styles.header}>
 
       <View style={styles.headerSide}>
-        <TextAlignStart size={24} color="#374151" />
+        <Icon name="TextAlignStart" size={24} color="#374151" />
       </View>
 
       <View style={styles.logoWrap}>
@@ -36,7 +36,7 @@ export default function Navbar() {
       </View>
 
       <View style={styles.headerActions}>
-        <Bell size={22} color="#374151" />
+        <Icon name="Bell" size={22} color="#374151" />
 
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>

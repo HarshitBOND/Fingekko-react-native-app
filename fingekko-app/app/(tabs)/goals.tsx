@@ -6,10 +6,10 @@ import { apiRequest } from '@/utils/api';
 
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BarChart3, CalendarDays, CircleAlert, Flame, Target, Zap } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 import ProgressBar from '../../components/ProgressBar';
 import TodaysQuest from '../../components/TodaysQuest';
 import { Colors, FontSizes } from '../../constants/Colors';
@@ -94,39 +94,6 @@ export default function TabIndex() {
     .replace(' ', ' ')
     .replace(/ (\d{4})$/, ', $1');
 
-  const progressItems = useMemo(() => {
-    if (!stats) {
-      return undefined;
-    }
-
-    return [
-      {
-        icon: Flame,
-        value: String(stats.dayStreak),
-        label: 'Day Streak',
-        color: '#16a34a',
-      },
-      {
-        icon: Zap,
-        value: String(stats.totalXp),
-        label: 'Total XP',
-        color: '#f59e0b',
-      },
-      {
-        icon: Target,
-        value: `${stats.questsDone} / ${stats.questsTarget}`,
-        label: 'Quests Done',
-        color: '#10b981',
-      },
-      {
-        icon: BarChart3,
-        value: `${stats.betterThanYesterday}%`,
-        label: 'Better than\nyesterday',
-        color: '#8b5cf6',
-      },
-    ];
-  }, [stats]);
-
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -138,7 +105,7 @@ export default function TabIndex() {
             <Text style={styles.greetingSubtitle}>{"You've got this!"}</Text>
           </View>
           <View style={styles.datePill}>
-            <CalendarDays size={12} strokeWidth={1.5} color="#4b5563" />
+            <Icon name="CalendarDays" size={12} color="#4b5563" />
             <Text style={styles.dateText}>{formattedDate}</Text>
           </View>
         </View>
@@ -156,7 +123,7 @@ export default function TabIndex() {
             <View style={styles.cardCenter}>
               <View style={styles.titleRow}>
                 <Text style={styles.cardTitle}>{user?.userGekko ?? 'Planner Gekko'}</Text>
-                <CircleAlert size={16} strokeWidth={1.5} color="#bcd9df" />
+                <Icon name="CircleAlert" size={16} color="#bcd9df" />
               </View>
 
               <View style={styles.levelRow}>

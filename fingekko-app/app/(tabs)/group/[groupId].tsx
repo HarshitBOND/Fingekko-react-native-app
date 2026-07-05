@@ -1,16 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
-import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import {
-  Briefcase,
-  Car,
-  CircleHelp,
-  Coins,
-  Home,
-  Plane,
-  Users,
-  Utensils,
-} from 'lucide-react-native';
+import Icon from '../../../components/ui/Icon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -67,7 +57,7 @@ const EXPENSES = [
     group: 'Goa Trip',
     amount: '₹2,480',
     split: 'Split equally',
-    icon: <Feather name="arrow-up-right" size={18} color={COLORS.green} />,
+    icon: <Icon name="ArrowRight" size={18} color={COLORS.green} />,
   },
   {
     id: '2',
@@ -76,7 +66,7 @@ const EXPENSES = [
     group: 'Weekend Cafe',
     amount: '₹160',
     split: 'Split equally',
-    icon: <Ionicons name="restaurant-outline" size={18} color={COLORS.green} />,
+    icon: <Icon name="Utensils" size={18} color={COLORS.green} />,
   },
   {
     id: '3',
@@ -85,7 +75,7 @@ const EXPENSES = [
     group: 'Goa Trip',
     amount: '₹540',
     split: 'Split equally',
-    icon: <Ionicons name="car-outline" size={18} color={COLORS.green} />,
+    icon: <Icon name="Car" size={18} color={COLORS.green} />,
   },
 ];
 
@@ -103,18 +93,17 @@ type GroupItem = {
   balance?: number;
 };
 
-const GROUP_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
-  Plane,
-  Home,
-  Users,
-  Car,
-  Coins,
-  Utensils,
-  Briefcase,
-};
-
-function getGroupIcon(iconName?: string) {
-  return GROUP_ICONS[iconName ?? ''] ?? CircleHelp;
+function getGroupIconName(iconName?: string): string {
+  const nameMap: Record<string, string> = {
+    Plane: 'Plane',
+    Home: 'Home',
+    Users: 'Users',
+    Car: 'Car',
+    Coins: 'Coins',
+    Utensils: 'Utensils',
+    Briefcase: 'Briefcase',
+  };
+  return nameMap[iconName ?? ''] ?? 'CircleAlert';
 }
 
 
@@ -157,7 +146,7 @@ export default function GroupDetailScreen() {
   const { userId, getToken } = useAuth();
   const { groupId } = useLocalSearchParams<{ groupId?: string | string[] }>();
   const resolvedGroupId = Array.isArray(groupId) ? groupId[0] : groupId;
-  const GroupIcon = useMemo(() => getGroupIcon(group?.icon), [group?.icon]);
+  const GroupIconName = useMemo(() => getGroupIconName(group?.icon), [group?.icon]);
 
   const fetchGroupDetails = async (groupId: string) => {
     setLoading(true);
@@ -224,11 +213,11 @@ export default function GroupDetailScreen() {
           style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={20} color={COLORS.textDark} />
+          <Icon name="ChevronLeft" size={20} color={COLORS.textDark} />
         </Pressable>
 
         <View style={styles.avatarLg}>
-          <GroupIcon size={24} color={COLORS.green} />
+          <Icon name={GroupIconName} size={24} color={COLORS.green} />
         </View>
 
         <View style={{ flex: 1 }}>
@@ -237,7 +226,7 @@ export default function GroupDetailScreen() {
         </View>
 
         <Pressable style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}>
-          <Ionicons name="ellipsis-vertical" size={18} color={COLORS.textDark} />
+          <Icon name="Menu" size={18} color={COLORS.textDark} />
         </Pressable>
       </View>
 
@@ -259,25 +248,25 @@ export default function GroupDetailScreen() {
         {/* Action row */}
         <View style={styles.actionsCard}>
           <PressableAction
-            icon={<Ionicons name="add" size={22} color={COLORS.green} />}
+            icon={<Icon name="Plus" size={22} color={COLORS.green} />}
             label="Add Expense"
             onPress={handleAddExpense}
           />
           <View style={styles.actionDivider} />
           <PressableAction
-            icon={<FontAwesome5 name="hand-holding-usd" size={18} color={COLORS.green} />}
+            icon={<Icon name="Coins" size={18} color={COLORS.green} />}
             label="Settle Up"
             onPress={handleSettleUp}
           />
           <View style={styles.actionDivider} />
           <PressableAction
-            icon={<Ionicons name="people-outline" size={22} color={COLORS.green} />}
+            icon={<Icon name="Users" size={22} color={COLORS.green} />}
             label="Members"
             onPress={scrollToMembers}
           />
           <View style={styles.actionDivider} />
           <PressableAction
-            icon={<Ionicons name="settings-outline" size={22} color={COLORS.green} />}
+            icon={<Icon name="Settings" size={22} color={COLORS.green} />}
             label="Group Settings"
             onPress={() => {
               Alert.alert('Group Settings', 'Group settings are not connected yet.');
@@ -349,7 +338,7 @@ export default function GroupDetailScreen() {
 
         <View style={styles.listCard}>
           <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={22} color={COLORS.green} />
+            <Icon name="StickyNote" size={22} color={COLORS.green} />
             <Text style={styles.emptyStateTitle}>No expenses yet</Text>
             <Text style={styles.emptyStateText}>This screen is connected to the backend, but expenses are not loaded here yet.</Text>
           </View>
@@ -423,7 +412,7 @@ export default function GroupDetailScreen() {
             <Text style={styles.modalTitle}>Settle Up</Text>
 
             <View style={styles.modalEmptyState}>
-              <Ionicons name="information-circle-outline" size={40} color={COLORS.green} />
+              <Icon name="CircleAlert" size={40} color={COLORS.green} />
               <Text style={styles.modalEmptyText}>Settle up is connected, but balance data is not loaded yet.</Text>
             </View>
 
@@ -442,7 +431,6 @@ export default function GroupDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -455,49 +443,69 @@ const styles = StyleSheet.create({
   circleBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   circleBtnPressed: { backgroundColor: COLORS.border },
   avatarLg: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
-  avatarLgText: { fontSize: 18, fontWeight: '700', color: COLORS.textDark },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textDark },
-  headerSubtitle: { fontSize: 13, color: COLORS.textGray, marginTop: 2 },
+  avatarLgText: { fontSize: 18, fontWeight: '800', color: COLORS.textDark },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.textDark },
+  headerSubtitle: { fontSize: 13, color: COLORS.textGray, marginTop: 2, fontWeight: '600' },
 
   scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
 
   balanceCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 22,
     marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
-  balanceLabel: { fontSize: 13, color: COLORS.textGray, marginBottom: 10 },
+  balanceLabel: { fontSize: 13, color: COLORS.textGray, marginBottom: 10, fontWeight: '700' },
   balanceMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  balanceTitle: { fontSize: 19, fontWeight: '700', color: COLORS.textDark },
-  balanceAmount: { fontSize: 22, fontWeight: '700', color: COLORS.green },
-  balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6 },
+  balanceTitle: { fontSize: 19, fontWeight: '900', color: COLORS.textDark },
+  balanceAmount: { fontSize: 22, fontWeight: '900', color: COLORS.green },
+  balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6, fontWeight: '600' },
 
   actionsCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 20,
     marginBottom: 28,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   actionItem: {
     flex: 1,
@@ -509,45 +517,59 @@ const styles = StyleSheet.create({
   actionIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
-  actionLabel: { fontSize: 11, color: COLORS.textGray, textAlign: 'center' },
-  actionDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
+  actionLabel: { fontSize: 11, color: COLORS.textGray, textAlign: 'center', fontWeight: '800' },
+  actionDivider: { width: 2, height: 28, backgroundColor: '#000000' },
 
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textDark, marginBottom: 12 },
+  sectionTitle: { fontSize: 17, fontWeight: '900', color: COLORS.textDark, marginBottom: 12 },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  viewAll: { fontSize: 14, color: COLORS.green, fontWeight: '600', marginBottom: 12 },
+  viewAll: { fontSize: 14, color: COLORS.green, fontWeight: '800', marginBottom: 12 },
 
   summaryCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 20,
     marginBottom: 28,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 9,
   },
-  summaryLabel: { fontSize: 14, color: COLORS.textGray },
-  summaryValue: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
-  summaryDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
+  summaryLabel: { fontSize: 14, color: COLORS.textGray, fontWeight: '600' },
+  summaryValue: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  summaryDivider: { height: 2, backgroundColor: '#000000', marginVertical: 10 },
   greenText: { color: COLORS.green },
 
   listCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 18,
     paddingHorizontal: 18,
     marginBottom: 28,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
-  rowDivider: { height: 1, backgroundColor: COLORS.border },
+  rowDivider: { height: 2, backgroundColor: '#000000' },
 
   expenseRow: {
     flexDirection: 'row',
@@ -558,24 +580,26 @@ const styles = StyleSheet.create({
   expenseIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
-  expenseTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
-  expenseSubtitle: { fontSize: 12, color: COLORS.textGray, marginTop: 3 },
-  expenseGroup: { fontSize: 12, color: COLORS.textGray, marginTop: 1 },
-  expenseAmount: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
-  expenseSplit: { fontSize: 12, color: COLORS.textGray, marginTop: 3 },
+  expenseTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  expenseSubtitle: { fontSize: 12, color: COLORS.textGray, marginTop: 3, fontWeight: '600' },
+  expenseGroup: { fontSize: 12, color: COLORS.textGray, marginTop: 1, fontWeight: '600' },
+  expenseAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  expenseSplit: { fontSize: 12, color: COLORS.textGray, marginTop: 3, fontWeight: '600' },
 
   emptyState: {
     alignItems: 'center',
     paddingVertical: 24,
     gap: 8,
   },
-  emptyStateTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
-  emptyStateText: { fontSize: 12, color: COLORS.textGray, textAlign: 'center', lineHeight: 17 },
+  emptyStateTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  emptyStateText: { fontSize: 12, color: COLORS.textGray, textAlign: 'center', lineHeight: 17, fontWeight: '600' },
 
   memberRow: {
     flexDirection: 'row',
@@ -586,24 +610,28 @@ const styles = StyleSheet.create({
   avatarSm: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
-  avatarSmText: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+  avatarSmText: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  memberName: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+  memberName: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
   youBadge: {
     backgroundColor: COLORS.green,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
-  youBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  memberSub: { fontSize: 12, color: COLORS.textGray, marginTop: 4 },
-  memberRightLabel: { fontSize: 12, color: COLORS.textGray },
-  memberAmount: { fontSize: 15, fontWeight: '700', color: COLORS.textDark, marginTop: 3 },
+  youBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  memberSub: { fontSize: 12, color: COLORS.textGray, marginTop: 4, fontWeight: '600' },
+  memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontWeight: '600' },
+  memberAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark, marginTop: 3 },
 
   // Modal
   modalOverlay: {
@@ -617,6 +645,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 32,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#000000',
   },
   modalHandle: {
     width: 40,
@@ -626,9 +658,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 16,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textDark, marginBottom: 18 },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: COLORS.textDark, marginBottom: 18 },
   modalEmptyState: { alignItems: 'center', paddingVertical: 24, gap: 10 },
-  modalEmptyText: { fontSize: 14, color: COLORS.textGray, textAlign: 'center' },
+  modalEmptyText: { fontSize: 14, color: COLORS.textGray, textAlign: 'center', fontWeight: '600' },
   settleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -637,14 +669,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  settleText: { flex: 1, fontSize: 14, color: COLORS.textDark },
-  settleAmount: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+  settleText: { flex: 1, fontSize: 14, color: COLORS.textDark, fontWeight: '600' },
+  settleAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
   modalCloseBtn: {
     marginTop: 20,
-    backgroundColor: COLORS.greenLight,
-    borderRadius: 14,
+    backgroundColor: '#00FF66',
+    borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
-  modalCloseText: { fontSize: 15, fontWeight: '700', color: COLORS.green },
+  modalCloseText: { fontSize: 15, fontWeight: '900', color: '#000000' },
 });

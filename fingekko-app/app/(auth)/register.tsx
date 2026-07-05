@@ -1,16 +1,16 @@
 import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignUp } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import { Eye, EyeOff } from 'lucide-react-native';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import Icon from '../../components/ui/Icon';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -94,86 +94,62 @@ export default function RegisterScreen() {
 
           {!needsVerification ? (
             <>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Name</Text>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  style={styles.input}
-                  placeholder="Your name"
-                />
-              </View>
+              <Input
+                label="Name"
+                value={name}
+                onChangeText={setName}
+                placeholder="Your name"
+              />
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  style={styles.input}
-                  placeholder="you@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
+              <Input
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Password</Text>
-
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    style={styles.passwordInput}
-                    placeholder="Minimum 6 characters"
-                    secureTextEntry={!isPasswordVisible}
-                  />
-
+              <Input
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Minimum 6 characters"
+                secureTextEntry={!isPasswordVisible}
+                rightIcon={
                   <TouchableOpacity
                     onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                   >
-                    {isPasswordVisible ? (
-                      <Eye size={20} color={Colors.textSecondary} />
-                    ) : (
-                      <EyeOff size={20} color={Colors.textSecondary} />
-                    )}
+                    <Icon name={isPasswordVisible ? "Eye" : "EyeOff"} size={20} color={Colors.textSecondary} />
                   </TouchableOpacity>
-                </View>
-              </View>
+                }
+              />
             </>
           ) : (
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Verification code</Text>
-              <TextInput
-                value={verificationCode}
-                onChangeText={setVerificationCode}
-                style={styles.input}
-                placeholder="123456"
-                keyboardType="number-pad"
-              />
-            </View>
+            <Input
+              label="Verification code"
+              value={verificationCode}
+              onChangeText={setVerificationCode}
+              placeholder="123456"
+              keyboardType="number-pad"
+            />
           )}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <Pressable
-            style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            size="lg"
             onPress={needsVerification ? handleVerify : handleRegister}
             disabled={isSubmitting}
+            loading={isSubmitting}
           >
-            <Text style={styles.primaryButtonText}>
-              {isSubmitting
-                ? needsVerification
-                  ? 'Verifying...'
-                  : 'Creating account...'
-                : needsVerification
-                  ? 'Verify email'
-                  : 'Create account'}
-            </Text>
-          </Pressable>
+            {needsVerification ? 'Verify email' : 'Create account'}
+          </Button>
 
-          <Pressable style={styles.linkButton} onPress={() => router.back()}>
-            <Text style={styles.linkText}>Already have an account? Sign in</Text>
-          </Pressable>
+          <Button variant="ghost" size="md" onPress={() => router.back()}>
+            Already have an account? Sign in
+          </Button>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

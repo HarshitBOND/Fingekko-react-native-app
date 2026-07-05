@@ -1,5 +1,5 @@
 import { Image, Text, View } from 'react-native';
-import { Flame } from 'lucide-react-native';
+import Icon from '../ui/Icon';
 import { s } from './style';
 
 interface Props {
@@ -35,7 +35,8 @@ export default function HeroCard({
 
       <View style={s.streakBox}>
         <View style={s.fireBadge}>
-          <Flame
+          <Icon
+            name="Flame"
             color="#000000"
             size={16}
           />

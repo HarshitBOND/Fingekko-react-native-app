@@ -1,16 +1,16 @@
 import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignIn } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import { Eye, EyeOff } from 'lucide-react-native';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import Icon from '../../components/ui/Icon';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -62,60 +62,49 @@ export default function LoginScreen() {
           <Text style={styles.title}>Welcome back</Text>
           <Text style={styles.subtitle}>Sign in to continue.</Text>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              placeholder="you@example.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
+          <Input
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-
-            <View style={styles.passwordContainer}>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                style={styles.passwordInput}
-                placeholder="Your password"
-                secureTextEntry={!isPasswordVisible}
-              />
-
+          <Input
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Your password"
+            secureTextEntry={!isPasswordVisible}
+            rightIcon={
               <TouchableOpacity
                 onPress={() => setIsPasswordVisible(!isPasswordVisible)}
               >
-                {isPasswordVisible ? (
-                  <Eye size={20} color={Colors.textSecondary} />
-                ) : (
-                  <EyeOff size={20} color={Colors.textSecondary} />
-                )}
+                <Icon name={isPasswordVisible ? "Eye" : "EyeOff"} size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
-            </View>
-          </View>
-          <Pressable style={styles.linkButton} onPress={() => router.push('/(auth)/reset-password')}>
-            <Text style={styles.linkText}>Forgot password?</Text>
-          </Pressable>
+            }
+          />
+
+          <Button variant="ghost" size="sm" onPress={() => router.push('/(auth)/reset-password')}>
+            Forgot password?
+          </Button>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <Pressable
-            style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            size="lg"
             onPress={handleLogin}
             disabled={isSubmitting}
+            loading={isSubmitting}
           >
-            <Text style={styles.primaryButtonText}>
-              {isSubmitting ? 'Signing in...' : 'Sign in'}
-            </Text>
-          </Pressable>
+            Sign in
+          </Button>
 
-          <Pressable style={styles.linkButton} onPress={() => router.push('/(auth)/register')}>
-            <Text style={styles.linkText}>Create an account</Text>
-          </Pressable>
+          <Button variant="ghost" size="md" onPress={() => router.push('/(auth)/register')}>
+            Create an account
+          </Button>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

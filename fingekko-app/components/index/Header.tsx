@@ -1,5 +1,5 @@
 import { FontSizes } from '@/constants/Colors';
-import { CalendarDays } from 'lucide-react-native';
+import Icon from '../ui/Icon';
 import { Text, View } from 'react-native';
 import { Theme } from './constants';
 import { styles } from './styles';
@@ -20,7 +20,7 @@ export default function Header({ name, dateLabel }: HeaderProps) {
         </Text>
       </View>
       <View style={styles.datePill}>
-        <CalendarDays style={{ marginHorizontal: 2 }} size={12} strokeWidth={1.5} color={Theme.textMuted} />
+        <Icon name="CalendarDays" style={{ marginHorizontal: 2 }} size={12} color={Theme.textMuted} />
         <Text style={{ color: Theme.textMuted, fontSize: FontSizes.xs }}>{dateLabel}</Text>
       </View>
     </View>

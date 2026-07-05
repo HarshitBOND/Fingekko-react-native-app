@@ -1,6 +1,6 @@
 import Divider from '@/components/Divider';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CalendarDays, ChevronRight, Eye, Wallet } from 'lucide-react-native';
+import Icon from '../ui/Icon';
 import { ImageBackground, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Theme } from './constants';
@@ -52,7 +52,7 @@ export default function BalanceCard({
           <View style={styles.balanceMainSection}>
             <View style={styles.balanceLabelRow}>
               <Text style={styles.balanceLabel} numberOfLines={1}>Remaining Balance</Text>
-              <Eye style={styles.balanceEye} size={16} color={Theme.textMain} />
+              <Icon name="Eye" style={styles.balanceEye} size={16} color={Theme.textMain} />
             </View>
             <View style={styles.balanceValueRow}>
               <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
@@ -111,7 +111,7 @@ export default function BalanceCard({
           <View style={styles.bottomRow}>
             <View style={styles.bottomItems}>
               <View style={styles.bottomItem}>
-                <View style={styles.bottomIconWrap}><CalendarDays size={18} color="#000000" /></View>
+                <View style={styles.bottomIconWrap}><Icon name="CalendarDays" size={18} color="#000000" /></View>
                 <View style={styles.bottomText}>
                   <Text style={styles.bottomValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{daysLeftInMonth}</Text>
                   <Text style={styles.bottomLabel} numberOfLines={1}>Days left in month</Text>
@@ -119,14 +119,14 @@ export default function BalanceCard({
               </View>
               <View style={styles.bottomItemDivider} />
               <View style={styles.bottomItem}>
-                <View style={styles.bottomIconWrap}><Wallet size={18} color="#000000" /></View>
+                <View style={styles.bottomIconWrap}><Icon name="Wallet" size={18} color="#000000" /></View>
                 <View style={styles.bottomText}>
                   <Text style={styles.bottomValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>₹{Math.round(avgDailySpend).toLocaleString('en-IN')}</Text>
                   <Text style={styles.bottomLabel}>Avg. daily spend</Text>
                 </View>
               </View>
             </View>
-            <ChevronRight size={18} color="#000000" />
+            <Icon name="ChevronRight" size={18} color="#000000" />
           </View>
         </View>
       </ImageBackground>

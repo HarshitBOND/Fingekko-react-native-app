@@ -60,7 +60,7 @@ const communityExpenseSchema = new mongoose.Schema(
     groupId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Group',
-      required: true,
+      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -79,6 +79,10 @@ const communityExpenseSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+    },
+    expenseDate: {
+      type: Date,
+      default: Date.now,
     },
     currency: {
       type: String,

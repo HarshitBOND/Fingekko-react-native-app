@@ -3,10 +3,10 @@ import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from '../../components/ui/Icon';
 import Navbar from '../../components/Navbar';
 import { Colors, FontSizes, Spacing } from '../../constants/Colors';
 import { Goal, Transaction, UserProfile } from '../../constants/types';
@@ -138,7 +138,7 @@ export default function SafeToSpendScreen() {
               onPress={() => router.back()}
               accessibilityLabel="Go back"
             >
-              <ChevronLeft size={20} color={Colors.textPrimary} />
+              <Icon name="ChevronLeft" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.screenTitle}>Safe to Spend</Text>
             <View style={styles.iconPlaceholder} />

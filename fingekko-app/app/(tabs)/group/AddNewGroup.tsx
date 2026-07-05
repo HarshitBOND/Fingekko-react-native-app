@@ -1,24 +1,7 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-
-import {
-    Briefcase,
-    Car,
-    Check,
-    ChevronLeft,
-    Coins,
-    Home,
-    Menu,
-    Plane,
-    Plus,
-    Search,
-    Users,
-    UserPlus,
-    Utensils,
-    X,
-    Handshake
-} from 'lucide-react-native';
+import Icon from '../../../components/ui/Icon';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -39,17 +22,15 @@ import { useCallback } from 'react';
 import { Use } from 'react-native-svg';
 
 // Same icon set used on YourGroups so a group created here renders consistently there.
-const ICONS = {
-    Plane,
-    Home,
-    Users,
-    Car,
-    Coins,
-    Utensils,
-    Briefcase,
-};
-
-const ICON_KEYS = Object.keys(ICONS) as (keyof typeof ICONS)[];
+const ICON_KEYS = [
+    'Plane',
+    'Home',
+    'Users',
+    'Car',
+    'Coins',
+    'Utensils',
+    'Briefcase',
+] as const;
 
 // ---- Types matching the backend exactly ----
 
@@ -324,12 +305,12 @@ export default function AddNewGroup() {
                     <View style={styles.topBar}>
                         <View style={styles.brandRow}>
                             <Pressable style={styles.logoCircle} onPress={() => router.replace('/(tabs)/YourGroups')}>
-                                <ChevronLeft size={20} color="#148a46" />
+                                <Icon name="ChevronLeft" size={20} color="#148a46" />
                             </Pressable>
                             <Text style={styles.brandTitle}>New Group</Text>
                         </View>
                         <Pressable style={styles.menuButton} onPress={() => router.replace('/(tabs)/YourGroups')}>
-                            <Menu size={20} color="#1f2937" />
+                            <Icon name="Menu" size={20} color="#1f2937" />
                         </Pressable>
                     </View>
 
@@ -352,7 +333,6 @@ export default function AddNewGroup() {
                     <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Group Icon</Text>
                     <View style={styles.iconGrid}>
                         {ICON_KEYS.map((key) => {
-                            const Icon = ICONS[key];
                             const active = key === selectedIcon;
                             return (
                                 <Pressable
@@ -360,7 +340,7 @@ export default function AddNewGroup() {
                                     onPress={() => setSelectedIcon(key)}
                                     style={[styles.iconOption, active && styles.iconOptionActive]}
                                 >
-                                    <Icon size={20} color="#000000" />
+                                    <Icon name={key} size={20} color="#000000" />
                                 </Pressable>
                             );
                         })}
@@ -375,13 +355,13 @@ export default function AddNewGroup() {
 
                     <Pressable style={styles.addMembersButton} onPress={() => setMembersModalVisible(true)}>
                         <View style={styles.quickActionIconWrap}>
-                            <Plus size={18} color="#000000" />
+                            <Icon name="Plus" size={18} color="#000000" />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.addMembersTitle}>Add Members</Text>
                             <Text style={styles.addMembersSubtitle}>Choose friends or search for others</Text>
                         </View>
-                        <ChevronLeft size={18} color="#000000" style={{ transform: [{ rotate: '180deg' }] }} />
+                        <Icon name="ChevronRight" size={18} color="#000000" />
                     </Pressable>
 
                     {selectedMembers.length > 0 && (
@@ -392,7 +372,7 @@ export default function AddNewGroup() {
                                         {member.name}
                                     </Text>
                                     <Pressable onPress={() => removeSelectedMember(member.id)}>
-                                        <X size={13} color="#000000" />
+                                        <Icon name="X" size={13} color="#000000" />
                                     </Pressable>
                                 </View>
                             ))}
@@ -440,12 +420,12 @@ export default function AddNewGroup() {
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Add Members</Text>
                         <Pressable style={styles.modalCloseButton} onPress={() => setMembersModalVisible(false)}>
-                            <X size={20} color="#1f2937" />
+                            <Icon name="X" size={20} color="#1f2937" />
                         </Pressable>
                     </View>
 
                     <View style={styles.searchBar}>
-                        <Search size={16} color="#9ca3af" />
+                        <Icon name="Search" size={16} color="#9ca3af" />
                         <TextInput
                             placeholder="Search friends or find new people"
                             placeholderTextColor="#9ca3af"
@@ -487,7 +467,7 @@ export default function AddNewGroup() {
                                                     )}
                                                 </View>
                                                 <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                                                    {selected ? <Check size={14} color="#ffffff" /> : <UserPlus size={14} color="#148a46" />}
+                                                    {selected ? <Icon name="Check" size={14} color="#ffffff" /> : <Icon name="UserPlus" size={14} color="#148a46" />}
                                                 </View>
                                             </Pressable>
                                         );
@@ -527,9 +507,9 @@ export default function AddNewGroup() {
                                                     disabled={requested}
                                                 >
                                                     {requested ? (
-                                                        <Handshake size={18} color="#EAB308" />
+                                                        <Icon name="Handshake" size={18} color="#EAB308" />
                                                     ) : (
-                                                        <Handshake size={18} color="#374151" />
+                                                        <Icon name="Handshake" size={18} color="#374151" />
                                                     )}
 
                                                 </Pressable>
@@ -538,9 +518,9 @@ export default function AddNewGroup() {
                                                     onPress={() => toggleMember(result.user)}
                                                 >
                                                     {added ? (
-                                                        <Check size={18} color="#148a46" />
+                                                        <Icon name="Check" size={18} color="#148a46" />
                                                     ) : (
-                                                        <UserPlus size={18} color="#374151" />
+                                                        <Icon name="UserPlus" size={18} color="#374151" />
                                                     )}
 
                                                 </Pressable>
@@ -634,10 +614,10 @@ const styles = StyleSheet.create({
     },
     card: {
         backgroundColor: '#ffffff',
-        borderRadius: 8,
-        padding: 16,
+        borderRadius: 18,
+        padding: 18,
         marginHorizontal: 16,
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
         shadowColor: '#000000',
         shadowOffset: { width: 5, height: 5 },
@@ -654,15 +634,19 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     textInput: {
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
-        borderRadius: 8,
+        borderRadius: 16,
         paddingHorizontal: 14,
         paddingVertical: 12,
         fontSize: 15,
         fontWeight: '700',
         color: '#000000',
         backgroundColor: '#ffffff',
+        shadowColor: '#000000',
+        shadowOffset: { width: 3, height: 3 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
     },
     iconGrid: {
         flexDirection: 'row',
@@ -672,7 +656,7 @@ const styles = StyleSheet.create({
     iconWrap: {
         width: 46,
         height: 46,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ffffff',
@@ -685,7 +669,7 @@ const styles = StyleSheet.create({
     quickActionIconWrap: {
         width: 40,
         height: 40,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#C3FFD8',
@@ -695,7 +679,7 @@ const styles = StyleSheet.create({
     iconOption: {
         width: 44,
         height: 44,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ffffff',
@@ -720,9 +704,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
-        borderRadius: 8,
+        borderRadius: 16,
         padding: 12,
         backgroundColor: '#ffffff',
         shadowColor: '#000000',
@@ -754,7 +738,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#C3FFD8',
         borderWidth: 2,
         borderColor: '#000000',
-        borderRadius: 8,
+        borderRadius: 12,
         paddingVertical: 6,
         paddingHorizontal: 10,
         maxWidth: 160,
@@ -767,11 +751,11 @@ const styles = StyleSheet.create({
     },
     createButton: {
         backgroundColor: '#00FF66',
-        borderRadius: 8,
+        borderRadius: 16,
         paddingVertical: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
         shadowColor: '#000000',
         shadowOffset: { width: 4, height: 4 },
@@ -780,7 +764,7 @@ const styles = StyleSheet.create({
     },
     createButtonDisabled: {
         backgroundColor: '#a7d7b9',
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
     },
     createButtonText: {
@@ -790,8 +774,8 @@ const styles = StyleSheet.create({
     },
     footerBanner: {
         marginHorizontal: 16,
-        borderRadius: 8,
-        borderWidth: 3,
+        borderRadius: 18,
+        borderWidth: 2,
         borderColor: '#000000',
         overflow: 'hidden',
         shadowColor: '#000000',
@@ -805,12 +789,12 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     footerBannerBgImage: {
-        borderRadius: 5,
+        borderRadius: 15,
     },
     footerBannerOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(255, 222, 67, 0.45)',
-        borderRadius: 5,
+        borderRadius: 15,
     },
     footerBannerContent: {
         padding: 20,
@@ -845,7 +829,7 @@ const styles = StyleSheet.create({
     modalCloseButton: {
         width: 32,
         height: 32,
-        borderRadius: 8,
+        borderRadius: 12,
         backgroundColor: '#ffffff',
         borderWidth: 2,
         borderColor: '#000000',
@@ -859,12 +843,16 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         marginTop: 8,
         marginBottom: 12,
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#000000',
-        borderRadius: 8,
+        borderRadius: 16,
         paddingHorizontal: 12,
         paddingVertical: 10,
         backgroundColor: '#ffffff',
+        shadowColor: '#000000',
+        shadowOffset: { width: 3, height: 3 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
     },
     searchInput: {
         flex: 1,
@@ -901,7 +889,7 @@ const styles = StyleSheet.create({
     avatarCircle: {
         width: 40,
         height: 40,
-        borderRadius: 8,
+        borderRadius: 12,
         backgroundColor: '#C3FFD8',
         borderWidth: 2,
         borderColor: '#000000',
@@ -927,7 +915,7 @@ const styles = StyleSheet.create({
     checkbox: {
         width: 24,
         height: 24,
-        borderRadius: 6,
+        borderRadius: 8,
         borderWidth: 2,
         borderColor: '#000000',
         alignItems: 'center',
@@ -942,7 +930,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
         backgroundColor: '#00FF66',
-        borderRadius: 8,
+        borderRadius: 12,
         borderWidth: 2,
         borderColor: '#000000',
         paddingVertical: 7,
@@ -970,8 +958,8 @@ const styles = StyleSheet.create({
     },
     doneButton: {
         backgroundColor: '#00FF66',
-        borderRadius: 8,
-        borderWidth: 3,
+        borderRadius: 16,
+        borderWidth: 2,
         borderColor: '#000000',
         paddingVertical: 14,
         alignItems: 'center',

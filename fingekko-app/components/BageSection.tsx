@@ -1,5 +1,5 @@
 import { Colors, FontSizes } from '@/constants/Colors';
-import { ChevronRight, Lock } from 'lucide-react-native';
+import Icon from './ui/Icon';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 const badges = [
@@ -32,7 +32,7 @@ export default function BageSection() {
 				<Text style={styles.title}>Badges</Text>
 				<View style={styles.viewAll}>
 					<Text style={styles.viewAllText}>View all</Text>
-					<ChevronRight size={14} color="#16a34a" />
+					<Icon name="ChevronRight" size={14} color="#16a34a" />
 				</View>
 			</View>
 
@@ -41,7 +41,7 @@ export default function BageSection() {
 					<View key={badge.id} style={styles.badgeItem}>
 						<View style={[styles.badgeIconWrap, badge.locked && styles.badgeLocked]}>
 							{badge.locked ? (
-								<Lock size={18} color="#9ca3af" />
+								<Icon name="Lock" size={18} color="#9ca3af" />
 							) : (
 								<Image source={badge.source} style={styles.badgeImage} />
 							)}
@@ -59,10 +59,10 @@ export default function BageSection() {
 const styles = StyleSheet.create({
 	section: {
 		backgroundColor: Colors.surface,
-		borderRadius: 8,
-		paddingHorizontal: 16,
-		paddingVertical: 16,
-		borderWidth: 3,
+		borderRadius: 18,
+		paddingHorizontal: 18,
+		paddingVertical: 18,
+		borderWidth: 2,
 		borderColor: '#000000',
 		shadowColor: '#000000',
 		shadowOffset: { width: 5, height: 5 },

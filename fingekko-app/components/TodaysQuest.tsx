@@ -3,7 +3,7 @@ import type { DailyQuest, QuestDefinition, QuestState, QuestStatus, QuestType } 
 import type { QuestStateResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
-import { BarChart3, Check, Target, Wallet, X, Zap } from 'lucide-react-native';
+import Icon from './ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Divider from './Divider';
@@ -304,16 +304,16 @@ const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
 const DEFAULT_DIFFICULTY = 2;
 
-const questTypeIcons: Record<QuestType, typeof Wallet> = {
-  saving: Wallet,
-  discipline: Target,
-  tracking: BarChart3,
-  engagement: Zap,
-  budgeting: Wallet,
-  challenge: Target,
-  lifestyle: Zap,
-  mindfulness: Target,
-  learning: BarChart3,
+const questTypeIcons: Record<QuestType, string> = {
+  saving: 'Wallet',
+  discipline: 'Target',
+  tracking: 'BarChart3',
+  engagement: 'Zap',
+  budgeting: 'Wallet',
+  challenge: 'Target',
+  lifestyle: 'Zap',
+  mindfulness: 'Target',
+  learning: 'BarChart3',
 };
 
 const difficultyLabels: Record<number, string> = {
@@ -635,14 +635,14 @@ export default function TodaysQuest() {
 
       <View style={styles.list}>
         {quests.map((quest, index) => {
-          const Icon = questTypeIcons[quest.type] ?? Target;
+          const iconName = questTypeIcons[quest.type] ?? 'Target';
           const isDone = quest.status === 'completed';
 
           return (
             <View key={quest.id}>
               <View style={styles.questRow}>
                 <View style={styles.iconWrap}>
-                  <Icon size={32} strokeWidth={1.3} color="#16a34a" />
+                  <Icon name={iconName} size={32} color="#16a34a" />
                 </View>
 
                 <View style={styles.questBody}>
@@ -660,7 +660,7 @@ export default function TodaysQuest() {
 
                 <View style={styles.questRight}>
                   <View style={styles.xpRow}>
-                    <Zap size={14} color="#f59e0b" />
+                    <Icon name="Zap" size={14} color="#f59e0b" />
                     <Text style={styles.xpText}>+{quest.xp} XP</Text>
                   </View>
 
@@ -670,14 +670,14 @@ export default function TodaysQuest() {
                         onPress={() => updateQuestStatus(quest.id, 'completed')}
                         style={[styles.actionBadge, styles.actionComplete]}
                       >
-                        <Check size={12} color="#ffffff" />
+                        <Icon name="Check" size={12} color="#ffffff" />
                         <Text style={styles.actionText}>Done</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => updateQuestStatus(quest.id, 'failed')}
                         style={[styles.actionBadge, styles.actionFailed]}
                       >
-                        <X size={12} color="#ffffff" />
+                        <Icon name="X" size={12} color="#ffffff" />
                         <Text style={styles.actionText}>{"Can't"}</Text>
                       </Pressable>
                     </View>
@@ -686,9 +686,9 @@ export default function TodaysQuest() {
                       style={[styles.statusBadge, isDone ? styles.statusDone : styles.statusFailed]}
                     >
                       {isDone ? (
-                        <Check size={14} color="#ffffff" />
+                        <Icon name="Check" size={14} color="#ffffff" />
                       ) : (
-                        <X size={14} color="#ffffff" />
+                        <Icon name="X" size={14} color="#ffffff" />
                       )}
                     </View>
                   )}
@@ -721,9 +721,9 @@ export default function TodaysQuest() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 3,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 2,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 5, height: 5 },

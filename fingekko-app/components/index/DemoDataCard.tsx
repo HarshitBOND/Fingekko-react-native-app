@@ -1,6 +1,8 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, View, Pressable } from 'react-native';
 import { DEMO_CATEGORIES } from './constants';
 import { styles } from './styles';
+import Input from '../ui/Input';
+import Button from '../ui/Button';
 
 type DemoDataCardProps = {
   useDummyData: boolean;
@@ -30,27 +32,34 @@ export default function DemoDataCard({
           <Text style={styles.demoTitle}>{useDummyData ? 'Demo data is on' : 'Demo data is off'}</Text>
           <Text style={styles.demoSubTitle}>Add a dummy expense to watch the balance, ring, and weekly numbers update.</Text>
         </View>
-        <Pressable onPress={onToggleDemo} style={[styles.demoToggle, useDummyData && styles.demoToggleActive]}>
-          <Text style={[styles.demoToggleText, useDummyData && styles.demoToggleTextActive]}>
-            {useDummyData ? 'Disable demo' : 'Use demo data'}
-          </Text>
-        </Pressable>
+        <Button
+          variant={useDummyData ? 'danger' : 'outline'}
+          size="sm"
+          onPress={onToggleDemo}
+          style={{ width: 'auto', minWidth: 110 }}
+        >
+          {useDummyData ? 'Disable demo' : 'Use demo data'}
+        </Button>
       </View>
 
       {useDummyData ? (
         <View style={styles.demoControls}>
           <View style={styles.demoInputRow}>
-            <TextInput
+            <Input
               placeholder="Amount"
-              placeholderTextColor="rgba(85,112,100,0.55)"
               keyboardType="numeric"
               value={dummyAmount}
               onChangeText={onAmountChange}
-              style={styles.demoInput}
+              containerStyle={{ flex: 1 }}
             />
-            <Pressable style={styles.demoAction} onPress={onAddExpense}>
-              <Text style={styles.demoActionText}>Add expense</Text>
-            </Pressable>
+            <Button
+              variant="secondary"
+              size="md"
+              onPress={onAddExpense}
+              style={{ width: 'auto' }}
+            >
+              Add expense
+            </Button>
           </View>
 
           <View style={styles.demoCategoryRow}>

@@ -2,18 +2,7 @@ import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Calendar,
-  CheckSquare2,
-  ChevronDown,
-  Circle,
-  ShoppingBag,
-  StickyNote,
-  Users,
-  Wallet,
-} from 'lucide-react-native';
+import Icon from '../../components/ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -189,7 +178,7 @@ export default function AddNewExpense() {
     <SafeAreaView style={styles.page} edges={['top']}>
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <ArrowLeft size={20} color="#148a46" />
+          <Icon name="ChevronLeft" size={20} color="#148a46" />
         </Pressable>
         <Text style={styles.headerTitle}>Add Expense</Text>
         <View style={styles.headerButton} />
@@ -198,7 +187,7 @@ export default function AddNewExpense() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.balanceCard}>
           <View style={styles.balanceIconWrap}>
-            <Wallet size={22} color="#148a46" />
+            <Icon name="Wallet" size={22} color="#148a46" />
           </View>
           <View style={styles.balanceCopy}>
             <Text style={styles.balanceLabel}>Available Balance</Text>
@@ -232,7 +221,7 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Description</Text>
           <View style={styles.inputWrap}>
             <View style={styles.iconBubble}>
-              <StickyNote size={18} color="#148a46" />
+              <Icon name="StickyNote" size={18} color="#148a46" />
             </View>
             <TextInput
               value={description}
@@ -248,12 +237,12 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Category</Text>
           <Pressable style={styles.inputWrap} onPress={() => setCategoryPickerOpen(true)}>
             <View style={styles.iconBubble}>
-              <ShoppingBag size={18} color="#148a46" />
+              <Icon name="ShoppingBag" size={18} color="#148a46" />
             </View>
             <Text style={[styles.fieldInput, !category && styles.placeholderText]}>
               {category || 'Select category'}
             </Text>
-            <ChevronDown size={18} color="#9ca3af" />
+            <Icon name="ChevronDown" size={18} color="#9ca3af" />
           </Pressable>
         </View>
 
@@ -261,7 +250,7 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Date</Text>
           <View style={styles.inputWrap}>
             <View style={styles.iconBubble}>
-              <Calendar size={18} color="#148a46" />
+              <Icon name="Calendar" size={18} color="#148a46" />
             </View>
             <TextInput
               value={date}
@@ -277,12 +266,12 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Split With</Text>
           <Pressable style={styles.inputWrap} onPress={() => setFriendPickerOpen(true)}>
             <View style={styles.iconBubble}>
-              <Users size={18} color="#148a46" />
+              <Icon name="Users" size={18} color="#148a46" />
             </View>
             <Text style={[styles.fieldInput, selectedFriends.length === 0 && styles.placeholderText]}>
               {friendsSummaryLabel}
             </Text>
-            <ChevronDown size={18} color="#9ca3af" />
+            <Icon name="ChevronDown" size={18} color="#9ca3af" />
           </Pressable>
         </View>
 
@@ -290,7 +279,7 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Notes (Optional)</Text>
           <View style={[styles.inputWrap, styles.textAreaWrap]}>
             <View style={styles.iconBubble}>
-              <StickyNote size={18} color="#148a46" />
+              <Icon name="StickyNote" size={18} color="#148a46" />
             </View>
             <TextInput
               value={notes}
@@ -311,7 +300,7 @@ export default function AddNewExpense() {
           ) : (
             <>
               <Text style={styles.primaryButtonText}>Add Expense</Text>
-              <ArrowRight size={18} color="#ffffff" />
+              <Icon name="ChevronRight" size={18} color="#ffffff" />
             </>
           )}
         </Pressable>
@@ -329,7 +318,7 @@ export default function AddNewExpense() {
                 <ActivityIndicator color="#148a46" style={{ marginVertical: 20 }} />
               ) : acceptedFriends.length === 0 ? (
                 <View style={styles.emptyFriendsBox}>
-                  <Users size={18} color="#148a46" />
+                  <Icon name="Users" size={18} color="#148a46" />
                   <Text style={styles.helperText}>Add friends first to split expenses with them.</Text>
                 </View>
               ) : (
@@ -344,9 +333,9 @@ export default function AddNewExpense() {
                         <Text style={styles.friendEmail}>{friendship.friend.email}</Text>
                       </View>
                       {selected ? (
-                        <CheckSquare2 size={22} color="#148a46" />
+                        <Icon name="CheckSquare2" size={22} color="#148a46" />
                       ) : (
-                        <Circle size={22} color="#94a3b8" />
+                        <Icon name="Circle" size={22} color="#94a3b8" />
                       )}
                     </Pressable>
                   );
@@ -382,9 +371,9 @@ export default function AddNewExpense() {
                   >
                     <Text style={styles.categoryRowText}>{item}</Text>
                     {selected ? (
-                      <CheckSquare2 size={20} color="#148a46" />
+                      <Icon name="CheckSquare2" size={20} color="#148a46" />
                     ) : (
-                      <Circle size={20} color="#94a3b8" />
+                      <Icon name="Circle" size={20} color="#94a3b8" />
                     )}
                   </Pressable>
                 );
@@ -400,7 +389,7 @@ export default function AddNewExpense() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#f5f8f5',
+    backgroundColor: '#FFF8E7',
   },
   header: {
     flexDirection: 'row',
@@ -408,8 +397,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eef2ee',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000000',
   },
   headerButton: {
     width: 40,
@@ -419,7 +408,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
   },
   container: {
@@ -433,16 +422,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#eef6f0',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   balanceIconWrap: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   balanceCopy: {
     flex: 1,
@@ -450,12 +447,12 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 13,
-    color: '#4b5f52',
-    fontWeight: '600',
+    color: '#000000',
+    fontWeight: '800',
   },
   balanceValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
   },
   balanceImage: {
@@ -464,15 +461,15 @@ const styles = StyleSheet.create({
   },
   groupHint: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#148a46',
+    fontWeight: '800',
+    color: '#000000',
   },
   fieldGroup: {
     gap: 8,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
   },
   inputWrap: {
@@ -480,30 +477,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     minHeight: 52,
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   iconBubble: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#f0f7f1',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
   prefix: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#148a46',
+    fontWeight: '800',
+    color: '#000000',
   },
   fieldInput: {
     flex: 1,
     fontSize: 15,
     color: '#111827',
     paddingVertical: 0,
+    fontWeight: '600',
   },
   placeholderText: {
     color: '#9ca3af',
@@ -520,22 +524,28 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#eb5a4f',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   primaryButton: {
-    marginTop: 4,
+    marginTop: 8,
     minHeight: 54,
     borderRadius: 16,
-    backgroundColor: '#148a46',
+    backgroundColor: '#00FF66',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: '#000000',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   helperText: {
     flex: 1,
@@ -549,18 +559,18 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderWidth: 2,
+    borderColor: '#000000',
     marginVertical: 8,
   },
   friendRow: {
     minHeight: 54,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -571,20 +581,21 @@ const styles = StyleSheet.create({
   },
   friendName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
   },
   friendEmail: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#4b5563',
+    fontWeight: '600',
   },
   categoryRow: {
     minHeight: 50,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -592,7 +603,7 @@ const styles = StyleSheet.create({
   },
   categoryRowText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
     color: '#111827',
   },
   modalBackdrop: {
@@ -608,6 +619,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 24,
     maxHeight: '70%',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#000000',
   },
   modalHandle: {
     alignSelf: 'center',
@@ -619,7 +634,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
     marginBottom: 12,
   },
@@ -628,15 +643,21 @@ const styles = StyleSheet.create({
   },
   modalDoneButton: {
     minHeight: 50,
-    borderRadius: 14,
-    backgroundColor: '#148a46',
+    borderRadius: 16,
+    backgroundColor: '#00FF66',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   modalDoneText: {
-    color: '#ffffff',
+    color: '#000000',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 });

@@ -7,6 +7,9 @@ import {
     View,
 } from "react-native";
 
+import Card from "./ui/Card";
+import Button from "./ui/Button";
+
 type ConfirmDialogProps = {
     visible: boolean;
     title: string;
@@ -40,8 +43,7 @@ export default function ConfirmDialog({
             animationType="fade"
         >
             <View style={styles.overlay}>
-                <View style={styles.container}>
-
+                <Card variant="tactile" style={styles.containerCard}>
                     <Text style={styles.title}>
                         {title}
                     </Text>
@@ -51,33 +53,28 @@ export default function ConfirmDialog({
                     </Text>
 
                     <View style={styles.buttons}>
-
-                        <Pressable
-                            style={styles.cancelButton}
+                        <Button
+                            variant="outline"
+                            size="md"
                             onPress={onCancel}
                             disabled={loading}
+                            style={styles.dialogButton}
                         >
-                            <Text style={styles.cancelText}>
-                                {cancelText}
-                            </Text>
-                        </Pressable>
+                            {cancelText}
+                        </Button>
 
-                        <Pressable
-                            style={[
-                                styles.confirmButton,
-                                destructive && styles.destructiveButton,
-                            ]}
+                        <Button
+                            variant={destructive ? "danger" : "primary"}
+                            size="md"
                             onPress={onConfirm}
                             disabled={loading}
+                            loading={loading}
+                            style={styles.dialogButton}
                         >
-                            <Text style={styles.confirmText}>
-                                {loading ? "Please wait..." : confirmText}
-                            </Text>
-                        </Pressable>
-
+                            {confirmText}
+                        </Button>
                     </View>
-
-                </View>
+                </Card>
             </View>
         </Modal>
     );
@@ -92,58 +89,42 @@ const styles = StyleSheet.create({
         paddingHorizontal: 25,
     },
 
-    container: {
+    containerCard: {
         width: "100%",
-        backgroundColor: "#fff",
-        borderRadius: 22,
-        padding: 22,
     },
 
     title: {
         fontSize: 20,
-        fontWeight: "700",
+        fontWeight: "800",
         color: "#111827",
     },
 
     message: {
         marginTop: 12,
         fontSize: 15,
-        color: "#6b7280",
+        color: "#4b5563",
         lineHeight: 22,
+        fontWeight: "600",
     },
 
     buttons: {
         flexDirection: "row",
-        justifyContent: "flex-end",
-        marginTop: 28,
+        justifyContent: "space-between",
+        marginTop: 24,
+        gap: 12,
     },
 
-    cancelButton: {
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 10,
-        marginRight: 10,
-        backgroundColor: "#F3F4F6",
-    },
-
-    confirmButton: {
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 10,
-        backgroundColor: "#148A46",
-    },
-
-    destructiveButton: {
-        backgroundColor: "#DC2626",
+    dialogButton: {
+        flex: 1,
     },
 
     cancelText: {
         color: "#374151",
-        fontWeight: "600",
+        fontWeight: "800",
     },
 
     confirmText: {
         color: "white",
-        fontWeight: "700",
+        fontWeight: "800",
     },
 });

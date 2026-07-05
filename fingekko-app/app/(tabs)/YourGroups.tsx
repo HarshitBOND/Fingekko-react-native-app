@@ -1,22 +1,22 @@
 import { useAuth, useUser, } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ArrowDownLeft, Briefcase, Car, ChevronRight, Coins, Home, Menu, Plane, Plus, Scroll, Trash, Users, Utensils } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 import { showConfirm } from '@/utils/showConfirm';
 import ConfirmDialog from "../../components/ConfirmDialog";
+import Icon from '../../components/ui/Icon';
 
 const ICONS = {
-    Plane,
-    Home,
-    Users,
-    Car,
-    Coins,
-    Utensils,
-    Briefcase,
+    Plane: 'Plane',
+    Home: 'Home',
+    Users: 'Users',
+    Car: 'Car',
+    Coins: 'Coins',
+    Utensils: 'Utensils',
+    Briefcase: 'Briefcase',
 };
 
 type GroupItem = {
@@ -34,7 +34,7 @@ type QuickAction = {
     id: string;
     title: string;
     subtitle: string;
-    icon: React.ElementType;
+    icon: string;
     href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses';
 };
 
@@ -76,17 +76,16 @@ const QUICK_ACTIONS: QuickAction[] = [
         id: 'add-expense',
         title: 'Create New Group',
         subtitle: 'Create a new group',
-        icon: Plus,
+        icon: 'Plus',
         href: '/(tabs)/group/AddNewGroup',
     },
     {
         id: 'your-groups',
         title: 'Your Groups',
         subtitle: 'Open the groups screen',
-        icon: Users,
+        icon: 'Users',
         href: '/(tabs)/YourGroups',
     },
-
 ];
 
 
@@ -185,12 +184,12 @@ export default function YourGroups() {
                     <View style={styles.topBar}>
                         <View style={styles.brandRow}>
                             <View style={styles.logoCircle}>
-                                <Users size={18} color="#148a46" />
+                                <Icon name="Users" size={18} color="#148a46" />
                             </View>
                             <Text style={styles.brandTitle}>Your Groups</Text>
                         </View>
                         <Pressable style={styles.menuButton} onPress={() => router.back()}>
-                            <Menu size={20} color="#1f2937" />
+                            <Icon name="Menu" size={20} color="#1f2937" />
                         </Pressable>
                     </View>
 
@@ -222,8 +221,8 @@ export default function YourGroups() {
                             >
                                 <View style={styles.groupIconWrap}>
                                     {(() => {
-                                        const Icon = ICONS[item.icon as keyof typeof ICONS] ?? Users;
-                                        return <Icon size={24} color="#148a46" />;
+                                        const iconName = ICONS[item.icon as keyof typeof ICONS] ?? 'Users';
+                                        return <Icon name={iconName} size={24} color="#148a46" />;
                                     })()}
                                 </View>
                                 <View style={styles.groupTextWrap}>
@@ -243,12 +242,12 @@ export default function YourGroups() {
                                     }
                                     } style={{ marginRight: 8 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(235,90,79,0.05)' }}>
-                                            <Trash size={16} color="#eb5a4f" />
+                                            <Icon name="Trash" size={16} color="#eb5a4f" />
                                         </View>
                                     </Pressable>
                                 )}
                                 <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(20,138,70,0.05)' }}>
-                                    <ChevronRight size={16} color="#071407" style={styles.groupChevron} />
+                                    <Icon name="ChevronRight" size={16} color="#071407" style={styles.groupChevron} />
                                 </View>
                             </Pressable>
                         ))
@@ -257,8 +256,6 @@ export default function YourGroups() {
 
                 <View style={styles.quickActionsGrid}>
                     {QUICK_ACTIONS.map((action) => {
-                        const ActionIcon = action.icon;
-
                         return (
                             <Pressable
                                 key={action.id}
@@ -266,7 +263,7 @@ export default function YourGroups() {
                                 onPress={() => router.push(action.href)}
                             >
                                 <View style={styles.quickActionIconWrap}>
-                                    <ActionIcon size={22} color="#148a46" />
+                                    <Icon name={action.icon} size={22} color="#148a46" />
                                 </View>
                                 <Text style={styles.quickActionTitle}>{action.title}</Text>
                                 <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>

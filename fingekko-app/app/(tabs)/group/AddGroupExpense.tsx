@@ -2,18 +2,7 @@ import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Calendar,
-  CheckSquare2,
-  ChevronDown,
-  Circle,
-  ShoppingBag,
-  StickyNote,
-  Users,
-  Wallet,
-} from 'lucide-react-native';
+import Icon from '../../../components/ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -81,6 +70,7 @@ export default function AddNewExpense() {
 
   // renamed from selectedFriendIds -> selectedUserIds (scales to both friends & group members)
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -240,6 +230,14 @@ export default function AddNewExpense() {
       return;
     }
 
+    if (selectedSplit === 'custom') {
+      const sum = selectedUserIds.reduce((acc, id) => acc + Number(customShares[id] || 0), 0);
+      if (Math.abs(sum - amountValue) > 0.01) {
+        setError(`Custom split shares must sum up to the total amount (₹${amountValue}). Currently: ₹${sum.toFixed(2)}`);
+        return;
+      }
+    }
+
     try {
       setSaving(true);
       const token = await getTokenRef.current();
@@ -249,6 +247,13 @@ export default function AddNewExpense() {
         return;
       }
 
+      const finalParticipantIds = selectedSplit === 'custom'
+        ? selectedUserIds.map((userId) => ({
+            userId,
+            amount: Number(customShares[userId] || 0),
+          }))
+        : selectedUserIds;
+
       await apiRequest({
         method: 'post',
         url: '/api/expenses',
@@ -257,15 +262,11 @@ export default function AddNewExpense() {
           description: description.trim(),
           amount: amountValue,
           expenseDate: date,
-          participantIds: selectedUserIds,
+          splitType: selectedSplit === 'custom' ? 'unequalPaidByYou' : 'equalPaidByYou',
+          participantIds: finalParticipantIds,
           notes: notes.trim(),
           currency: 'INR',
-          // NOTE: groupId is only useful once the backend route/service
-          // actually reads it (see callout above the code) — currently
-          // it will be silently ignored by createCommunityExpense.
           ...(isGroupMode ? { groupId } : {}),
-          // NOTE: category isn't part of the original Expense schema either —
-          // drop this line if you don't add it on the backend.
           category: category || undefined,
         },
       });
@@ -276,6 +277,7 @@ export default function AddNewExpense() {
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
       setCategory('');
+      setCustomShares({});
       // group mode: reset back to "everyone selected"; friend mode: clear
       setSelectedUserIds(isGroupMode ? peopleList.map((p) => p.id) : []);
     } catch (saveError: any) {
@@ -289,7 +291,7 @@ export default function AddNewExpense() {
     <SafeAreaView style={styles.page} edges={['top']}>
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.push(`/(tabs)/group/${groupId}`)}>
-          <ArrowLeft size={20} color="#148a46" />
+          <Icon name="ChevronLeft" size={20} color="#148a46" />
         </Pressable>
         <Text style={styles.headerTitle}>Add Expense</Text>
         <View style={styles.headerButton} />
@@ -298,7 +300,7 @@ export default function AddNewExpense() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.balanceCard}>
           <View style={styles.balanceIconWrap}>
-            <Wallet size={22} color="#148a46" />
+            <Icon name="Wallet" size={22} color="#148a46" />
           </View>
           <View style={styles.balanceCopy}>
             <Text style={styles.balanceLabel}>Create</Text>
@@ -332,7 +334,7 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Description</Text>
           <View style={styles.inputWrap}>
             <View style={styles.iconBubble}>
-              <StickyNote size={18} color="#148a46" />
+              <Icon name="StickyNote" size={18} color="#148a46" />
             </View>
             <TextInput
               value={description}
@@ -348,12 +350,12 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Split With</Text>
           <Pressable style={styles.inputWrap} onPress={() => setPeoplePickerOpen(true)}>
             <View style={styles.iconBubble}>
-              <Users size={18} color="#148a46" />
+              <Icon name="Users" size={18} color="#148a46" />
             </View>
             <Text style={[styles.fieldInput, selectedPeople.length === 0 && styles.placeholderText]}>
               {peopleSummaryLabel}
             </Text>
-            <ChevronDown size={18} color="#9ca3af" />
+            <Icon name="ChevronDown" size={18} color="#9ca3af" />
           </Pressable>
         </View>
 
@@ -361,7 +363,7 @@ export default function AddNewExpense() {
           <Text style={styles.fieldLabel}>Notes (Optional)</Text>
           <View style={[styles.inputWrap, styles.textAreaWrap]}>
             <View style={styles.iconBubble}>
-              <StickyNote size={18} color="#148a46" />
+              <Icon name="StickyNote" size={18} color="#148a46" />
             </View>
             <TextInput
               value={notes}
@@ -422,7 +424,7 @@ export default function AddNewExpense() {
           ) : (
             <>
               <Text style={styles.primaryButtonText}>Add Expense</Text>
-              <ArrowRight size={18} color="#ffffff" />
+              <Icon name="ChevronRight" size={18} color="#ffffff" />
             </>
           )}
         </Pressable>
@@ -448,7 +450,7 @@ export default function AddNewExpense() {
                 <ActivityIndicator color="#148a46" style={{ marginVertical: 20 }} />
               ) : peopleList.length === 0 ? (
                 <View style={styles.emptyFriendsBox}>
-                  <Users size={18} color="#148a46" />
+                  <Icon name="Users" size={18} color="#148a46" />
                   <Text style={styles.helperText}>
                     {isGroupMode
                       ? 'No members found in this group.'
@@ -466,9 +468,9 @@ export default function AddNewExpense() {
                         {person.email ? <Text style={styles.friendEmail}>{person.email}</Text> : null}
                       </View>
                       {selected ? (
-                        <CheckSquare2 size={22} color="#148a46" />
+                        <Icon name="CheckSquare2" size={22} color="#148a46" />
                       ) : (
-                        <Circle size={22} color="#94a3b8" />
+                        <Icon name="Circle" size={22} color="#94a3b8" />
                       )}
                     </Pressable>
                   );
@@ -504,9 +506,9 @@ export default function AddNewExpense() {
                   >
                     <Text style={styles.categoryRowText}>{item}</Text>
                     {selected ? (
-                      <CheckSquare2 size={20} color="#148a46" />
+                      <Icon name="CheckSquare2" size={20} color="#148a46" />
                     ) : (
-                      <Circle size={20} color="#94a3b8" />
+                      <Icon name="Circle" size={20} color="#94a3b8" />
                     )}
                   </Pressable>
                 );
@@ -535,6 +537,13 @@ export default function AddNewExpense() {
                       style={[styles.fieldInput, { width: 80, textAlign: 'right' }]}
                       placeholder="0.00"
                       keyboardType="decimal-pad"
+                      value={customShares[person.id] || ''}
+                      onChangeText={(text) => {
+                        setCustomShares((prev) => ({
+                          ...prev,
+                          [person.id]: text,
+                        }));
+                      }}
                     />
                   </View>
                 );
@@ -560,31 +569,35 @@ const styles = StyleSheet.create({
 splitButton: {
   width: '48%',
   height: 52,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: '#e4efe7',
+  borderRadius: 16,
+  borderWidth: 2,
+  borderColor: '#000000',
   backgroundColor: '#fff',
   alignItems: 'center',
   justifyContent: 'center',
+  shadowColor: '#000000',
+  shadowOffset: { width: 3, height: 3 },
+  shadowOpacity: 1,
+  shadowRadius: 0,
 },
 
 splitButtonActive: {
-  backgroundColor: '#5aad65',
-  borderColor: '#a5c7b3',
+  backgroundColor: '#00FF66',
+  borderColor: '#000000',
 },
 
 splitButtonText: {
   fontSize: 14,
-  fontWeight: '700',
-  color: '#148a46',
+  fontWeight: '800',
+  color: '#000000',
 },
 
 splitButtonTextActive: {
-  color: '#fff',
+  color: '#000000',
 },
   page: {
     flex: 1,
-    backgroundColor: '#f5f8f5',
+    backgroundColor: '#FFF8E7',
   },
   header: {
     flexDirection: 'row',
@@ -592,8 +605,8 @@ splitButtonTextActive: {
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eef2ee',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000000',
   },
   headerButton: {
     width: 40,
@@ -603,7 +616,7 @@ splitButtonTextActive: {
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
   },
   container: {
@@ -617,16 +630,24 @@ splitButtonTextActive: {
     alignItems: 'center',
     gap: 14,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#eef6f0',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   balanceIconWrap: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   balanceCopy: {
     flex: 1,
@@ -634,12 +655,12 @@ splitButtonTextActive: {
   },
   balanceLabel: {
     fontSize: 13,
-    color: '#4b5f52',
-    fontWeight: '600',
+    color: '#000000',
+    fontWeight: '800',
   },
   balanceValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
   },
   balanceImage: {
@@ -648,15 +669,15 @@ splitButtonTextActive: {
   },
   groupHint: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#148a46',
+    fontWeight: '800',
+    color: '#000000',
   },
   fieldGroup: {
     gap: 8,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
   },
   inputWrap: {
@@ -664,30 +685,37 @@ splitButtonTextActive: {
     alignItems: 'center',
     gap: 10,
     minHeight: 52,
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   iconBubble: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#f0f7f1',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000000',
   },
   prefix: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#148a46',
+    fontWeight: '800',
+    color: '#000000',
   },
   fieldInput: {
     flex: 1,
     fontSize: 15,
     color: '#111827',
     paddingVertical: 0,
+    fontWeight: '600',
   },
   placeholderText: {
     color: '#9ca3af',
@@ -704,22 +732,28 @@ splitButtonTextActive: {
   errorText: {
     color: '#eb5a4f',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   primaryButton: {
-    marginTop: 4,
+    marginTop: 8,
     minHeight: 54,
     borderRadius: 16,
-    backgroundColor: '#148a46',
+    backgroundColor: '#00FF66',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: '#000000',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   helperText: {
     flex: 1,
@@ -733,18 +767,18 @@ splitButtonTextActive: {
     padding: 14,
     borderRadius: 16,
     backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderWidth: 2,
+    borderColor: '#000000',
     marginVertical: 8,
   },
   friendRow: {
     minHeight: 54,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -755,20 +789,21 @@ splitButtonTextActive: {
   },
   friendName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
   },
   friendEmail: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#4b5563',
+    fontWeight: '600',
   },
   categoryRow: {
     minHeight: 50,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#f8fbf8',
-    borderWidth: 1,
-    borderColor: '#e4efe7',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -3,7 +3,6 @@ import type { HomeResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { appendDummyExpense, createDummyProfile, createDummyTransactions, summarizeExpenses } from '@/utils/demo-finance';
 import { useAuth } from '@clerk/clerk-expo';
-import { BarChart3, Flame, Target, Zap } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Theme } from './constants';
 import type { ProgressItem } from './types';
@@ -87,10 +86,10 @@ export const useHomeScreen = () => {
     if (!visibleStats) return undefined;
 
     return [
-      { icon: Flame, value: String(visibleStats.dayStreak), label: 'Day Streak', color: Theme.primaryDark },
-      { icon: Zap, value: String(visibleStats.totalXp), label: 'Total XP', color: Theme.mountainTeal },
-      { icon: Target, value: `${visibleStats.questsDone} / ${visibleStats.questsTarget}`, label: 'Quests Done', color: Theme.primary },
-      { icon: BarChart3, value: `${visibleStats.betterThanYesterday}%`, label: 'Better than\nyesterday', color: Theme.forestSoft },
+      { icon: 'Flame', value: String(visibleStats.dayStreak), label: 'Day Streak', color: Theme.primaryDark },
+      { icon: 'Zap', value: String(visibleStats.totalXp), label: 'Total XP', color: Theme.mountainTeal },
+      { icon: 'Target', value: `${visibleStats.questsDone} / ${visibleStats.questsTarget}`, label: 'Quests Done', color: Theme.primary },
+      { icon: 'BarChart3', value: `${visibleStats.betterThanYesterday}%`, label: 'Better than\nyesterday', color: Theme.forestSoft },
     ];
   }, [visibleStats]);
 
