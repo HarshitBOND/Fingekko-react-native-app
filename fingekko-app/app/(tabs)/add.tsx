@@ -297,12 +297,13 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Action Button */}
+      {/* Rectangular Add Expense Button */}
       <Pressable
-        style={styles.fab}
+        style={styles.addExpenseRectBtn}
         onPress={() => router.push('/(tabs)/AddNewExpense')}
       >
-        <Icon name="Plus" size={24} color="#ffffff" />
+        <Icon name="Plus" size={16} color="#ffffff" clickable={true} />
+        <Text style={styles.addExpenseRectText}>Add Expense</Text>
       </Pressable>
     </SafeAreaView>
   );
@@ -545,22 +546,29 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginTop: 8,
   },
-  fab: {
+  addExpenseRectBtn: {
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    height: 48,
+    paddingHorizontal: 18,
+    borderRadius: 12,
     backgroundColor: '#148a46',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
+    gap: 8,
+    borderWidth: 2,
     borderColor: '#000000',
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 5,
+  },
+  addExpenseRectText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

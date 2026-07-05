@@ -21,7 +21,7 @@ function TabIcon({ name, label, focused, activeColor }: TabIconProps) {
         styles.iconWrapper,
         focused && styles.iconWrapperActive
       ]}>
-        <Icon name={name} size={18} color={focused ? '#000000' : Colors.tabBarInactive} />
+        <Icon name={name} size={18} color={focused ? '#000000' : Colors.tabBarInactive} clickable={true} />
       </View>
       <Text style={[
         styles.tabLabel,
@@ -92,7 +92,7 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ focused }) => (
             <View style={styles.addButton}>
-              <Icon name="Repeat" size={24} color="#000000" />
+              <Icon name="Repeat" size={24} color="#000000" clickable={true} />
             </View>
           ),
         }}

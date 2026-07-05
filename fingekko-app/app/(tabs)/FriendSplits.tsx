@@ -289,7 +289,7 @@ export default function FriendSplitsScreen() {
                       style={styles.deleteBtn}
                       onPress={() => handleDeleteExpense(item.id)}
                     >
-                      <Icon name="Trash2" size={16} color="#eb5a4f" />
+                      <Icon name="Trash2" size={16} color="#eb5a4f" clickable={true} />
                     </Pressable>
                   )}
                 </View>

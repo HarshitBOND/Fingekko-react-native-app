@@ -59,6 +59,7 @@ interface IconProps {
   color?: string;
   autoplay?: boolean;
   style?: StyleProp<ViewStyle>;
+  clickable?: boolean; // Only clickable icons load Lordicons
 }
 
 const IconComponent = ({
@@ -67,12 +68,13 @@ const IconComponent = ({
   color,
   autoplay = true,
   style,
+  clickable = false,
 }: IconProps) => {
-  const lottieUrl = LORDICON_REGISTRY[name];
+  const lottieUrl = clickable ? LORDICON_REGISTRY[name] : undefined;
   const lottieRef = useRef<LottieView>(null);
 
   useEffect(() => {
-    if (lottieRef.current && autoplay) {
+    if (lottieRef.current && autoplay && lottieUrl) {
       lottieRef.current.play();
     }
   }, [autoplay, lottieUrl]);
@@ -90,15 +92,19 @@ const IconComponent = ({
   let extraStyle: ViewStyle = {};
   let resolvedUrl = lottieUrl;
 
-  if (name === 'ChevronDown') {
-    resolvedUrl = LORDICON_REGISTRY['ChevronRight'];
-    extraStyle = { transform: [{ rotate: '90deg' }] };
-  } else if (name === 'ChevronUp') {
-    resolvedUrl = LORDICON_REGISTRY['ChevronRight'];
-    extraStyle = { transform: [{ rotate: '270deg' }] };
-  } else if (name === 'ArrowDownLeft') {
-    resolvedUrl = LORDICON_REGISTRY['ArrowRight'];
-    extraStyle = { transform: [{ rotate: '135deg' }] };
+  if (clickable) {
+    if (name === 'Trash2') {
+      resolvedUrl = LORDICON_REGISTRY['Trash'];
+    } else if (name === 'ChevronDown') {
+      resolvedUrl = LORDICON_REGISTRY['ChevronRight'];
+      extraStyle = { transform: [{ rotate: '90deg' }] };
+    } else if (name === 'ChevronUp') {
+      resolvedUrl = LORDICON_REGISTRY['ChevronRight'];
+      extraStyle = { transform: [{ rotate: '270deg' }] };
+    } else if (name === 'ArrowDownLeft') {
+      resolvedUrl = LORDICON_REGISTRY['ArrowRight'];
+      extraStyle = { transform: [{ rotate: '135deg' }] };
+    }
   }
 
   if (resolvedUrl) {

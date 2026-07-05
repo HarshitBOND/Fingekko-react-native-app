@@ -277,7 +277,7 @@ export default function NonGroupExpenses() {
         style={styles.fab}
         onPress={() => router.push('/(tabs)/AddNewExpense')}
       >
-        <Icon name="Plus" size={24} color="#000000" />
+        <Icon name="Plus" size={24} color="#000000" clickable={true} />
       </Pressable>
     </SafeAreaView>
   );
