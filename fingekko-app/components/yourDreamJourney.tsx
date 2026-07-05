@@ -17,24 +17,15 @@ export default function YourDreamJourney() {
                 Goa Trip 🌴
             </Text>
                         <View style={styles.amountRow}>
-                                <View style={styles.amountValues}>
-                                        <Text
-                                            style={styles.savedAmount}
-                                            numberOfLines={1}
-                                            adjustsFontSizeToFit
-                                            minimumFontScale={0.8}
-                                        >
-                                            Rs. {Saved.toLocaleString()}
-                                        </Text>
-                                        <Text
-                                            style={styles.goalAmount}
-                                            numberOfLines={1}
-                                            adjustsFontSizeToFit
-                                            minimumFontScale={0.8}
-                                        >
-                                            / Rs. {goal.toLocaleString()}
-                                        </Text>
-                                </View>
+                                <Text
+                                    style={styles.savedAmount}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >
+                                    Rs. {Saved.toLocaleString()}{' '}
+                                    <Text style={styles.goalAmount}>/ Rs. {goal.toLocaleString()}</Text>
+                                </Text>
                                 <Text style={styles.amountPercent}>{Math.round(levelProgress * 100)}%</Text>
                         </View>
             <ProgressBar
@@ -62,28 +53,37 @@ export default function YourDreamJourney() {
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
-        backgroundColor: '#f8fbf8',
-        borderRadius: 12,
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
         padding: 16,
+        borderWidth: 3,
+        borderColor: '#000000',
+        shadowColor: '#000000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 3,
     },
     title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#323947',
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#000000',
     },
     description: {
         fontSize: 12,
-        color: Colors.primaryDark,
+        color: '#000000',
+        fontWeight: '700',
         marginTop: 4,
     },
     savedAmount: {
         fontSize: 14,
-        fontWeight: 'bold',
-        color: Colors.primary,
+        fontWeight: '800',
+        color: '#000000',
     },
     goalAmount: {
         fontSize: 12,
-        color: Colors.textSecondary,
+        fontWeight: '700',
+        color: '#333333',
     },
     amountRow: {
         flexDirection: 'row',
@@ -99,7 +99,8 @@ const styles = StyleSheet.create({
     },
     amountPercent: {
         fontSize: FontSizes.xs,
-        color: Colors.textSecondary,
+        fontWeight: '800',
+        color: '#000000',
         marginLeft: 8,
     },
 });

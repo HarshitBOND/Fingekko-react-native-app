@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar';
 import YourDreamJourney from '@/components/yourDreamJourney';
 import type { HomeResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BarChart3, CalendarDays, CircleAlert, Flame, Target, Zap } from 'lucide-react-native';
@@ -134,7 +135,7 @@ export default function TabIndex() {
           <View style={styles.greetingText}>
             <Text style={styles.greetingEyebrow}>Good morning, {displayName}! 👋</Text>
             <Text style={styles.greetingTitle}>Small saves, big adventures.</Text>
-            <Text style={styles.greetingSubtitle}>You've got this!</Text>
+            <Text style={styles.greetingSubtitle}>{"You've got this!"}</Text>
           </View>
           <View style={styles.datePill}>
             <CalendarDays size={12} strokeWidth={1.5} color="#4b5563" />
@@ -177,8 +178,8 @@ export default function TabIndex() {
               </View>
 
               <View style={styles.helperText}>
-                <Text style={styles.helperLine}>"You're doing great!"</Text>
-                <Text style={styles.helperLine}>"Keep going and level up. 💚"</Text>
+                <Text style={styles.helperLine}>{"\"You're doing great!\""}</Text>
+                <Text style={styles.helperLine}>{"\"Keep going and level up. 💚\""}</Text>
               </View>
             </View>
           </View>
@@ -194,18 +195,18 @@ export default function TabIndex() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#f4f6f5',
+    backgroundColor: Colors.background,
   },
   container: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 24,
+    gap: 16,
   },
   greetingRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 12,
   },
   greetingText: {
     flex: 1,
@@ -232,9 +233,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: '#000000',
+    borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
     backgroundColor: '#ffffff',
@@ -245,15 +246,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   gekkoCard: {
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#0a2a2f',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
+    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 3,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
     elevation: 8,
   },
   cardContent: {

@@ -59,11 +59,16 @@ export default function BageSection() {
 const styles = StyleSheet.create({
 	section: {
 		backgroundColor: Colors.surface,
-		borderRadius: 16,
-		paddingHorizontal: 14,
-		paddingVertical: 12,
-		borderWidth: 1,
-		borderColor: '#eef2f7',
+		borderRadius: 8,
+		paddingHorizontal: 16,
+		paddingVertical: 16,
+		borderWidth: 3,
+		borderColor: '#000000',
+		shadowColor: '#000000',
+		shadowOffset: { width: 5, height: 5 },
+		shadowOpacity: 1,
+		shadowRadius: 0,
+		elevation: 3,
 	},
 	headerRow: {
 		flexDirection: 'row',
@@ -73,7 +78,7 @@ const styles = StyleSheet.create({
 	title: {
 		fontSize: FontSizes.xs,
 		fontWeight: '800',
-		color: '#6b7280',
+		color: '#000000',
 		textTransform: 'uppercase',
 		letterSpacing: 1,
 	},
@@ -84,8 +89,8 @@ const styles = StyleSheet.create({
 	},
 	viewAllText: {
 		fontSize: FontSizes.xs,
-		fontWeight: '700',
-		color: '#16a34a',
+		fontWeight: '800',
+		color: '#000000',
 	},
 	badgesRow: {
 		marginTop: 12,
@@ -102,11 +107,12 @@ const styles = StyleSheet.create({
 	badgeIconWrap: {
 		width: 56,
 		height: 56,
-		borderRadius: 16,
+		borderRadius: 8,
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: '#f7f7fb',
-		
+		backgroundColor: '#FFE600',
+		borderWidth: 2,
+		borderColor: '#000000',
 	},
 	badgeImage: {
 		width: 46,
@@ -118,8 +124,8 @@ const styles = StyleSheet.create({
 	},
 	badgeLabel: {
 		fontSize: FontSizes.xs,
-		fontWeight: '600',
-		color: '#6b7280',
+		fontWeight: '800',
+		color: '#000000',
 		textAlign: 'center',
 	},
 	badgeLabelLocked: {

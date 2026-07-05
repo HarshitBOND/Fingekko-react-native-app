@@ -360,7 +360,7 @@ export default function AddNewGroup() {
                                     onPress={() => setSelectedIcon(key)}
                                     style={[styles.iconOption, active && styles.iconOptionActive]}
                                 >
-                                    <Icon size={20} color={active ? '#ffffff' : '#148a46'} />
+                                    <Icon size={20} color="#000000" />
                                 </Pressable>
                             );
                         })}
@@ -375,13 +375,13 @@ export default function AddNewGroup() {
 
                     <Pressable style={styles.addMembersButton} onPress={() => setMembersModalVisible(true)}>
                         <View style={styles.quickActionIconWrap}>
-                            <Plus size={18} color="#148a46" />
+                            <Plus size={18} color="#000000" />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.addMembersTitle}>Add Members</Text>
                             <Text style={styles.addMembersSubtitle}>Choose friends or search for others</Text>
                         </View>
-                        <ChevronLeft size={18} color="#9ca3af" style={{ transform: [{ rotate: '180deg' }] }} />
+                        <ChevronLeft size={18} color="#000000" style={{ transform: [{ rotate: '180deg' }] }} />
                     </Pressable>
 
                     {selectedMembers.length > 0 && (
@@ -392,7 +392,7 @@ export default function AddNewGroup() {
                                         {member.name}
                                     </Text>
                                     <Pressable onPress={() => removeSelectedMember(member.id)}>
-                                        <X size={13} color="#148a46" />
+                                        <X size={13} color="#000000" />
                                     </Pressable>
                                 </View>
                             ))}
@@ -407,7 +407,7 @@ export default function AddNewGroup() {
                         disabled={!groupName.trim() || creating}
                     >
                         {creating ? (
-                            <ActivityIndicator color="#ffffff" />
+                            <ActivityIndicator color="#000000" />
                         ) : (
                             <Text style={styles.createButtonText}>Create Group</Text>
                         )}
@@ -464,7 +464,7 @@ export default function AddNewGroup() {
                                     <ActivityIndicator style={{ marginTop: 20 }} color="#148a46" />
                                 ) : friends.length === 0 ? (
 
-                                    <Text style={styles.emptyText}>You don't have any friends added yet.</Text>
+                                    <Text style={styles.emptyText}>{"You don't have any friends added yet."}</Text>
 
                                 ) : (
                                     friends.map((friend) => {
@@ -569,7 +569,7 @@ export default function AddNewGroup() {
 const styles = StyleSheet.create({
     page: {
         flex: 1,
-        backgroundColor: '#f5f8f5',
+        backgroundColor: '#FFF8E7',
     },
     container: {
         paddingBottom: 40,
@@ -594,28 +594,27 @@ const styles = StyleSheet.create({
     logoCircle: {
         width: 36,
         height: 36,
-        borderRadius: 18,
+        borderRadius: 8,
         backgroundColor: '#ffffff',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        elevation: 3,
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     brandTitle: {
         fontSize: 18,
         fontWeight: '800',
-        color: '#111827',
+        color: '#000000',
     },
     menuButton: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.85)',
+        borderRadius: 8,
+        backgroundColor: '#ffffff',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     heroCopy: {
         paddingHorizontal: 20,
@@ -624,64 +623,87 @@ const styles = StyleSheet.create({
     },
     heroTitle: {
         fontSize: 32,
-        fontWeight: '800',
-        color: '#111827',
+        fontWeight: '900',
+        color: '#000000',
         letterSpacing: -0.8,
     },
     heroSubtitle: {
         fontSize: 13,
-        color: '#6b7280',
+        color: '#000000',
+        fontWeight: '600',
     },
     card: {
         backgroundColor: '#ffffff',
-        borderRadius: 20,
+        borderRadius: 8,
         padding: 16,
         marginHorizontal: 16,
-        borderWidth: 1,
-        borderColor: '#e9f3ec',
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.04,
-        shadowRadius: 16,
+        borderWidth: 3,
+        borderColor: '#000000',
+        shadowColor: '#000000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
         elevation: 3,
     },
     fieldLabel: {
         fontSize: 11,
-        color: '#6b7280',
-        fontWeight: '700',
+        color: '#000000',
+        fontWeight: '800',
         textTransform: 'uppercase',
         letterSpacing: 0.6,
         marginBottom: 8,
     },
     textInput: {
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 12,
+        borderWidth: 3,
+        borderColor: '#000000',
+        borderRadius: 8,
         paddingHorizontal: 14,
         paddingVertical: 12,
         fontSize: 15,
-        fontWeight: '600',
-        color: '#111827',
-        backgroundColor: '#fafbfa',
+        fontWeight: '700',
+        color: '#000000',
+        backgroundColor: '#ffffff',
     },
     iconGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 10,
     },
+    iconWrap: {
+        width: 46,
+        height: 46,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#ffffff',
+        borderWidth: 2,
+        borderColor: '#000000',
+    },
+    iconWrapActive: {
+        backgroundColor: '#C3FFD8',
+    },
+    quickActionIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#C3FFD8',
+        borderWidth: 2,
+        borderColor: '#000000',
+    },
     iconOption: {
         width: 44,
         height: 44,
-        borderRadius: 14,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#eaf6ee',
-        borderWidth: 1,
-        borderColor: '#d4edda',
+        backgroundColor: '#ffffff',
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     iconOptionActive: {
-        backgroundColor: '#148a46',
-        borderColor: '#148a46',
+        backgroundColor: '#C3FFD8',
     },
     membersHeaderRow: {
         flexDirection: 'row',
@@ -691,36 +713,32 @@ const styles = StyleSheet.create({
     },
     membersCount: {
         fontSize: 12,
-        color: '#148a46',
-        fontWeight: '700',
+        color: '#000000',
+        fontWeight: '800',
     },
     addMembersButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        borderWidth: 1,
-        borderColor: '#e9f3ec',
-        borderRadius: 14,
+        borderWidth: 3,
+        borderColor: '#000000',
+        borderRadius: 8,
         padding: 12,
-    },
-    quickActionIconWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#eaf6ee',
-        borderWidth: 1,
-        borderColor: '#d4edda',
+        backgroundColor: '#ffffff',
+        shadowColor: '#000000',
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
     },
     addMembersTitle: {
         fontSize: 14,
-        fontWeight: '700',
-        color: '#111827',
+        fontWeight: '800',
+        color: '#000000',
     },
     addMembersSubtitle: {
         fontSize: 12,
-        color: '#6b7280',
+        color: '#333333',
+        fontWeight: '600',
         marginTop: 1,
     },
     chipsWrap: {
@@ -733,51 +751,66 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#eaf6ee',
-        borderWidth: 1,
-        borderColor: '#d4edda',
-        borderRadius: 20,
+        backgroundColor: '#C3FFD8',
+        borderWidth: 2,
+        borderColor: '#000000',
+        borderRadius: 8,
         paddingVertical: 6,
         paddingHorizontal: 10,
         maxWidth: 160,
     },
     chipText: {
         fontSize: 12,
-        fontWeight: '600',
-        color: '#148a46',
+        fontWeight: '700',
+        color: '#000000',
         flexShrink: 1,
     },
     createButton: {
-        backgroundColor: '#148a46',
-        borderRadius: 14,
+        backgroundColor: '#00FF66',
+        borderRadius: 8,
         paddingVertical: 15,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 3,
+        borderColor: '#000000',
+        shadowColor: '#000000',
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
     },
     createButtonDisabled: {
         backgroundColor: '#a7d7b9',
+        borderWidth: 3,
+        borderColor: '#000000',
     },
     createButtonText: {
-        color: '#ffffff',
+        color: '#000000',
         fontSize: 15,
-        fontWeight: '800',
+        fontWeight: '900',
     },
     footerBanner: {
         marginHorizontal: 16,
-        borderRadius: 20,
+        borderRadius: 8,
+        borderWidth: 3,
+        borderColor: '#000000',
         overflow: 'hidden',
+        shadowColor: '#000000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 3,
     },
     footerBannerBg: {
         minHeight: 130,
         justifyContent: 'flex-end',
     },
     footerBannerBgImage: {
-        borderRadius: 20,
+        borderRadius: 5,
     },
     footerBannerOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(240, 250, 242, 0.45)',
-        borderRadius: 20,
+        backgroundColor: 'rgba(255, 222, 67, 0.45)',
+        borderRadius: 5,
     },
     footerBannerContent: {
         padding: 20,
@@ -785,8 +818,8 @@ const styles = StyleSheet.create({
     },
     footerBannerTitle: {
         fontSize: 20,
-        fontWeight: '800',
-        color: '#111827',
+        fontWeight: '900',
+        color: '#000000',
         letterSpacing: -0.3,
         lineHeight: 28,
     },
@@ -794,7 +827,7 @@ const styles = StyleSheet.create({
     // Modal styles
     modalPage: {
         flex: 1,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#FFF8E7',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -807,13 +840,15 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 18,
         fontWeight: '800',
-        color: '#111827',
+        color: '#000000',
     },
     modalCloseButton: {
         width: 32,
         height: 32,
-        borderRadius: 16,
-        backgroundColor: '#f3f4f6',
+        borderRadius: 8,
+        backgroundColor: '#ffffff',
+        borderWidth: 2,
+        borderColor: '#000000',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -824,22 +859,23 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         marginTop: 8,
         marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 12,
+        borderWidth: 3,
+        borderColor: '#000000',
+        borderRadius: 8,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: '#fafbfa',
+        backgroundColor: '#ffffff',
     },
     searchInput: {
         flex: 1,
         fontSize: 14,
-        color: '#111827',
+        color: '#000000',
+        fontWeight: '700',
     },
     sectionLabel: {
         fontSize: 11,
-        color: '#6b7280',
-        fontWeight: '700',
+        color: '#000000',
+        fontWeight: '800',
         textTransform: 'uppercase',
         letterSpacing: 0.6,
         marginHorizontal: 20,
@@ -848,12 +884,12 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 30,
-        color: '#494f5a',
+        color: '#000000',
         justifyContent: 'center',
         alignItems: 'center',
         marginHorizontal: 20,
         marginTop: 8,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     friendRow: {
         flexDirection: 'row',
@@ -865,80 +901,89 @@ const styles = StyleSheet.create({
     avatarCircle: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: '#eaf6ee',
-        borderWidth: 1,
-        borderColor: '#d4edda',
+        borderRadius: 8,
+        backgroundColor: '#C3FFD8',
+        borderWidth: 2,
+        borderColor: '#000000',
         alignItems: 'center',
         justifyContent: 'center',
     },
     avatarInitial: {
         fontSize: 15,
-        fontWeight: '800',
-        color: '#148a46',
+        fontWeight: '900',
+        color: '#000000',
     },
     friendName: {
         fontSize: 14,
-        fontWeight: '700',
-        color: '#111827',
+        fontWeight: '800',
+        color: '#000000',
     },
     friendUsername: {
         fontSize: 12,
-        color: '#6b7280',
+        color: '#333333',
+        fontWeight: '600',
         marginTop: 1,
     },
     checkbox: {
         width: 24,
         height: 24,
-        borderRadius: 7,
-        borderWidth: 1.5,
-        borderColor: '#d1d5db',
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: '#000000',
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkboxActive: {
-        backgroundColor: '#148a46',
-        borderColor: '#148a46',
+        backgroundColor: '#00FF66',
+        borderColor: '#000000',
     },
     addPersonButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#148a46',
-        borderRadius: 20,
+        backgroundColor: '#00FF66',
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: '#000000',
         paddingVertical: 7,
         paddingHorizontal: 12,
     },
     addPersonButtonDisabled: {
-        backgroundColor: '#eaf6ee',
-        borderWidth: 1,
-        borderColor: '#d4edda',
+        backgroundColor: '#C3FFD8',
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     addPersonText: {
         fontSize: 12,
-        fontWeight: '700',
-        color: '#ffffff',
+        fontWeight: '800',
+        color: '#000000',
     },
     addPersonTextDisabled: {
-        color: '#148a46',
+        color: '#333333',
     },
     modalFooter: {
         paddingHorizontal: 20,
         paddingTop: 8,
         paddingBottom: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f5f1',
+        borderTopWidth: 2,
+        borderTopColor: '#000000',
     },
     doneButton: {
-        backgroundColor: '#148a46',
-        borderRadius: 14,
+        backgroundColor: '#00FF66',
+        borderRadius: 8,
+        borderWidth: 3,
+        borderColor: '#000000',
         paddingVertical: 14,
         alignItems: 'center',
         justifyContent: 'center',
+        shadowColor: '#000000',
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
     },
     doneButtonText: {
-        color: '#ffffff',
+        color: '#000000',
         fontSize: 15,
-        fontWeight: '800',
+        fontWeight: '900',
     },
 });

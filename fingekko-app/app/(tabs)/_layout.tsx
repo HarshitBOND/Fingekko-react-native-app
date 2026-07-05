@@ -35,6 +35,8 @@ function TabIcon({ icon: Icon, label, focused, activeColor }: TabIconProps) {
 export default function TabLayout() {
 
   const { isLoaded, isSignedIn } = useAuth();
+  const insets = useSafeAreaInsets();
+  const pathname = usePathname();
 
   //if loading the page
   if(!isLoaded){
@@ -44,10 +46,6 @@ export default function TabLayout() {
   if (!isSignedIn) {
     return <Redirect href="/(auth)/login" />;
   }
-
-  const insets = useSafeAreaInsets();
-
-  const pathname = usePathname();
 
   const activeColor =
   pathname.startsWith('/insights')

@@ -1,30 +1,30 @@
 export const Colors = {
   // Pr
-  primary: '#32c672',        // FinGekko green
-  primaryDark: '#27AE60',    // Darker green (buttons pressed)
-  primaryLight: '#A8E6CF',   // Light green (backgrounds)
+  primary: '#00FF66',        // Neo-brutalist Green
+  primaryDark: '#000000',    // Black
+  primaryLight: '#C3FFD8',   // Light green
 
   // Background colors
-  background: '#F8F9FA',     // Main screen background
+  background: '#FFF8E7',     // Neo-brutalist warm cream background
   surface: '#FFFFFF',        // Cards, modals
-  surfaceDark: '#1A1A2E',    // Dark cards
+  surfaceDark: '#000000',    // Black surface
 
   // Text colors
-  textPrimary: '#1A1A2E',    // Main text
-  textSecondary: '#6C757D',  // Subtitles, hints
+  textPrimary: '#000000',    // Main text
+  textSecondary: '#1E293B',  // Secondary text
   textLight: '#FFFFFF',      // Text on dark backgrounds
 
   // Status colors
-  income: '#2ECC71',         // Green for money coming in
-  expense: '#E74C3C',        // Red for money going out
-  savings: '#3498DB',        // Blue for savings
+  income: '#00FF66',         // Vibrant green for income
+  expense: '#FF3366',        // Vibrant coral/red for expense
+  savings: '#3399FF',        // Vibrant blue for savings
 
   // UI colors
-  border: '#E9ECEF',         // Card borders
-  shadow: '#000000',         // Shadow color
-  tabBar: '#ebe7e7d9',         // Bottom tab background
-  tabBarActive: '#2ECC71',   // Active tab icon
-  tabBarInactive: '#ADB5BD', // Inactive tab icon
+  border: '#000000',         // Thick black borders
+  shadow: '#000000',         // Hard black shadow
+  tabBar: '#FFFFFF',         // White tab background
+  tabBarActive: '#000000',   // Black active tab text/icon
+  tabBarInactive: '#6B7280', // Gray inactive tab text/icon
 };
 
 // Typography sizes

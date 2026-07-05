@@ -72,7 +72,7 @@ export default function TodaysProgress({ items }: { items?: ProgressItem[] }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Today's Progress</Text>
+      <Text style={styles.title}>{"Today's Progress"}</Text>
       <View style={styles.itemsRow}>{rowItems}</View>
     </View>
   );
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
   },
   title: {
     fontSize: FontSizes.xs,

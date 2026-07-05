@@ -605,7 +605,7 @@ export default function TodaysQuest() {
     return (
       <View style={styles.card}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Today's Quests</Text>
+          <Text style={styles.title}>{"Today's Quests"}</Text>
         </View>
         <Text style={styles.loadingText}>Building your quests...</Text>
       </View>
@@ -616,7 +616,7 @@ export default function TodaysQuest() {
     return (
       <View style={styles.card}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Today's Quests</Text>
+          <Text style={styles.title}>{"Today's Quests"}</Text>
           <Text style={styles.completionText}>0 / 0 completed</Text>
         </View>
         <Text style={styles.emptyText}>No quests available yet.</Text>
@@ -627,7 +627,7 @@ export default function TodaysQuest() {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Today's Quests</Text>
+        <Text style={styles.title}>{"Today's Quests"}</Text>
         <Text style={styles.completionText}>
           {completedCount} / {totalCount} completed
         </Text>
@@ -678,7 +678,7 @@ export default function TodaysQuest() {
                         style={[styles.actionBadge, styles.actionFailed]}
                       >
                         <X size={12} color="#ffffff" />
-                        <Text style={styles.actionText}>Can't</Text>
+                        <Text style={styles.actionText}>{"Can't"}</Text>
                       </Pressable>
                     </View>
                   ) : (
@@ -720,9 +720,16 @@ export default function TodaysQuest() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#f8fbf8',
-    borderRadius: 12,
-    padding: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 3,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   headerRow: {
     flexDirection: 'row',
@@ -732,53 +739,55 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSizes.xs,
     fontWeight: '800',
-    color: '#6b7280',
+    color: '#000000',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   completionText: {
     fontSize: FontSizes.xs,
-    fontWeight: '700',
-    color: '#16a34a',
+    fontWeight: '800',
+    color: '#000000',
   },
   loadingText: {
     marginTop: 12,
     fontSize: FontSizes.sm,
-    color: '#6b7280',
+    color: '#000000',
   },
   emptyText: {
     marginTop: 12,
     fontSize: FontSizes.sm,
-    color: '#6b7280',
+    color: '#000000',
   },
   list: {
     marginTop: 12,
-    gap: 6,
+    gap: 12,
   },
   questRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 12,
   },
   iconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#eaf3ed',
+    borderRadius: 8,
+    backgroundColor: '#C3FFD8',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   questBody: {
     flex: 1,
   },
   questTitle: {
     fontSize: FontSizes.sm,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.textPrimary,
   },
   questSubtitle: {
     fontSize: FontSizes.xs,
-    color: '#6b7280',
+    color: '#000000',
     marginTop: 2,
   },
   questProgress: {
@@ -796,8 +805,8 @@ const styles = StyleSheet.create({
   },
   xpText: {
     fontSize: FontSizes.xs,
-    fontWeight: '700',
-    color: '#16a34a',
+    fontWeight: '800',
+    color: '#000000',
   },
   actionRow: {
     flexDirection: 'row',
@@ -810,43 +819,50 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   actionComplete: {
-    backgroundColor: '#16a34a',
+    backgroundColor: '#00FF66',
   },
   actionFailed: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF3366',
   },
   actionText: {
     fontSize: FontSizes.xs,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontWeight: '800',
+    color: '#000000',
   },
   statusBadge: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   statusDone: {
-    backgroundColor: '#16a34a',
+    backgroundColor: '#00FF66',
   },
   statusFailed: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF3366',
   },
   questDivider: {
     marginLeft: 48,
   },
   bonusCard: {
     marginTop: 12,
-    borderRadius: 16,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 3,
+    borderColor: '#000000',
+    backgroundColor: '#FFDE43',
   },
   bonusLeft: {
     flexDirection: 'row',

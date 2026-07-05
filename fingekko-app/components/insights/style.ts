@@ -15,16 +15,18 @@ import {
 
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: PAGE_BG },
-  container: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 32, gap: 10 },
+  container: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32, gap: 16 },
 
   header: { marginBottom: 2 },
   heading: { fontSize: F.lg, fontWeight: '800', color: TEXT_PRIMARY },
   subHeading: { marginTop: 2, fontSize: F.sm, fontWeight: '600', color: TEXT_SECONDARY },
 
   heroCard: {
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 0,
+    backgroundColor: '#FFE600',
+    borderRadius: 8, paddingHorizontal: 16, paddingVertical: 0,
     minHeight: 120, flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', overflow: 'hidden',
+    borderWidth: 3, borderColor: '#000000', overflow: 'hidden',
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   heroImageWrap: {
     width: 104, alignSelf: 'stretch', marginRight: 10, marginLeft: -2,
@@ -36,16 +38,17 @@ export const s = StyleSheet.create({
   heroText: { color: 'rgba(24,59,86,0.72)', fontSize: F.base, lineHeight: 18 },
   streakBox: { alignItems: 'center', marginLeft: 10, paddingVertical: 14 },
   fireBadge: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.22)', justifyContent: 'center', alignItems: 'center',
-    marginBottom: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
+    width: 44, height: 44, borderRadius: 8,
+    backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center',
+    marginBottom: 6, borderWidth: 3, borderColor: '#000000',
   },
-  streakTitle: { color: TEXT_PRIMARY, fontWeight: '700', fontSize: F.base },
-  streakSub: { color: TEXT_SECONDARY, fontSize: F.xs, marginTop: 3 },
+  streakTitle: { color: TEXT_PRIMARY, fontWeight: '800', fontSize: F.base },
+  streakSub: { color: TEXT_SECONDARY, fontSize: F.xs, marginTop: 3, fontWeight: '700' },
 
   card: {
-    backgroundColor: CARD_BG, borderRadius: 14,
-    padding: 14, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: CARD_BG, borderRadius: 8,
+    padding: 16, borderWidth: 3, borderColor: BORDER,
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   sectionLabel: {
     fontSize: F.xs, fontWeight: '700', color: TEXT_HELPER,
@@ -124,7 +127,7 @@ export const s = StyleSheet.create({
   statNum: { fontSize: F.xl, fontWeight: '800', color: AMOUNT_DARK },
   statLbl: { fontSize: F.xs, color: TEXT_MUTED, textAlign: 'center', marginTop: 4, lineHeight: 14 },
 
-  twoColRow: { gap: 10 },
+  twoColRow: { gap: 16 },
   catCard: { flex: 1, paddingBottom: 10 },
   catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   thisMonthTag: { fontSize: F.xs, color: GREEN, fontWeight: '700' },
@@ -141,8 +144,9 @@ export const s = StyleSheet.create({
   viewAllText: { fontSize: F.sm, color: GREEN, fontWeight: '700' },
 
   impactCard: {
-    backgroundColor: CARD_BG, borderRadius: 14,
-    borderWidth: 1, borderColor: BORDER, overflow: 'hidden',
+    backgroundColor: CARD_BG, borderRadius: 8,
+    borderWidth: 3, borderColor: BORDER, overflow: 'hidden',
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   impactCardLayout: {
     flexDirection: 'row', minHeight: 220, padding: 0, alignItems: 'stretch',
@@ -169,9 +173,10 @@ export const s = StyleSheet.create({
   impactGrowText: { fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY },
 
   guidanceCard: {
-    backgroundColor: CARD_BG, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 0,
+    backgroundColor: CARD_BG, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 0,
     minHeight: 96, flexDirection: 'row', alignItems: 'stretch',
-    borderWidth: 1, borderColor: BORDER, gap: 12, overflow: 'hidden',
+    borderWidth: 3, borderColor: BORDER, gap: 12, overflow: 'hidden',
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   guidanceImgWrap: { width: 78, marginRight: 8, marginLeft: -2, justifyContent: 'flex-end', alignItems: 'center' },
   guidanceImg: { width: 78, height: 104, marginTop: -6 },
@@ -181,8 +186,9 @@ export const s = StyleSheet.create({
   guidanceSub: { fontSize: F.xs, color: TEXT_MUTED, marginTop: 4, lineHeight: 16 },
 
   rewardCard: {
-    borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', overflow: 'hidden',
+    borderRadius: 8, padding: 16, flexDirection: 'row', alignItems: 'center',
+    borderWidth: 3, borderColor: '#000000', overflow: 'hidden',
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   rewardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   rewardIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.22)', justifyContent: 'center', alignItems: 'center' },
@@ -197,9 +203,10 @@ export const s = StyleSheet.create({
   rewardBadgeSub: { color: TEXT_SECONDARY, fontSize: F.xs, textAlign: 'center' },
 
   tipCard: {
-    backgroundColor: 'rgba(255,255,255,0.82)', borderRadius: 14, padding: 14,
+    backgroundColor: '#FFFFFF', borderRadius: 8, padding: 16,
     flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', gap: 10,
+    borderWidth: 3, borderColor: '#000000', gap: 10,
+    shadowColor: '#000000', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0,
   },
   tipTitle: { fontWeight: '700', color: TEXT_PRIMARY, fontSize: F.base },
   tipText: { fontSize: F.xs, color: TEXT_MUTED, marginTop: 2, lineHeight: 16 },
