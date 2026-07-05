@@ -46,8 +46,7 @@ type ExpenseItem = {
 export default function FriendSplitsScreen() {
   const router = useRouter();
   const { getToken } = useAuth();
-  const { user: clerkUser } = useUser();
-  const currentUserId = clerkUser?.id || '';
+  const [dbUserId, setDbUserId] = useState<string>('');
 
   const { friendId, friendName } = useLocalSearchParams<{ friendId: string; friendName: string }>();
 
@@ -61,6 +60,11 @@ export default function FriendSplitsScreen() {
     try {
       const token = await getToken();
       if (!token) return;
+
+      // Get DB User ID first
+      const meRes = await apiRequest<any>('/api/me', {}, token);
+      const myDbId = meRes?.user?._id || meRes?.user?.id || '';
+      setDbUserId(myDbId);
 
       const response = await apiRequest<{ expenses: ExpenseItem[] }>({
         method: 'get',
@@ -79,10 +83,10 @@ export default function FriendSplitsScreen() {
           (p) => (p.userId?.id || p.userId?.toString()) === friendId
         );
         const userIsParticipant = exp.participants?.some(
-          (p) => (p.userId?.id || p.userId?.toString()) === currentUserId
+          (p) => (p.userId?.id || p.userId?.toString()) === myDbId
         );
 
-        if (creatorId === currentUserId && friendIsParticipant) return true;
+        if (creatorId === myDbId && friendIsParticipant) return true;
         if (creatorId === friendId && userIsParticipant) return true;
         return false;
       });
@@ -103,13 +107,13 @@ export default function FriendSplitsScreen() {
   const totalBalance = expenses.reduce((sum, exp) => {
     const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
     
-    if (creatorId === currentUserId) {
+    if (creatorId === dbUserId) {
       const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
       if (friendPart && !friendPart.settled) {
         return sum + friendPart.amount;
       }
     } else if (creatorId === friendId) {
-      const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === currentUserId);
+      const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
       if (userPart && !userPart.settled) {
         return sum - userPart.amount;
       }
@@ -141,11 +145,11 @@ export default function FriendSplitsScreen() {
               // Find unsettled expenses with this friend
               const unsettled = expenses.filter(exp => {
                 const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-                if (creatorId === currentUserId) {
+                if (creatorId === dbUserId) {
                   const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
                   return friendPart && !friendPart.settled;
                 } else if (creatorId === friendId) {
-                  const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === currentUserId);
+                  const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
                   return userPart && !userPart.settled;
                 }
                 return false;
@@ -158,7 +162,7 @@ export default function FriendSplitsScreen() {
                   url: `/api/expenses/${exp.id}/settle`,
                   token,
                   data: {
-                    userId: totalBalance > 0 ? friendId : currentUserId
+                    userId: totalBalance > 0 ? friendId : dbUserId
                   }
                 });
               }
@@ -251,11 +255,11 @@ export default function FriendSplitsScreen() {
         ) : (
           expenses.map((item) => {
             const creatorId = item.createdBy?.id || item.createdBy?.toString() || '';
-            const userPaid = creatorId === currentUserId;
+            const userPaid = creatorId === dbUserId;
             
             // Get friend participant share
             const friendPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-            const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === currentUserId);
+            const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
             
             const isSettled = userPaid ? friendPart?.settled : userPart?.settled;
             const splitAmount = userPaid ? friendPart?.amount : userPart?.amount;

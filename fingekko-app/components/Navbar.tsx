@@ -72,7 +72,7 @@ export default function Navbar() {
           style={styles.bellPressable}
           onPress={() => router.push('/(tabs)/Notifications')}
         >
-          <Icon name="Bell" size={22} color="#374151" clickable={true} />
+          <Icon name="Bell" size={22} color="#374151" />
           {badgeCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{badgeCount}</Text>

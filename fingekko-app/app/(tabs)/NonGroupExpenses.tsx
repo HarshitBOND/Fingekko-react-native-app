@@ -41,8 +41,7 @@ type BackendExpenseItem = {
 export default function NonGroupExpenses() {
   const router = useRouter();
   const { getToken } = useAuth();
-  const { user } = useUser();
-  const currentUserId = user?.id || '';
+  const [dbUserId, setDbUserId] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<'expenses' | 'friends'>('expenses');
   const [expenses, setExpenses] = useState<BackendExpenseItem[]>([]);
@@ -54,6 +53,11 @@ export default function NonGroupExpenses() {
     try {
       const token = await getToken();
       if (!token) return;
+
+      // Get DB User ID
+      const meRes = await apiRequest<any>('/api/me', {}, token);
+      const myDbId = meRes?.user?._id || meRes?.user?.id || '';
+      setDbUserId(myDbId);
       
       // Fetch expenses
       const response = await apiRequest<{ expenses: BackendExpenseItem[] }>({
@@ -96,7 +100,7 @@ export default function NonGroupExpenses() {
     let balance = 0;
     expenses.forEach((exp) => {
       const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-      if (creatorId === currentUserId) {
+      if (creatorId === dbUserId) {
         const friendPart = exp.participants?.find(
           (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === friendUserId
         );
@@ -105,7 +109,7 @@ export default function NonGroupExpenses() {
         }
       } else if (creatorId === friendUserId) {
         const userPart = exp.participants?.find(
-          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === currentUserId
+          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === dbUserId
         );
         if (userPart && !userPart.settled) {
           balance -= userPart.amount;

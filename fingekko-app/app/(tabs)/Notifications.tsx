@@ -158,7 +158,7 @@ export default function NotificationsScreen() {
                       onPress={() => handleAcceptFriend(item.id)}
                       disabled={actionLoading[item.id]}
                     >
-                      {actionLoading[item.id] ? <ActivityIndicator size="small" color="#000" /> : 'Accept'}
+                      {actionLoading[item.id] ? <ActivityIndicator size="small" color="#fff" /> : 'Confirm'}
                     </Button>
                     <Button
                       variant="outline"
@@ -167,7 +167,7 @@ export default function NotificationsScreen() {
                       onPress={() => handleDeclineFriend(item.id)}
                       disabled={actionLoading[item.id]}
                     >
-                      Decline
+                      Delete
                     </Button>
                   </View>
                 )}
