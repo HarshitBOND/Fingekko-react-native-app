@@ -1,43 +1,62 @@
+import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
 
-type NonGroupExpenseItem = {
+type BackendExpenseItem = {
   id: string;
-  user: string;
-  splitBetween: Map<string, number>;
-  title: string;
-  icon: string;
+  groupId: string | null;
+  description: string;
+  amount: number;
+  netBalance: number;
+  participants: { userId: { name: string } }[];
+  category?: string;
 };
-
-const NON_GROUP_EXPENSES: NonGroupExpenseItem[] = [
-  {
-    id: 'n1',
-    user: 'Alice',
-    splitBetween: new Map([
-      ['Alice', 1240],
-      ['Bob', 1240],
-    ]),
-    title: 'Dinner at Beach Shack',
-    icon: '🍽️',
-  },
-  {
-    id: 'n2',
-    user: 'Riya',
-    splitBetween: new Map([
-      ['Riya', -80],
-      ['Shreya', 80],
-      ['BehanKiLodi', 80],
-    ]),
-    title: 'Coffee at Cafe Coffee Day',
-    icon: '☕',
-  },
-];
 
 export default function NonGroupExpenses() {
   const router = useRouter();
+  const { getToken } = useAuth();
+  const [expenses, setExpenses] = useState<BackendExpenseItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchExpenses = async () => {
+    setLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      
+      const response = await apiRequest<{ expenses: BackendExpenseItem[] }>({
+        method: 'get',
+        url: '/api/expenses',
+        token,
+      });
+      
+      // Filter out expenses that are part of a group
+      const nonGroup = (response?.expenses || []).filter((e) => !e.groupId);
+      setExpenses(nonGroup);
+    } catch (error) {
+      console.error('Error fetching non-group expenses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getAmountColor = (balance: number) => {
     if (balance > 0) return '#148a46';
@@ -49,10 +68,6 @@ export default function NonGroupExpenses() {
     if (balance > 0) return 'You are owed';
     if (balance < 0) return 'You owe';
     return 'You are settled up';
-  };
-
-  const getExpenseBalance = (expense: NonGroupExpenseItem): number => {
-    return expense.splitBetween.get(expense.user) || 0;
   };
 
   return (
@@ -95,29 +110,37 @@ export default function NonGroupExpenses() {
         </View>
 
         <View style={styles.card}>
-          {NON_GROUP_EXPENSES.length === 0 ? (
-            <View style={{ padding: 16 }}>
-              <Text style={{ fontSize: 14, color: '#6b7280' }}>You have no non-group expenses.</Text>
+          {loading ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <ActivityIndicator color="#148a46" />
+            </View>
+          ) : expenses.length === 0 ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: '#6b7280', fontWeight: '700' }}>You have no non-group expenses.</Text>
             </View>
           ) : (
-            NON_GROUP_EXPENSES.map((item, index) => {
-              const balance = getExpenseBalance(item);
+            expenses.map((item, index) => {
+              const balance = item.netBalance;
+              const participantNames = item.participants
+                .map((p) => p.userId?.name)
+                .filter(Boolean)
+                .join(', ') || 'Self';
 
               return (
                 <View
                   key={item.id}
-                  style={[styles.groupRow, index !== NON_GROUP_EXPENSES.length - 1 && styles.divider]}
+                  style={[styles.groupRow, index !== expenses.length - 1 && styles.divider]}
                 >
                   <View style={styles.groupIconWrap}>
-                    <Text style={styles.groupIconEmoji}>{item.icon}</Text>
+                    <Text style={styles.groupIconEmoji}>💵</Text>
                   </View>
                   <View style={styles.groupTextWrap}>
-                    <Text style={styles.groupName}>{item.title}</Text>
-                    <Text style={styles.groupMembers}>{Array.from(item.splitBetween.keys()).join(', ')}</Text>
+                    <Text style={styles.groupName}>{item.description}</Text>
+                    <Text style={styles.groupMembers}>{participantNames}</Text>
                   </View>
                   <View style={styles.groupRight}>
                     <Text style={styles.groupStatusLabel}>{getAmountLabel(balance)}</Text>
-                    <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>{Math.abs(balance)}</Text>
+                    <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>₹{Math.abs(balance).toFixed(2)}</Text>
                   </View>
                   <Icon name="ChevronRight" size={16} color="#9ca3af" style={styles.groupChevron} />
                 </View>
