@@ -140,16 +140,23 @@ function useFriendSearch(onSuccess: () => Promise<void>) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [requestLoading, setRequestLoading] = useState<Record<string, boolean>>({});
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults([]);
+      if (searchResults.length > 0) {
+        setSearchResults([]);
+      }
       return;
     }
 
     const handle = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const token = await getToken();
+        const token = await getTokenRef.current();
         if (!token) return;
         const response = await apiRequest<FriendSearchResponse[]>({
           method: 'get',
@@ -165,12 +172,12 @@ function useFriendSearch(onSuccess: () => Promise<void>) {
     }, 350);
 
     return () => clearTimeout(handle);
-  }, [searchQuery, getToken]);
+  }, [searchQuery]);
 
   const sendRequest = useCallback(async (targetEmail: string) => {
     setRequestLoading(prev => ({ ...prev, [targetEmail]: true }));
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       if (!token) return;
       await apiRequest({
         method: 'post',
@@ -184,7 +191,7 @@ function useFriendSearch(onSuccess: () => Promise<void>) {
     } finally {
       setRequestLoading(prev => ({ ...prev, [targetEmail]: false }));
     }
-  }, [getToken, onSuccess]);
+  }, [onSuccess]);
 
   return {
     searchQuery,
