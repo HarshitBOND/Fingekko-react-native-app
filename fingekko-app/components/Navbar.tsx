@@ -15,31 +15,13 @@ export default function Navbar() {
       const token = await getToken();
       if (!token) return;
 
-      // 1. Fetch friend requests
-      const friendsRes = await apiRequest<any>('/api/friends', {}, token);
-      const incomingRequestsCount = friendsRes?.incomingRequests?.length || 0;
-
-      // 2. Fetch expenses
-      const expensesRes = await apiRequest<any>('/api/expenses', {}, token);
-      const expensesList = expensesRes?.expenses || [];
-      const currentUserId = user?.id || '';
-
-      let expenseNotificationCount = 0;
-      expensesList.forEach((exp: any) => {
-        const creator = exp.createdBy;
-        const creatorId = creator?.id || creator?.toString() || '';
-        
-        if (creatorId !== currentUserId) {
-          const userParticipant = exp.participants?.find(
-            (p: any) => (p.userId?.id || p.userId?.toString()) === currentUserId
-          );
-          if (userParticipant && !userParticipant.settled) {
-            expenseNotificationCount++;
-          }
-        }
+      const response = await apiRequest<{ count: number }>({
+        method: 'get',
+        url: '/api/notifications',
+        token,
       });
 
-      setBadgeCount(incomingRequestsCount + expenseNotificationCount);
+      setBadgeCount(response?.count || 0);
     } catch (error) {
       console.warn('Failed to fetch badge count:', error);
     }

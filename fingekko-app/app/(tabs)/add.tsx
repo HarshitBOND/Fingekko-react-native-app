@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../../components/ui/Icon';
+import Navbar from '../../components/Navbar';
 import { apiRequest } from '../../utils/api';
 
 type QuickAction = {
@@ -204,17 +205,7 @@ export default function HomeScreen() {
             ]}
           />
 
-          <View style={styles.topBar}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoCircle}>
-                <Text style={styles.logoEmoji}>🌿</Text>
-              </View>
-              <Text style={styles.brandTitle}>GekkoSplit</Text>
-            </View>
-            <Pressable style={styles.menuButton}>
-              <Icon name="Menu" size={20} color="#1f2937" />
-            </Pressable>
-          </View>
+          <Navbar />
 
           <View style={styles.greetingBlock}>
             <Text style={styles.greetingSmall}>Good Morning,</Text>

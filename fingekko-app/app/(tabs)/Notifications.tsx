@@ -43,52 +43,13 @@ export default function NotificationsScreen() {
       const token = await getToken();
       if (!token) return;
 
-      // 1. Fetch friend requests
-      const friendsRes = await apiRequest<any>('/api/friends', {}, token);
-      const incomingRequests = friendsRes?.incomingRequests || [];
-
-      // 2. Fetch expenses
-      const expensesRes = await apiRequest<any>('/api/expenses', {}, token);
-      const expensesList = expensesRes?.expenses || [];
-
-      const list: NotificationItem[] = [];
-
-      // Map incoming requests
-      incomingRequests.forEach((req: any) => {
-        list.push({
-          id: req.id,
-          type: 'friend_request',
-          title: 'Friend Request Received',
-          subtitle: `${req.senderId?.name || req.senderId?.email || 'Someone'} sent you a friend request.`,
-          dateLabel: 'Pending',
-          rawData: req,
-        });
+      const response = await apiRequest<{ notifications: NotificationItem[] }>({
+        method: 'get',
+        url: '/api/notifications',
+        token,
       });
 
-      // Map expenses where user is a participant (excluding user's own created expenses)
-      expensesList.forEach((exp: any) => {
-        const creator = exp.createdBy;
-        const creatorId = creator?.id || creator?.toString() || '';
-        
-        // If user is not the creator, and user is a participant
-        if (creatorId !== currentUserId) {
-          const userParticipant = exp.participants?.find(
-            (p: any) => (p.userId?.id || p.userId?.toString()) === currentUserId
-          );
-          
-          if (userParticipant && !userParticipant.settled) {
-            list.push({
-              id: exp.id,
-              type: 'expense_split',
-              title: `${creator?.name || 'A friend'} added a split`,
-              subtitle: `Owe ₹${userParticipant.amount.toFixed(2)} for "${exp.description}"`,
-              dateLabel: exp.expenseDate ? new Date(exp.expenseDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Recent',
-              rawData: exp,
-            });
-          }
-        }
-      });
-
+      const list = response?.notifications || [];
       setNotifications(list);
 
       // Save count to AsyncStorage to clear home badge count

@@ -11,6 +11,7 @@ import expenseRoutes from "./routes/communityExpense.routes.js";
 import friendRoutes from "./routes/friends.routes.js";
 import groupRoutes from "./routes/group.routes.js";
 import homeRoutes from "./routes/home.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ app.use('/api', homeRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 
 
