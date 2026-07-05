@@ -80,7 +80,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
     const expenses = await communityExpenseRepository.listForUser(currentUserId);
-    return res.json({ expenses: expenses.map(serializeExpense) });
+    return res.json({ expenses: expenses.map((expense) => serializeExpense(expense, currentUserId)) });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to fetch expenses' });
@@ -260,7 +260,11 @@ router.delete('/:expenseId', async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Only the creator can delete this expense' });
     }
 
-    await communityExpenseRepository.deleteExpense(String(req.params.expenseId));
+    await communityExpenseRepository.SoftdeleteExpense(
+      String(req.params.expenseId),
+      currentUserId,
+      { action: 'DELETE', performedBy: currentUserId }
+    );
     return res.json({ message: 'Expense deleted' });
   } catch (error) {
     console.error(error);
