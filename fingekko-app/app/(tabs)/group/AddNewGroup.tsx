@@ -67,7 +67,7 @@ export default function AddNewGroup() {
     const { user } = useUser();
 
     const [groupName, setGroupName] = useState('');
-    const [selectedIcon, setSelectedIcon] = useState<keyof typeof ICONS>('Users');
+    const [selectedIcon, setSelectedIcon] = useState<string>('Users');
 
     const [friends, setFriends] = useState<Friend[]>([]);
     const [friendsLoading, setFriendsLoading] = useState(false);

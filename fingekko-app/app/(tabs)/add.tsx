@@ -1,7 +1,9 @@
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   ImageBackground,
   Pressable,
   ScrollView,
@@ -11,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../../components/ui/Icon';
+import { apiRequest } from '../../utils/api';
 
 type QuickAction = {
   id: string;
@@ -94,6 +97,69 @@ const ACTIVITY: ActivityItem[] = [
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useUser();
+  const { getToken } = useAuth();
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchRecentActivity = async () => {
+    setLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      const response = await apiRequest<{ expenses: any[] }>({
+        method: 'get',
+        url: '/api/expenses',
+        token,
+      });
+
+      // Sort by creation date descending, take top 5
+      const sorted = (response?.expenses || [])
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5);
+
+      const items = sorted.map((exp) => {
+        const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
+        const userPaid = creatorId === user?.id;
+        const groupName = exp.groupName || 'Personal Split';
+        
+        let dateStr = 'Recent';
+        if (exp.createdAt) {
+          const diffMs = new Date().getTime() - new Date(exp.createdAt).getTime();
+          const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+          if (diffHrs < 1) {
+            dateStr = 'Just now';
+          } else if (diffHrs < 24) {
+            dateStr = `${diffHrs}h ago`;
+          } else {
+            dateStr = `${Math.floor(diffHrs / 24)}d ago`;
+          }
+        }
+
+        return {
+          id: exp.id,
+          title: userPaid ? 'You added an expense' : `${exp.createdBy?.name || 'A friend'} added an expense`,
+          subtitle: exp.description,
+          meta: `${groupName} • ${dateStr}`,
+          amount: `₹${exp.amount.toFixed(2)}`,
+          amountColor: userPaid ? '#111827' : '#eb5a4f',
+          iconType: userPaid ? 'up' : 'down',
+        };
+      });
+
+      setActivities(items);
+    } catch (error) {
+      console.error('Failed to fetch recent activities:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchRecentActivity();
+    }
+  }, [user]);
 
   const renderActivityIcon = (type: ActivityItem['iconType']) => {
     if (type === 'up') {
@@ -186,26 +252,32 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.card}>
-          {ACTIVITY.map((item, index) => (
-            <View
-              key={item.id}
-              style={[styles.activityRow, index !== ACTIVITY.length - 1 && styles.divider]}
-            >
-              {renderActivityIcon(item.iconType)}
-              <View style={styles.activityTextWrap}>
-                <Text style={styles.activityTitle}>{item.title}</Text>
-                <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
-                <Text style={styles.activityMeta}>{item.meta}</Text>
-              </View>
-              {item.amount ? (
+          {loading ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <ActivityIndicator color="#148a46" />
+            </View>
+          ) : activities.length === 0 ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: '#6b7280', fontWeight: '700' }}>No recent activity.</Text>
+            </View>
+          ) : (
+            activities.map((item, index) => (
+              <View
+                key={item.id}
+                style={[styles.activityRow, index !== activities.length - 1 && styles.divider]}
+              >
+                {renderActivityIcon(item.iconType)}
+                <View style={styles.activityTextWrap}>
+                  <Text style={styles.activityTitle}>{item.title}</Text>
+                  <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
+                  <Text style={styles.activityMeta}>{item.meta}</Text>
+                </View>
                 <Text style={[styles.activityAmount, { color: item.amountColor }]}>
                   {item.amount}
                 </Text>
-              ) : (
-                item.hasChevron && <Icon name="ChevronRight" size={16} color="#9ca3af" />
-              )}
-            </View>
-          ))}
+              </View>
+            ))
+          )}
         </View>
 
         <View style={styles.footerBanner}>
@@ -224,6 +296,14 @@ export default function HomeScreen() {
           </ImageBackground>
         </View>
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <Pressable
+        style={styles.fab}
+        onPress={() => router.push('/(tabs)/AddNewExpense')}
+      >
+        <Icon name="Plus" size={24} color="#ffffff" />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -464,5 +544,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#000000',
     marginTop: 8,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#148a46',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 5,
   },
 });

@@ -42,6 +42,9 @@ export default function AddNewExpense() {
     outgoingRequests: [],
   });
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [selectedSplitType, setSelectedSplitType] = useState<
+    'equalPaidByYou' | 'equalPaidByOthers' | 'fullyOwedPaidByOthers' | 'fullyOwedPaidByYou'
+  >('equalPaidByYou');
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -133,6 +136,11 @@ export default function AddNewExpense() {
       return;
     }
 
+    if (selectedFriendIds.length === 0) {
+      setError('Select at least one friend to split with.');
+      return;
+    }
+
     try {
       setSaving(true);
       const token = await getTokenRef.current();
@@ -141,6 +149,11 @@ export default function AddNewExpense() {
         setError('Sign in again to save this expense.');
         return;
       }
+
+      const friendId = selectedFriendIds[0];
+      const isPaidByOther =
+        selectedSplitType === 'equalPaidByOthers' ||
+        selectedSplitType === 'fullyOwedPaidByOthers';
 
       await apiRequest({
         method: 'post',
@@ -153,9 +166,8 @@ export default function AddNewExpense() {
           participantIds: selectedFriendIds,
           notes: notes.trim(),
           currency: 'INR',
-          // NOTE: `category` is not part of the original payload shape.
-          // Keep it only if your backend Expense schema accepts it,
-          // otherwise strip this line before shipping.
+          splitType: selectedSplitType,
+          paidBy: isPaidByOther ? friendId : undefined,
           category: category || undefined,
         },
       });
@@ -167,6 +179,7 @@ export default function AddNewExpense() {
       setNotes('');
       setCategory('');
       setSelectedFriendIds([]);
+      setSelectedSplitType('equalPaidByYou');
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
     } finally {
@@ -187,13 +200,12 @@ export default function AddNewExpense() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.balanceCard}>
           <View style={styles.balanceIconWrap}>
-            <Icon name="Wallet" size={22} color="#148a46" />
+            <Icon name="Flame" size={24} color="#000000" />
           </View>
           <View style={styles.balanceCopy}>
-            <Text style={styles.balanceLabel}>Available Balance</Text>
-            <Text style={styles.balanceValue}>₹ 12,450.00</Text>
+            <Text style={styles.balanceLabel}>Let's GekkoSplit!</Text>
+            <Text style={styles.balanceValue}>Keep the calculations clean & the friendships closer! 🌿</Text>
           </View>
-          <Image source={WALLET_ILLUSTRATION} style={styles.balanceImage} resizeMode="contain" />
         </View>
 
         {groupId ? (
@@ -289,6 +301,47 @@ export default function AddNewExpense() {
               placeholderTextColor="#9ca3af"
               multiline
             />
+          </View>
+        </View>
+        {/* Split Option Selection */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Split Option</Text>
+          <View style={styles.splitTypeGrid}>
+            <Pressable
+              style={[styles.splitTypeBtn, selectedSplitType === 'equalPaidByYou' && styles.splitTypeBtnActive]}
+              onPress={() => setSelectedSplitType('equalPaidByYou')}
+            >
+              <Text style={[styles.splitTypeBtnText, selectedSplitType === 'equalPaidByYou' && styles.splitTypeBtnTextActive]}>
+                Paid by you, split equally
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.splitTypeBtn, selectedSplitType === 'equalPaidByOthers' && styles.splitTypeBtnActive]}
+              onPress={() => setSelectedSplitType('equalPaidByOthers')}
+            >
+              <Text style={[styles.splitTypeBtnText, selectedSplitType === 'equalPaidByOthers' && styles.splitTypeBtnTextActive]}>
+                Paid by other, split equally
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.splitTypeBtn, selectedSplitType === 'fullyOwedPaidByOthers' && styles.splitTypeBtnActive]}
+              onPress={() => setSelectedSplitType('fullyOwedPaidByOthers')}
+            >
+              <Text style={[styles.splitTypeBtnText, selectedSplitType === 'fullyOwedPaidByOthers' && styles.splitTypeBtnTextActive]}>
+                You owe the amount
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.splitTypeBtn, selectedSplitType === 'fullyOwedPaidByYou' && styles.splitTypeBtnActive]}
+              onPress={() => setSelectedSplitType('fullyOwedPaidByYou')}
+            >
+              <Text style={[styles.splitTypeBtnText, selectedSplitType === 'fullyOwedPaidByYou' && styles.splitTypeBtnTextActive]}>
+                He owes the amount
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -658,6 +711,35 @@ const styles = StyleSheet.create({
   modalDoneText: {
     color: '#000000',
     fontSize: 15,
+    fontWeight: '900',
+  },
+  splitTypeGrid: {
+    gap: 8,
+    marginTop: 4,
+  },
+  splitTypeBtn: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  splitTypeBtnActive: {
+    backgroundColor: '#00FF66',
+  },
+  splitTypeBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  splitTypeBtnTextActive: {
     fontWeight: '900',
   },
 });

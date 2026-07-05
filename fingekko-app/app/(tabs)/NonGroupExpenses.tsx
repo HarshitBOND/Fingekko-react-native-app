@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -21,40 +21,62 @@ type BackendExpenseItem = {
   description: string;
   amount: number;
   netBalance: number;
-  participants: { userId: { name: string } }[];
+  participants: {
+    userId: {
+      id: string;
+      name: string;
+      email: string;
+    };
+    amount: number;
+    settled: boolean;
+  }[];
+  createdBy: {
+    id: string;
+    name: string;
+    email: string;
+  };
   category?: string;
 };
 
 export default function NonGroupExpenses() {
   const router = useRouter();
   const { getToken } = useAuth();
+  const { user } = useUser();
+  const currentUserId = user?.id || '';
+
+  const [activeTab, setActiveTab] = useState<'expenses' | 'friends'>('expenses');
   const [expenses, setExpenses] = useState<BackendExpenseItem[]>([]);
+  const [friends, setFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchExpenses = async () => {
+  const fetchExpensesAndFriends = async () => {
     setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
       
+      // Fetch expenses
       const response = await apiRequest<{ expenses: BackendExpenseItem[] }>({
         method: 'get',
         url: '/api/expenses',
         token,
       });
-      
       // Filter out expenses that are part of a group
       const nonGroup = (response?.expenses || []).filter((e) => !e.groupId);
       setExpenses(nonGroup);
+
+      // Fetch friends
+      const friendsRes = await apiRequest<any>('/api/friends', {}, token);
+      setFriends(friendsRes?.friends || []);
     } catch (error) {
-      console.error('Error fetching non-group expenses:', error);
+      console.error('Error fetching non-group splits data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchExpenses();
+    fetchExpensesAndFriends();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -68,6 +90,29 @@ export default function NonGroupExpenses() {
     if (balance > 0) return 'You are owed';
     if (balance < 0) return 'You owe';
     return 'You are settled up';
+  };
+
+  const getFriendBalance = (friendUserId: string) => {
+    let balance = 0;
+    expenses.forEach((exp) => {
+      const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
+      if (creatorId === currentUserId) {
+        const friendPart = exp.participants?.find(
+          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === friendUserId
+        );
+        if (friendPart && !friendPart.settled) {
+          balance += friendPart.amount;
+        }
+      } else if (creatorId === friendUserId) {
+        const userPart = exp.participants?.find(
+          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === currentUserId
+        );
+        if (userPart && !userPart.settled) {
+          balance -= userPart.amount;
+        }
+      }
+    });
+    return balance;
   };
 
   return (
@@ -109,11 +154,73 @@ export default function NonGroupExpenses() {
           </View>
         </View>
 
+        {/* Tab Container */}
+        <View style={styles.tabContainer}>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'expenses' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('expenses')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'expenses' && styles.tabButtonTextActive]}>
+              Expenses
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('friends')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}>
+              Friends Summary
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.card}>
           {loading ? (
             <View style={{ padding: 24, alignItems: 'center' }}>
               <ActivityIndicator color="#148a46" />
             </View>
+          ) : activeTab === 'friends' ? (
+            friends.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: '#6b7280', fontWeight: '700' }}>No friends added yet.</Text>
+              </View>
+            ) : (
+              friends.map((item, index) => {
+                const friendUser = item.friend;
+                const friendUserId = friendUser?.id || friendUser?.toString() || '';
+                const friendName = friendUser?.name || friendUser?.email || 'Friend';
+                const balance = getFriendBalance(friendUserId);
+
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.groupRow, index !== friends.length - 1 && styles.divider]}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(tabs)/FriendSplits',
+                        params: { friendId: friendUserId, friendName: friendName },
+                      })
+                    }
+                  >
+                    <View style={styles.groupIconWrap}>
+                      <Text style={styles.groupIconEmoji}>👤</Text>
+                    </View>
+                    <View style={styles.groupTextWrap}>
+                      <Text style={styles.groupName}>{friendName}</Text>
+                      <Text style={styles.groupMembers}>{friendUser?.email || ''}</Text>
+                    </View>
+                    <View style={styles.groupRight}>
+                      <Text style={styles.groupStatusLabel}>{getAmountLabel(balance)}</Text>
+                      <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>
+                        ₹{Math.abs(balance).toFixed(2)}
+                      </Text>
+                    </View>
+                    <Icon name="ChevronRight" size={16} color="#9ca3af" style={styles.groupChevron} />
+                  </Pressable>
+                );
+              })
+            )
           ) : expenses.length === 0 ? (
             <View style={{ padding: 24, alignItems: 'center' }}>
               <Text style={{ fontSize: 14, color: '#6b7280', fontWeight: '700' }}>You have no non-group expenses.</Text>
@@ -164,6 +271,14 @@ export default function NonGroupExpenses() {
           </ImageBackground>
         </View>
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <Pressable
+        style={styles.fab}
+        onPress={() => router.push('/(tabs)/AddNewExpense')}
+      >
+        <Icon name="Plus" size={24} color="#000000" />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -332,5 +447,50 @@ const styles = StyleSheet.create({
     color: '#000000',
     letterSpacing: -0.3,
     lineHeight: 28,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#00FF66',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    elevation: 5,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  tabButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  tabButtonActive: {
+    backgroundColor: '#00FF66',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  tabButtonTextActive: {
+    fontWeight: '900',
   },
 });

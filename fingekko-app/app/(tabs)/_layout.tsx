@@ -158,6 +158,20 @@ export default function TabLayout() {
         }}
       />
 
+      <Tabs.Screen
+        name="Notifications"     // matches app/(tabs)/Notifications.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="FriendSplits"     // matches app/(tabs)/FriendSplits.tsx
+        options={{
+          href: null,
+        }}
+      />
+
     </Tabs>
   );
 }

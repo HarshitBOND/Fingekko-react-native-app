@@ -1,0 +1,353 @@
+import { useAuth, useUser } from '@clerk/clerk-expo';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiRequest } from '../../utils/api';
+import Icon from '../../components/ui/Icon';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+
+type NotificationItem = {
+  id: string;
+  type: 'friend_request' | 'expense_split';
+  title: string;
+  subtitle: string;
+  dateLabel: string;
+  rawData: any;
+};
+
+export default function NotificationsScreen() {
+  const router = useRouter();
+  const { getToken } = useAuth();
+  const { user: clerkUser } = useUser();
+  const currentUserId = clerkUser?.id || '';
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  const fetchAllNotifications = async () => {
+    setLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // 1. Fetch friend requests
+      const friendsRes = await apiRequest<any>('/api/friends', {}, token);
+      const incomingRequests = friendsRes?.incomingRequests || [];
+
+      // 2. Fetch expenses
+      const expensesRes = await apiRequest<any>('/api/expenses', {}, token);
+      const expensesList = expensesRes?.expenses || [];
+
+      const list: NotificationItem[] = [];
+
+      // Map incoming requests
+      incomingRequests.forEach((req: any) => {
+        list.push({
+          id: req.id,
+          type: 'friend_request',
+          title: 'Friend Request Received',
+          subtitle: `${req.senderId?.name || req.senderId?.email || 'Someone'} sent you a friend request.`,
+          dateLabel: 'Pending',
+          rawData: req,
+        });
+      });
+
+      // Map expenses where user is a participant (excluding user's own created expenses)
+      expensesList.forEach((exp: any) => {
+        const creator = exp.createdBy;
+        const creatorId = creator?.id || creator?.toString() || '';
+        
+        // If user is not the creator, and user is a participant
+        if (creatorId !== currentUserId) {
+          const userParticipant = exp.participants?.find(
+            (p: any) => (p.userId?.id || p.userId?.toString()) === currentUserId
+          );
+          
+          if (userParticipant && !userParticipant.settled) {
+            list.push({
+              id: exp.id,
+              type: 'expense_split',
+              title: `${creator?.name || 'A friend'} added a split`,
+              subtitle: `Owe ₹${userParticipant.amount.toFixed(2)} for "${exp.description}"`,
+              dateLabel: exp.expenseDate ? new Date(exp.expenseDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Recent',
+              rawData: exp,
+            });
+          }
+        }
+      });
+
+      setNotifications(list);
+
+      // Save count to AsyncStorage to clear home badge count
+      await AsyncStorage.setItem('last_notification_count', String(list.length));
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllNotifications();
+  }, []);
+
+  const handleAcceptFriend = async (requestId: string) => {
+    setActionLoading(prev => ({ ...prev, [requestId]: true }));
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      await apiRequest({
+        method: 'put',
+        url: `/api/friends/${requestId}/accept`,
+        token,
+      });
+
+      Alert.alert('Success', 'Friend request accepted.');
+      fetchAllNotifications();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not accept friend request.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  const handleDeclineFriend = async (requestId: string) => {
+    setActionLoading(prev => ({ ...prev, [requestId]: true }));
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      await apiRequest({
+        method: 'put',
+        url: `/api/friends/${requestId}/decline`,
+        token,
+      });
+
+      Alert.alert('Declined', 'Friend request declined.');
+      fetchAllNotifications();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not decline friend request.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.page} edges={['top']}>
+      <View style={styles.header}>
+        <Pressable style={styles.headerButton} onPress={() => router.back()}>
+          <Icon name="ChevronLeft" size={20} color="#000000" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <Pressable style={styles.headerButton} onPress={fetchAllNotifications}>
+          <Icon name="RefreshCw" size={18} color="#000000" />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#148a46" />
+          </View>
+        ) : notifications.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+              <Icon name="BellOff" size={32} color="#000000" />
+            </View>
+            <Text style={styles.emptyTitle}>All caught up!</Text>
+            <Text style={styles.emptyText}>No new notifications or pending splits.</Text>
+          </View>
+        ) : (
+          notifications.map((item) => {
+            const isFriendReq = item.type === 'friend_request';
+            
+            return (
+              <Card key={item.id} variant="tactile" style={styles.notiCard}>
+                <View style={styles.notiHeader}>
+                  <View style={[styles.iconWrap, { backgroundColor: isFriendReq ? '#C3FFD8' : '#FFF2C2' }]}>
+                    <Icon name={isFriendReq ? 'UserPlus' : 'DollarSign'} size={18} color="#000000" />
+                  </View>
+                  <View style={styles.notiBody}>
+                    <Text style={styles.notiTitle}>{item.title}</Text>
+                    <Text style={styles.notiSubtitle}>{item.subtitle}</Text>
+                  </View>
+                  <Text style={styles.notiDate}>{item.dateLabel}</Text>
+                </View>
+
+                {isFriendReq && (
+                  <View style={styles.actionRow}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      style={styles.actionBtn}
+                      onPress={() => handleAcceptFriend(item.id)}
+                      disabled={actionLoading[item.id]}
+                    >
+                      {actionLoading[item.id] ? <ActivityIndicator size="small" color="#000" /> : 'Accept'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      style={styles.actionBtn}
+                      onPress={() => handleDeclineFriend(item.id)}
+                      disabled={actionLoading[item.id]}
+                    >
+                      Decline
+                    </Button>
+                  </View>
+                )}
+
+                {item.type === 'expense_split' && (
+                  <View style={styles.actionRow}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={styles.actionBtn}
+                      onPress={() => {
+                        const groupId = item.rawData.groupId;
+                        if (groupId) {
+                          router.push({
+                            pathname: '/(tabs)/group/[groupId]',
+                            params: { groupId },
+                          });
+                        } else {
+                          router.push('/(tabs)/NonGroupExpenses');
+                        }
+                      }}
+                    >
+                      View details
+                    </Button>
+                  </View>
+                )}
+              </Card>
+            );
+          })
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    backgroundColor: '#FFF8E7',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#000000',
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 14,
+  },
+  notiCard: {
+    marginBottom: 4,
+  },
+  notiHeader: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notiBody: {
+    flex: 1,
+    gap: 2,
+  },
+  notiTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  notiSubtitle: {
+    fontSize: 12,
+    color: '#333333',
+    fontWeight: '600',
+  },
+  notiDate: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '800',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  actionBtn: {
+    flex: 1,
+    height: 38,
+  },
+  centerContainer: {
+    paddingVertical: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    gap: 12,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000000',
+    marginTop: 4,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});

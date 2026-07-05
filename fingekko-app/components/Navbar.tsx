@@ -1,9 +1,59 @@
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useAuth } from '@clerk/clerk-expo';
 import Icon from './ui/Icon';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { apiRequest } from '../utils/api';
+import { useState, useEffect } from 'react';
+import { router } from 'expo-router';
 
 export default function Navbar() {
   const { user } = useUser();
+  const { getToken } = useAuth();
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  const fetchBadgeCount = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // 1. Fetch friend requests
+      const friendsRes = await apiRequest<any>('/api/friends', {}, token);
+      const incomingRequestsCount = friendsRes?.incomingRequests?.length || 0;
+
+      // 2. Fetch expenses
+      const expensesRes = await apiRequest<any>('/api/expenses', {}, token);
+      const expensesList = expensesRes?.expenses || [];
+      const currentUserId = user?.id || '';
+
+      let expenseNotificationCount = 0;
+      expensesList.forEach((exp: any) => {
+        const creator = exp.createdBy;
+        const creatorId = creator?.id || creator?.toString() || '';
+        
+        if (creatorId !== currentUserId) {
+          const userParticipant = exp.participants?.find(
+            (p: any) => (p.userId?.id || p.userId?.toString()) === currentUserId
+          );
+          if (userParticipant && !userParticipant.settled) {
+            expenseNotificationCount++;
+          }
+        }
+      });
+
+      setBadgeCount(incomingRequestsCount + expenseNotificationCount);
+    } catch (error) {
+      console.warn('Failed to fetch badge count:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchBadgeCount();
+      // Poll every 10 seconds for real-time notification badge updates
+      const interval = setInterval(fetchBadgeCount, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
   const initials = (() => {
     if (!user) {
       return 'FG';
@@ -36,7 +86,17 @@ export default function Navbar() {
       </View>
 
       <View style={styles.headerActions}>
-        <Icon name="Bell" size={22} color="#374151" />
+        <Pressable
+          style={styles.bellPressable}
+          onPress={() => router.push('/(tabs)/Notifications')}
+        >
+          <Icon name="Bell" size={22} color="#374151" />
+          {badgeCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{badgeCount}</Text>
+            </View>
+          )}
+        </Pressable>
 
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
@@ -112,5 +172,28 @@ const styles = StyleSheet.create({
   avatarText: {
     fontWeight: '700',
     color: '#4b5563',
+  },
+  bellPressable: {
+    position: 'relative',
+    padding: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
   },
 });
