@@ -2,10 +2,42 @@ import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import communityExpenseRepository from '../repositories/communityExpenseRepository.js';
 import { createCommunityExpense, updateCommunityExpense } from '../services/communityExpenseService.js';
+import User from '../models/User.js';
+import mongoose from 'mongoose';
 
 const router = Router();
 
 router.use(authMiddleware);
+
+async function resolveIds(paidBy: string, participantIds: { userId: string; amount: number }[], currentUserId: string) {
+  const clerkIdsToResolve = new Set<string>();
+  if (paidBy) clerkIdsToResolve.add(paidBy);
+  participantIds.forEach((p: any) => {
+    if (p.userId) clerkIdsToResolve.add(p.userId);
+  });
+
+  const resolvedUsers = await User.find({
+    $or: [
+      { clerkId: { $in: Array.from(clerkIdsToResolve) } },
+      { _id: { $in: Array.from(clerkIdsToResolve).filter(id => mongoose.Types.ObjectId.isValid(id)) } }
+    ]
+  });
+
+  const userMap = new Map<string, string>(); // maps clerkId or _id to _id
+  resolvedUsers.forEach((u: any) => {
+    userMap.set(u.clerkId, u._id.toString());
+    userMap.set(u._id.toString(), u._id.toString());
+  });
+
+  const resolvedPaidBy = (paidBy && userMap.get(paidBy)) || currentUserId;
+
+  const resolvedParticipants = participantIds.map((p: any) => ({
+    userId: userMap.get(p.userId) || p.userId,
+    amount: p.amount
+  })).filter((p: any) => mongoose.Types.ObjectId.isValid(p.userId));
+
+  return { resolvedPaidBy, resolvedParticipants };
+}
 
 function getCurrentUserId(req: Request) {
   const user = req.user as any;
@@ -149,15 +181,21 @@ router.post('/', async (req: Request, res: Response) => {
       splitType = "equalPaidByYou";
     }
 
+    const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
+      String(req.body?.paidBy ?? ''),
+      participantIds,
+      currentUserId
+    );
+
     const expense = await createCommunityExpense(currentUserId, {
       description: String(req.body?.description ?? ''),
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
       splitType: splitType,
-      participantIds,
+      participantIds: resolvedParticipants,
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
-      paidBy: String(req.body?.paidBy ?? currentUserId),
+      paidBy: resolvedPaidBy,
       groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
     });
 
@@ -205,15 +243,21 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
       splitType = "equalPaidByYou";
     }
 
+    const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
+      String(req.body?.paidBy ?? ''),
+      participantIds,
+      currentUserId
+    );
+
     const updated = await updateCommunityExpense(currentUserId, String(req.params.expenseId), {
       description: String(req.body?.description ?? ''),
       amount: Number(req.body?.amount ?? 0),
       expenseDate: String(req.body?.expenseDate ?? ''),
       splitType: splitType,
-      participantIds,
+      participantIds: resolvedParticipants,
       notes: String(req.body?.notes ?? ''),
       currency: String(req.body?.currency ?? 'INR'),
-      paidBy: String(req.body?.paidBy ?? currentUserId),
+      paidBy: resolvedPaidBy,
     });
 
     return res.json({ expense: serializeExpense(updated) });

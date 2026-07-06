@@ -35,7 +35,7 @@ type QuickAction = {
     title: string;
     subtitle: string;
     icon: string;
-    href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses';
+    href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses' | '/(tabs)/insights';
 };
 
 const GROUPS: GroupItem[] = [
@@ -80,11 +80,11 @@ const QUICK_ACTIONS: QuickAction[] = [
         href: '/(tabs)/group/AddNewGroup',
     },
     {
-        id: 'your-groups',
-        title: 'Your Groups',
-        subtitle: 'Open the groups screen',
-        icon: 'Users',
-        href: '/(tabs)/YourGroups',
+        id: 'view-insights',
+        title: 'View Full Insights',
+        subtitle: 'Check spending patterns',
+        icon: 'TrendingUp',
+        href: '/(tabs)/insights',
     },
 ];
 
@@ -253,6 +253,15 @@ export default function YourGroups() {
                         ))
                     )}
                 </View>
+
+                <Pressable
+                    style={styles.insightsButton}
+                    onPress={() => router.push('/(tabs)/insights')}
+                >
+                    <Icon name="TrendingUp" size={20} color="#000000" />
+                    <Text style={styles.insightsButtonText}>View Full Insights</Text>
+                    <Icon name="ChevronRight" size={18} color="#000000" />
+                </Pressable>
 
                 <View style={styles.quickActionsGrid}>
                     {QUICK_ACTIONS.map((action) => {
@@ -518,5 +527,29 @@ const styles = StyleSheet.create({
         color: '#000000',
         letterSpacing: -0.3,
         lineHeight: 28,
+    },
+    insightsButton: {
+        backgroundColor: '#FFE999',
+        borderRadius: 8,
+        borderWidth: 3,
+        borderColor: '#000000',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#000000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 3,
+        marginTop: 8,
+    },
+    insightsButtonText: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#000000',
+        flex: 1,
+        marginLeft: 10,
     },
 });

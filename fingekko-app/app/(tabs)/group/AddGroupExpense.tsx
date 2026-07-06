@@ -3,7 +3,7 @@ import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Icon from '../../../components/ui/Icon';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,48 +15,41 @@ import {
   Text,
   TextInput,
   View,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// NOTE: swap this out for the real illustration when you have it.
-// Suggested path: assets/wallet.png
 const WALLET_ILLUSTRATION = require('../../../assets/images/bgadd.png');
 
 const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Other'];
 
-// ---- shared "person" shape so friends & group members render the same way ----
 type Person = {
   id: string;
   name: string;
   email: string;
+  dbId?: string;
 };
 
-// Shape expected from GET /api/groups/:groupId
-// NOTE: today groupRoute.ts only returns `members: string[]` (raw ids).
-// This type assumes the backend is extended to populate + serialize
-// members as { id, name, email }[]. Until that ships, `name`/`email`
-// will be missing and the UI falls back to showing the id.
 type GroupDetailsResponse = {
   id: string;
   name: string;
-  members: Partial<Person>[];
+  members: (Partial<Person> & { dbId?: string })[];
 };
 
 export default function AddNewExpense() {
-  const { getToken, isSignedIn } = useAuth();
+  const { userId, getToken, isSignedIn } = useAuth();
   const router = useRouter();
   const { groupId: groupIdParam } = useLocalSearchParams<{ groupId?: string | string[] }>();
   const groupId = Array.isArray(groupIdParam) ? groupIdParam[0] : groupIdParam;
   const isGroupMode = Boolean(groupId);
 
-  // ---- form state (unchanged field names -> unchanged API payload) ----
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>('');
 
-  // friends (used when NOT in group mode)
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
     incomingRequests: [],
@@ -64,13 +57,13 @@ export default function AddNewExpense() {
   });
   const [loadingFriends, setLoadingFriends] = useState(false);
 
-  // group (used when in group mode)
   const [group, setGroup] = useState<GroupDetailsResponse | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(false);
 
-  // renamed from selectedFriendIds -> selectedUserIds (scales to both friends & group members)
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [customShares, setCustomShares] = useState<Record<string, string>>({});
+  const [customOwesMe, setCustomOwesMe] = useState<Record<string, string>>({});
+  const [customIOwe, setCustomIOwe] = useState<Record<string, string>>({});
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -78,7 +71,17 @@ export default function AddNewExpense() {
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [selectedSplit, setSelectedSplit] = useState<'equal' | 'custom'>('equal');
 
-  const [splitMethod, setSplitMethod]= useState<boolean>(false);
+  const { width: SCREEN_WIDTH } = Dimensions.get('window');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const handleSplitMethodChange = (method: 'equal' | 'custom') => {
+    setSelectedSplit(method);
+    Animated.timing(slideAnim, {
+      toValue: method === 'custom' ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const getTokenRef = useRef(getToken);
 
@@ -86,7 +89,6 @@ export default function AddNewExpense() {
     getTokenRef.current = getToken;
   }, [getToken]);
 
-  // ---- load friends (only relevant outside group mode) ----
   useEffect(() => {
     if (isGroupMode) return;
     let active = true;
@@ -123,7 +125,6 @@ export default function AddNewExpense() {
     };
   }, [isSignedIn, isGroupMode]);
 
-  // ---- load group + auto-select all members (only relevant in group mode) ----
   useEffect(() => {
     if (!isGroupMode || !groupId) return;
     let active = true;
@@ -141,12 +142,7 @@ export default function AddNewExpense() {
 
         if (active) {
           setGroup(response);
-          // auto-select every group member by default
-          setSelectedUserIds(
-            response.members.map((m: any) =>
-              typeof m === 'string' ? m : String(m.id)
-            )
-          );
+          setSelectedUserIds([]);
         }
       } catch (fetchError) {
         if (active) {
@@ -166,7 +162,6 @@ export default function AddNewExpense() {
     };
   }, [isSignedIn, isGroupMode, groupId]);
 
-  // ---- unified people source ----
   const peopleList: Person[] = useMemo(() => {
     if (isGroupMode) {
       return (group?.members ?? []).map((m: any) => {
@@ -182,6 +177,7 @@ export default function AddNewExpense() {
           id: String(m.id),
           name: m.name ?? String(m.id),
           email: m.email ?? '',
+          dbId: m.dbId,
         };
       });
     }
@@ -192,6 +188,12 @@ export default function AddNewExpense() {
       email: f.friend.email,
     }));
   }, [isGroupMode, group, friends.friends]);
+
+  const filteredPeopleList = useMemo(() => {
+    return peopleList
+      .filter(p => p.id !== userId)
+      .filter(p => p.name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
+  }, [peopleList, memberSearchQuery, userId]);
 
   const loadingPeople = isGroupMode ? loadingGroup : loadingFriends;
 
@@ -231,7 +233,7 @@ export default function AddNewExpense() {
     }
 
     if (selectedSplit === 'custom') {
-      const sum = selectedUserIds.reduce((acc, id) => acc + Number(customShares[id] || 0), 0);
+      const sum = peopleList.reduce((acc, p) => acc + (Number(customOwesMe[p.id] || 0) - Number(customIOwe[p.id] || 0)), 0);
       if (Math.abs(sum - amountValue) > 0.01) {
         setError(`Custom split shares must sum up to the total amount (₹${amountValue}). Currently: ₹${sum.toFixed(2)}`);
         return;
@@ -248,9 +250,9 @@ export default function AddNewExpense() {
       }
 
       const finalParticipantIds = selectedSplit === 'custom'
-        ? selectedUserIds.map((userId) => ({
-            userId,
-            amount: Number(customShares[userId] || 0),
+        ? peopleList.map((p) => ({
+            userId: p.id,
+            amount: Number(customOwesMe[p.id] || 0) - Number(customIOwe[p.id] || 0),
           }))
         : selectedUserIds;
 
@@ -277,8 +279,8 @@ export default function AddNewExpense() {
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
       setCategory('');
-      setCustomShares({});
-      // group mode: reset back to "everyone selected"; friend mode: clear
+      setCustomOwesMe({});
+      setCustomIOwe({});
       setSelectedUserIds(isGroupMode ? peopleList.map((p) => p.id) : []);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
@@ -297,7 +299,8 @@ export default function AddNewExpense() {
         <View style={styles.headerButton} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+      {/* Top Wallet Card & Switcher */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
         <View style={styles.balanceCard}>
           <View style={styles.balanceIconWrap}>
             <Icon name="Wallet" size={22} color="#148a46" />
@@ -309,83 +312,20 @@ export default function AddNewExpense() {
           <Image source={WALLET_ILLUSTRATION} style={styles.balanceImage} resizeMode="contain" />
         </View>
 
-        {isGroupMode ? (
+        {isGroupMode && (
           <Text style={styles.groupHint}> {group?.name ?? 'Your Squad'}</Text>
-        ) : null}
+        )}
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Amount</Text>
-          <View style={styles.inputWrap}>
-            <View style={styles.iconBubble}>
-              <Text style={styles.prefix}>₹</Text>
-            </View>
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              style={styles.fieldInput}
-              placeholder="Enter amount"
-              placeholderTextColor="#9ca3af"
-              keyboardType="decimal-pad"
-            />
-          </View>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Description</Text>
-          <View style={styles.inputWrap}>
-            <View style={styles.iconBubble}>
-              <Icon name="StickyNote" size={18} color="#148a46" />
-            </View>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              style={styles.fieldInput}
-              placeholder="Dinner, cab, groceries"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Split With</Text>
-          <Pressable style={styles.inputWrap} onPress={() => setPeoplePickerOpen(true)}>
-            <View style={styles.iconBubble}>
-              <Icon name="Users" size={18} color="#148a46" />
-            </View>
-            <Text style={[styles.fieldInput, selectedPeople.length === 0 && styles.placeholderText]}>
-              {peopleSummaryLabel}
-            </Text>
-            <Icon name="ChevronDown" size={18} color="#9ca3af" />
-          </Pressable>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-          <View style={[styles.inputWrap, styles.textAreaWrap]}>
-            <View style={styles.iconBubble}>
-              <Icon name="StickyNote" size={18} color="#148a46" />
-            </View>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              style={[styles.fieldInput, styles.textArea]}
-              placeholder="Add a note"
-              placeholderTextColor="#9ca3af"
-              multiline
-            />
-          </View>
-        </View>
-
+        {/* Split Method Switcher on Top */}
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Split Method</Text>
-
           <View style={styles.splitContainer}>
             <Pressable
               style={[
                 styles.splitButton,
                 selectedSplit === 'equal' && styles.splitButtonActive,
               ]}
-              onPress={() => setSelectedSplit('equal')}
+              onPress={() => handleSplitMethodChange('equal')}
             >
               <Text
                 style={[
@@ -402,7 +342,7 @@ export default function AddNewExpense() {
                 styles.splitButton,
                 selectedSplit === 'custom' && styles.splitButtonActive,
               ]}
-              onPress={() => setSplitMethod(true)}
+              onPress={() => handleSplitMethodChange('custom')}
             >
               <Text
                 style={[
@@ -415,22 +355,202 @@ export default function AddNewExpense() {
             </Pressable>
           </View>
         </View>
+      </View>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {/* Animated Sliding Container */}
+      <Animated.View
+        style={{
+          flex: 1,
+          flexDirection: 'row',
+          width: SCREEN_WIDTH * 2,
+          transform: [
+            {
+              translateX: slideAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -SCREEN_WIDTH],
+              }),
+            },
+          ],
+        }}
+      >
+        {/* Screen 1: Equal Split Fields */}
+        <View style={{ width: SCREEN_WIDTH }}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.container, { paddingTop: 12 }]}
+          >
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Amount</Text>
+              <View style={styles.inputWrap}>
+                <View style={styles.iconBubble}>
+                  <Text style={styles.prefix}>₹</Text>
+                </View>
+                <TextInput
+                  value={amount}
+                  onChangeText={setAmount}
+                  style={styles.fieldInput}
+                  placeholder="Enter amount"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
 
-        <Pressable style={styles.primaryButton} onPress={handleSave} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <>
-              <Text style={styles.primaryButtonText}>Add Expense</Text>
-              <Icon name="ChevronRight" size={18} color="#ffffff" />
-            </>
-          )}
-        </Pressable>
-      </ScrollView>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Description</Text>
+              <View style={styles.inputWrap}>
+                <View style={styles.iconBubble}>
+                  <Icon name="StickyNote" size={18} color="#148a46" />
+                </View>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  style={styles.fieldInput}
+                  placeholder="Dinner, cab, groceries"
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+            </View>
 
-      {/* People (friends OR group members) multi-select modal */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Split With</Text>
+              <Pressable style={styles.inputWrap} onPress={() => setPeoplePickerOpen(true)}>
+                <View style={styles.iconBubble}>
+                  <Icon name="Users" size={18} color="#148a46" />
+                </View>
+                <Text style={[styles.fieldInput, selectedPeople.length === 0 && styles.placeholderText]}>
+                  {peopleSummaryLabel}
+                </Text>
+                <Icon name="ChevronDown" size={18} color="#9ca3af" />
+              </Pressable>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Notes (Optional)</Text>
+              <View style={[styles.inputWrap, styles.textAreaWrap]}>
+                <View style={styles.iconBubble}>
+                  <Icon name="StickyNote" size={18} color="#148a46" />
+                </View>
+                <TextInput
+                  value={notes}
+                  onChangeText={setNotes}
+                  style={[styles.fieldInput, styles.textArea]}
+                  placeholder="Add a note"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                />
+              </View>
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <Pressable style={styles.primaryButton} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>Add Expense</Text>
+                  <Icon name="ChevronRight" size={18} color="#000000" />
+                </>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
+
+        {/* Screen 2: Custom Split Fields */}
+        <View style={{ width: SCREEN_WIDTH }}>
+          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12 }}>
+            {/* Search Input */}
+            <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+              <Icon name="Search" size={18} color="#000000" />
+              <TextInput
+                value={memberSearchQuery}
+                onChangeText={setMemberSearchQuery}
+                style={styles.fieldInput}
+                placeholder="Search group members..."
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            {/* List of members with green/red inputs */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 16 }}
+            >
+              {filteredPeopleList.length === 0 ? (
+                <View style={styles.emptyFriendsBox}>
+                  <Text style={styles.helperText}>No members match your search.</Text>
+                </View>
+              ) : (
+                filteredPeopleList.map((person) => {
+                  return (
+                    <View key={person.id} style={styles.customSplitRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.friendName}>{person.name}</Text>
+                        <Text style={styles.friendEmail}>{person.email || 'Group member'}</Text>
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {/* They Owe Me Input (Green text) */}
+                        <View style={{ width: 85 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '900', color: '#1FA855', marginBottom: 2 }}>They Owe Me</Text>
+                          <TextInput
+                            style={styles.customSplitInputGreen}
+                            placeholder="₹0"
+                            placeholderTextColor="#a7f3d0"
+                            keyboardType="decimal-pad"
+                            value={customOwesMe[person.id] || ''}
+                            onChangeText={(text) => {
+                              setCustomOwesMe((prev) => ({
+                                ...prev,
+                                [person.id]: text,
+                              }));
+                            }}
+                          />
+                        </View>
+
+                        {/* I Owe Them Input (Red text) */}
+                        <View style={{ width: 85 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '900', color: '#FF3366', marginBottom: 2 }}>I Owe Them</Text>
+                          <TextInput
+                            style={styles.customSplitInputRed}
+                            placeholder="₹0"
+                            placeholderTextColor="#fecdd3"
+                            keyboardType="decimal-pad"
+                            value={customIOwe[person.id] || ''}
+                            onChangeText={(text) => {
+                              setCustomIOwe((prev) => ({
+                                ...prev,
+                                [person.id]: text,
+                              }));
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <Pressable style={[styles.primaryButton, { marginBottom: 16 }]} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>Add Custom Split</Text>
+                  <Icon name="ChevronRight" size={18} color="#000000" />
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* People Picker Modal */}
       <Modal visible={peoplePickerOpen} animationType="slide" transparent onRequestClose={() => setPeoplePickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPeoplePickerOpen(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
@@ -517,84 +637,42 @@ export default function AddNewExpense() {
           </Pressable>
         </Pressable>
       </Modal>
-
-      {/* Custom Split Modal */}
-      <Modal visible={splitMethod} animationType="slide" transparent onRequestClose={() => setSplitMethod(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSplitMethod(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Custom Split</Text>
-
-            <ScrollView style={styles.modalList}>
-              {selectedPeople.map((person) => {
-                return (
-                  <View key={person.id} style={styles.friendRow}>
-                    <View style={styles.friendIdentity}>
-                      <Text style={styles.friendName}>{person.name}</Text>
-                      {person.email ? <Text style={styles.friendEmail}>{person.email}</Text> : null}
-                    </View>
-                    <TextInput
-                      style={[styles.fieldInput, { width: 80, textAlign: 'right' }]}
-                      placeholder="0.00"
-                      keyboardType="decimal-pad"
-                      value={customShares[person.id] || ''}
-                      onChangeText={(text) => {
-                        setCustomShares((prev) => ({
-                          ...prev,
-                          [person.id]: text,
-                        }));
-                      }}
-                    />
-                  </View>
-                );
-              })}
-            </ScrollView>
-
-            <Pressable style={styles.modalDoneButton} onPress={() => setSplitMethod(false)}>
-              <Text style={styles.modalDoneText}>Done</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   splitContainer: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-},
-
-splitButton: {
-  width: '48%',
-  height: 52,
-  borderRadius: 16,
-  borderWidth: 2,
-  borderColor: '#000000',
-  backgroundColor: '#fff',
-  alignItems: 'center',
-  justifyContent: 'center',
-  shadowColor: '#000000',
-  shadowOffset: { width: 3, height: 3 },
-  shadowOpacity: 1,
-  shadowRadius: 0,
-},
-
-splitButtonActive: {
-  backgroundColor: '#00FF66',
-  borderColor: '#000000',
-},
-
-splitButtonText: {
-  fontSize: 14,
-  fontWeight: '800',
-  color: '#000000',
-},
-
-splitButtonTextActive: {
-  color: '#000000',
-},
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  splitButton: {
+    width: '48%',
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#000000',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  splitButtonActive: {
+    backgroundColor: '#00FF66',
+  },
+  splitButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  splitButtonTextActive: {
+    color: '#000000',
+  },
   page: {
     flex: 1,
     backgroundColor: '#FFF8E7',
@@ -605,7 +683,7 @@ splitButtonTextActive: {
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: '#000000',
   },
   headerButton: {
@@ -630,20 +708,21 @@ splitButtonTextActive: {
     alignItems: 'center',
     gap: 14,
     padding: 16,
-    borderRadius: 18,
-    backgroundColor: '#eef6f0',
-    borderWidth: 2,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 5, height: 5 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    elevation: 3,
   },
   balanceIconWrap: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    backgroundColor: '#C3FFD8',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -685,29 +764,30 @@ splitButtonTextActive: {
     alignItems: 'center',
     gap: 10,
     minHeight: 52,
-    borderRadius: 16,
+    borderRadius: 8,
     paddingHorizontal: 14,
     backgroundColor: '#ffffff',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    elevation: 2,
   },
   iconBubble: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#f0f7f1',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#000000',
   },
   prefix: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#000000',
   },
   fieldInput: {
@@ -715,7 +795,7 @@ splitButtonTextActive: {
     fontSize: 15,
     color: '#111827',
     paddingVertical: 0,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   placeholderText: {
     color: '#9ca3af',
@@ -732,23 +812,24 @@ splitButtonTextActive: {
   errorText: {
     color: '#eb5a4f',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   primaryButton: {
     marginTop: 8,
     minHeight: 54,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#00FF66',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 5, height: 5 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    elevation: 3,
   },
   primaryButtonText: {
     color: '#000000',
@@ -758,31 +839,37 @@ splitButtonTextActive: {
   helperText: {
     flex: 1,
     fontSize: 13,
-    color: '#64748b',
+    color: '#000000',
+    fontWeight: '700',
   },
   emptyFriendsBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#f8fbf8',
-    borderWidth: 2,
+    borderRadius: 8,
+    backgroundColor: '#FFF3D4',
+    borderWidth: 3,
     borderColor: '#000000',
     marginVertical: 8,
   },
   friendRow: {
     minHeight: 54,
-    borderRadius: 16,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     backgroundColor: '#ffffff',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   friendIdentity: {
     gap: 2,
@@ -800,19 +887,56 @@ splitButtonTextActive: {
   categoryRow: {
     minHeight: 50,
     paddingHorizontal: 14,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#ffffff',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   categoryRowText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
     color: '#111827',
+  },
+  customSplitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#000000',
+  },
+  customSplitInputGreen: {
+    borderWidth: 2,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1FA855',
+    backgroundColor: '#E3F2E7',
+    textAlign: 'right',
+  },
+  customSplitInputRed: {
+    borderWidth: 2,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FF3366',
+    backgroundColor: '#FFE5EC',
+    textAlign: 'right',
   },
   modalBackdrop: {
     flex: 1,
@@ -827,6 +951,10 @@ splitButtonTextActive: {
     paddingTop: 12,
     paddingBottom: 24,
     maxHeight: '70%',
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+    borderColor: '#000000',
   },
   modalHandle: {
     alignSelf: 'center',
@@ -844,12 +972,12 @@ splitButtonTextActive: {
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#111827',
   },
   selectAllText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#148a46',
   },
   modalList: {
@@ -857,15 +985,22 @@ splitButtonTextActive: {
   },
   modalDoneButton: {
     minHeight: 50,
-    borderRadius: 14,
-    backgroundColor: '#148a46',
+    borderRadius: 8,
+    backgroundColor: '#00FF66',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+    borderWidth: 3,
+    borderColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   modalDoneText: {
-    color: '#ffffff',
+    color: '#000000',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 });
