@@ -65,6 +65,7 @@ router.get('/', async (req: Request, res: Response) => {
           title: 'Friend Request Received',
           subtitle: `${sender?.name || sender?.email || 'Someone'} sent you a friend request.`,
           dateLabel: 'Pending',
+          createdAt: reqFriend.createdAt || new Date(),
           rawData: {
             id: reqFriend._id.toString(),
             senderId: {
@@ -99,6 +100,7 @@ router.get('/', async (req: Request, res: Response) => {
                   month: 'short',
                 })
               : 'Recent',
+            createdAt: exp.createdAt || exp.expenseDate || new Date(),
             rawData: {
               id: exp._id.toString(),
               groupId: exp.groupId?._id?.toString() || exp.groupId?.toString() || null,
@@ -118,6 +120,9 @@ router.get('/', async (req: Request, res: Response) => {
         console.error('Error processing expense item for notification:', err);
       }
     });
+
+    // Sort by createdAt descending (newest first)
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return res.json({ notifications: list, count: list.length });
   } catch (error) {

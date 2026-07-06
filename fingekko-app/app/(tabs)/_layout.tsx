@@ -172,6 +172,36 @@ export default function TabLayout() {
         }}
       />
 
+      <Tabs.Screen
+        name="group/[groupId]"     // matches app/(tabs)/groupId.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="AddExpense"     // matches app/(tabs)/AddExpense.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="group/AddNewGroup"     // matches app/(tabs)/AddNewGroup.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="group/AddGroupExpense"     // matches app/(tabs)/AddGroupExpense.tsx
+        options={{
+          href: null,
+        }}
+      />
+
+
+
     </Tabs>
   );
 }

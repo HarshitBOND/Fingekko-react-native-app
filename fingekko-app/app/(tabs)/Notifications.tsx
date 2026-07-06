@@ -24,6 +24,7 @@ type NotificationItem = {
   title: string;
   subtitle: string;
   dateLabel: string;
+  createdAt?: string;
   rawData: any;
 };
 
@@ -52,8 +53,8 @@ export default function NotificationsScreen() {
       const list = response?.notifications || [];
       setNotifications(list);
 
-      // Save count to AsyncStorage to clear home badge count
-      await AsyncStorage.setItem('last_notification_count', String(list.length));
+      // Save current timestamp as last seen to clear home badge count
+      await AsyncStorage.setItem('last_seen_notifications_time', new Date().toISOString());
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -107,6 +108,55 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handleShowDeclineMenu = (requestId: string, senderName: string) => {
+    Alert.alert(
+      'Friend Request Options',
+      `Manage friend request from ${senderName}`,
+      [
+        {
+          text: 'Decline Request',
+          style: 'destructive',
+          onPress: () => handleDeclineFriend(requestId),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const groupNotifications = (list: NotificationItem[]) => {
+    const groups: Record<string, NotificationItem[]> = {
+      'Today': [],
+      'Yesterday': [],
+      'This Week': [],
+      'Earlier': [],
+    };
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+    const oneWeekAgoStart = todayStart - 7 * 24 * 60 * 60 * 1000;
+
+    list.forEach((item) => {
+      const itemTime = item.createdAt ? new Date(item.createdAt).getTime() : new Date().getTime();
+      if (itemTime >= todayStart) {
+        groups['Today'].push(item);
+      } else if (itemTime >= yesterdayStart) {
+        groups['Yesterday'].push(item);
+      } else if (itemTime >= oneWeekAgoStart) {
+        groups['This Week'].push(item);
+      } else {
+        groups['Earlier'].push(item);
+      }
+    });
+
+    return groups;
+  };
+
+  const groupedNotifications = groupNotifications(notifications);
+
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
       <View style={styles.header}>
@@ -133,68 +183,101 @@ export default function NotificationsScreen() {
             <Text style={styles.emptyText}>No new notifications or pending splits.</Text>
           </View>
         ) : (
-          notifications.map((item) => {
-            const isFriendReq = item.type === 'friend_request';
-            
+          Object.entries(groupedNotifications).map(([groupTitle, items]) => {
+            if (items.length === 0) return null;
             return (
-              <Card key={item.id} variant="tactile" style={styles.notiCard}>
-                <View style={styles.notiHeader}>
-                  <View style={[styles.iconWrap, { backgroundColor: isFriendReq ? '#C3FFD8' : '#FFF2C2' }]}>
-                    <Icon name={isFriendReq ? 'UserPlus' : 'DollarSign'} size={18} color="#000000" />
-                  </View>
-                  <View style={styles.notiBody}>
-                    <Text style={styles.notiTitle}>{item.title}</Text>
-                    <Text style={styles.notiSubtitle}>{item.subtitle}</Text>
-                  </View>
-                  <Text style={styles.notiDate}>{item.dateLabel}</Text>
+              <View key={groupTitle} style={styles.groupContainer}>
+                <Text style={styles.groupHeaderTitle}>{groupTitle}</Text>
+                <View style={styles.groupList}>
+                  {items.map((item) => {
+                    const isFriendReq = item.type === 'friend_request';
+                    
+                    if (isFriendReq) {
+                      return (
+                        <Card key={item.id} variant="tactile" style={styles.notiCard}>
+                          <View style={styles.friendReqRow}>
+                            <View style={[styles.iconWrap, { backgroundColor: '#C3FFD8' }]}>
+                              <Icon name="UserPlus" size={18} color="#000000" />
+                            </View>
+                            <View style={styles.friendReqBody}>
+                              <Text style={styles.friendReqText} numberOfLines={2}>
+                                <Text style={styles.boldText}>
+                                  {item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'}
+                                </Text>
+                                {' sent you a friend request.'}
+                              </Text>
+                            </View>
+                            <View style={styles.friendReqActions}>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                style={styles.confirmBtn}
+                                textStyle={styles.confirmBtnText}
+                                onPress={() => handleAcceptFriend(item.id)}
+                                disabled={actionLoading[item.id]}
+                              >
+                                {actionLoading[item.id] ? (
+                                  <ActivityIndicator size="small" color="#000000" />
+                                ) : (
+                                  'Confirm'
+                                )}
+                              </Button>
+                              <Pressable
+                                style={styles.threeDotBtn}
+                                onPress={() =>
+                                  handleShowDeclineMenu(
+                                    item.id,
+                                    item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'
+                                  )
+                                }
+                                hitSlop={10}
+                              >
+                                <Icon name="MoreVertical" size={18} color="#000000" />
+                              </Pressable>
+                            </View>
+                          </View>
+                        </Card>
+                      );
+                    }
+                    
+                    return (
+                      <Card key={item.id} variant="tactile" style={styles.notiCard}>
+                        <View style={styles.notiHeader}>
+                          <View style={[styles.iconWrap, { backgroundColor: '#FFF2C2' }]}>
+                            <Icon name="DollarSign" size={18} color="#000000" />
+                          </View>
+                          <View style={styles.notiBody}>
+                            <Text style={styles.notiTitle}>{item.title}</Text>
+                            <Text style={styles.notiSubtitle}>{item.subtitle}</Text>
+                          </View>
+                          <Text style={styles.notiDate}>{item.dateLabel}</Text>
+                        </View>
+
+                        <View style={styles.actionRow}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            style={styles.actionBtn}
+                            onPress={() => {
+                              const groupId = item.rawData.groupId;
+                              if (groupId) {
+                                router.push({
+                                  pathname: '/(tabs)/group/[groupId]',
+                                  params: { groupId },
+                                });
+                              } else {
+                                router.push('/(tabs)/NonGroupExpenses');
+                              }
+                            }}
+                          >
+                            View details
+                          </Button>
+                        </View>
+                      </Card>
+                    );
+                  })}
                 </View>
-
-                {isFriendReq && (
-                  <View style={styles.actionRow}>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      style={styles.actionBtn}
-                      onPress={() => handleAcceptFriend(item.id)}
-                      disabled={actionLoading[item.id]}
-                    >
-                      {actionLoading[item.id] ? <ActivityIndicator size="small" color="#fff" /> : 'Confirm'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      style={styles.actionBtn}
-                      onPress={() => handleDeclineFriend(item.id)}
-                      disabled={actionLoading[item.id]}
-                    >
-                      Delete
-                    </Button>
-                  </View>
-                )}
-
-                {item.type === 'expense_split' && (
-                  <View style={styles.actionRow}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      style={styles.actionBtn}
-                      onPress={() => {
-                        const groupId = item.rawData.groupId;
-                        if (groupId) {
-                          router.push({
-                            pathname: '/(tabs)/group/[groupId]',
-                            params: { groupId },
-                          });
-                        } else {
-                          router.push('/(tabs)/NonGroupExpenses');
-                        }
-                      }}
-                    >
-                      View details
-                    </Button>
-                  </View>
-                )}
-              </Card>
+              </View>
             );
           })
         )}
@@ -232,7 +315,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 40,
-    gap: 14,
+  },
+  groupContainer: {
+    marginBottom: 20,
+  },
+  groupHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#000000',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  groupList: {
+    gap: 12,
   },
   notiCard: {
     marginBottom: 4,
@@ -268,6 +364,43 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#6b7280',
     fontWeight: '800',
+  },
+  friendReqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  friendReqBody: {
+    flex: 1,
+    paddingRight: 4,
+  },
+  friendReqText: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  boldText: {
+    fontWeight: '900',
+  },
+  friendReqActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  confirmBtn: {
+    width: 'auto',
+    minWidth: 80,
+  },
+  confirmBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  threeDotBtn: {
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionRow: {
     flexDirection: 'row',

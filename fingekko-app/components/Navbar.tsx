@@ -3,25 +3,41 @@ import Icon from './ui/Icon';
 import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 import { apiRequest } from '../utils/api';
 import { useState, useEffect } from 'react';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Navbar() {
   const { user } = useUser();
   const { getToken } = useAuth();
   const [badgeCount, setBadgeCount] = useState(0);
+  const navigation = useNavigation();
 
   const fetchBadgeCount = async () => {
     try {
       const token = await getToken();
       if (!token) return;
 
-      const response = await apiRequest<{ count: number }>({
+      const response = await apiRequest<{ notifications: any[] }>({
         method: 'get',
         url: '/api/notifications',
         token,
       });
 
-      setBadgeCount(response?.count || 0);
+      const list = response?.notifications || [];
+      const lastSeenStr = await AsyncStorage.getItem('last_seen_notifications_time');
+
+      if (!lastSeenStr) {
+        // If the user has never opened notifications, show the total count
+        setBadgeCount(list.length);
+      } else {
+        const lastSeenTime = new Date(lastSeenStr).getTime();
+        // Count how many notifications are newer than lastSeenTime
+        const unseenCount = list.filter((item: any) => {
+          const itemTime = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+          return itemTime > lastSeenTime;
+        }).length;
+        setBadgeCount(unseenCount);
+      }
     } catch (error) {
       console.warn('Failed to fetch badge count:', error);
     }
@@ -30,11 +46,20 @@ export default function Navbar() {
   useEffect(() => {
     if (user) {
       fetchBadgeCount();
+      // Listen to navigation focus to refresh the badge instantly when returning to the home screen
+      const unsubscribe = navigation.addListener('focus', () => {
+        fetchBadgeCount();
+      });
+
       // Poll every 10 seconds for real-time notification badge updates
       const interval = setInterval(fetchBadgeCount, 10000);
-      return () => clearInterval(interval);
+
+      return () => {
+        unsubscribe();
+        clearInterval(interval);
+      };
     }
-  }, [user]);
+  }, [user, navigation]);
 
   const initials = (() => {
     if (!user) {
