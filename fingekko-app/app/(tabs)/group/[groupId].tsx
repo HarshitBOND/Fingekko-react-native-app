@@ -16,9 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
 
-
 const COLORS = {
-  bg: '#F5F6F5',
+  bg: '#FFF8E7',
   card: '#FFFFFF',
   green: '#1FA855',
   greenLight: '#E3F2E7',
@@ -29,69 +28,46 @@ const COLORS = {
   overlay: 'rgba(0,0,0,0.4)',
 };
 
-// ---- Data (swap for real props / API data) ----
-const MEMBERS = [
-  {
-    id: '1',
-    initial: 'H',
-    name: 'Harshit Prabhakar',
-    isYou: true,
-    paid: 2480,
-    balance: 0, // positive = others owe you, negative = you owe them
-  },
-  {
-    id: '2',
-    initial: 'R',
-    name: 'Rohan',
-    isYou: false,
-    paid: 0,
-    balance: 0,
-  },
-];
-
-const EXPENSES = [
-  {
-    id: '1',
-    title: 'Dinner at Beach Shack',
-    subtitle: 'Paid by you • 2h ago',
-    group: 'Goa Trip',
-    amount: '₹2,480',
-    split: 'Split equally',
-    icon: <Icon name="ArrowRight" size={18} color={COLORS.green} />,
-  },
-  {
-    id: '2',
-    title: 'Cafe Coffee Day',
-    subtitle: 'Paid by Rohan • Yesterday',
-    group: 'Weekend Cafe',
-    amount: '₹160',
-    split: 'Split equally',
-    icon: <Icon name="Utensils" size={18} color={COLORS.green} />,
-  },
-  {
-    id: '3',
-    title: 'Taxi to Hotel',
-    subtitle: 'Paid by you • 2 days ago',
-    group: 'Goa Trip',
-    amount: '₹540',
-    split: 'Split equally',
-    icon: <Icon name="Car" size={18} color={COLORS.green} />,
-  },
-];
-
 type GroupItem = {
   id: string;
   name: string;
   description?: string;
   members: {
     id: string;
+    dbId: string;
     name: string;
     email: string;
-  }[]
+  }[];
   icon: string;
   createdBy: string;
   balance?: number;
 };
+
+interface MappedUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface Settlement {
+  fromUser: MappedUser;
+  toUser: MappedUser;
+  amount: number;
+}
+
+interface GroupBalance {
+  userId: string;
+  name: string;
+  email: string;
+  netBalance: number;
+}
+
+interface BalancesResponse {
+  balances: GroupBalance[];
+  settlements: Settlement[];
+  totalSpent: number;
+  expenseCount: number;
+}
 
 function getGroupIconName(iconName?: string): string {
   const nameMap: Record<string, string> = {
@@ -106,34 +82,15 @@ function getGroupIconName(iconName?: string): string {
   return nameMap[iconName ?? ''] ?? 'CircleAlert';
 }
 
-
-// Reusable button that gives a pale press-feedback effect
-type PressableActionProps = {
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
+const getInitials = (name: string): string => {
+  if (!name) return 'M';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'M';
 };
-
-function PressableAction({ icon, label, onPress }: PressableActionProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionItem,
-        pressed && { opacity: 0.55 },
-      ]}
-    >
-      {({ pressed }) => (
-        <>
-          <View style={[styles.actionIconWrap, pressed && { backgroundColor: COLORS.greenPale }]}>
-            {icon}
-          </View>
-          <Text style={styles.actionLabel}>{label}</Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
 
 export default function GroupDetailScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
@@ -147,6 +104,9 @@ export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId?: string | string[] }>();
   const resolvedGroupId = Array.isArray(groupId) ? groupId[0] : groupId;
   const GroupIconName = useMemo(() => getGroupIconName(group?.icon), [group?.icon]);
+
+  const [balancesData, setBalancesData] = useState<BalancesResponse | null>(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
 
   const fetchGroupDetails = async (groupId: string) => {
     setLoading(true);
@@ -168,11 +128,33 @@ export default function GroupDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  const fetchGroupBalances = async (groupId: string) => {
+    setBalancesLoading(true);
+    const token = await getToken();
+    if (!token) {
+      setBalancesLoading(false);
+      return;
+    }
+    try {
+      const response = await apiRequest<BalancesResponse>({
+        method: 'get',
+        url: `/api/groups/${groupId}/balances`,
+        token: token,
+      });
+      setBalancesData(response);
+    } catch (error) {
+      console.error('Error fetching group balances:', error);
+    } finally {
+      setBalancesLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (resolvedGroupId) {
       fetchGroupDetails(resolvedGroupId);
+      fetchGroupBalances(resolvedGroupId);
     }
   }, [resolvedGroupId]);
 
@@ -198,6 +180,25 @@ export default function GroupDetailScreen() {
 
   const handleSettleUp = () => {
     setSettleUpVisible(true);
+  };
+
+  const getMemberGroupBalance = (memberId: string) => {
+    if (!balancesData) return { amount: 0, label: 'Settled' };
+    
+    const directSettlement = balancesData.settlements.find(
+      s => (s.fromUser.id === userId && s.toUser.id === memberId) ||
+           (s.fromUser.id === memberId && s.toUser.id === userId)
+    );
+
+    if (directSettlement) {
+      if (directSettlement.fromUser.id === userId) {
+        return { amount: -directSettlement.amount, label: 'You owe them' };
+      } else {
+        return { amount: directSettlement.amount, label: 'Owes you' };
+      }
+    }
+
+    return { amount: 0, label: 'Settled' };
   };
 
 
@@ -237,95 +238,117 @@ export default function GroupDetailScreen() {
       >
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Group balance</Text>
+          <Text style={styles.balanceLabel}>Group Balance Overview</Text>
           <View style={styles.balanceMainRow}>
-            <Text style={styles.balanceTitle}>{loading ? 'Loading group...' : group ? 'No balance data yet' : 'Group not found'}</Text>
-            <Text style={styles.balanceAmount}>₹{group?.balance ?? 0}</Text>
+            <Text style={styles.balanceTitle}>
+              {loading ? 'Loading...' : `Total Spent: ₹${balancesData?.totalSpent ?? 0}`}
+            </Text>
+            {(() => {
+              const myBalance = balancesData?.balances.find(b => b.userId === userId);
+              if (!myBalance) return <Text style={[styles.balanceAmount, { color: '#6b7280' }]}>₹0.00</Text>;
+              
+              const isPositive = myBalance.netBalance > 0;
+              const isNegative = myBalance.netBalance < 0;
+              const color = isPositive ? '#1FA855' : isNegative ? '#FF3366' : '#6b7280';
+              const label = isPositive ? 'You are owed' : isNegative ? 'You owe' : 'Settled';
+              
+              return (
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.balanceAmount, { color }]}>
+                    ₹{Math.abs(myBalance.netBalance).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#333333', marginTop: 2 }}>
+                    {label}
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
           <Text style={styles.balanceNote}>{isCreator ? 'Created by you' : 'Created by another member'}</Text>
         </View>
 
-        {/* Action row */}
-        <View style={styles.actionsCard}>
-          <PressableAction
-            icon={<Icon name="Plus" size={22} color={COLORS.green} />}
-            label="Add Expense"
-            onPress={handleAddExpense}
-          />
-          <View style={styles.actionDivider} />
-          <PressableAction
-            icon={<Icon name="Coins" size={18} color={COLORS.green} />}
-            label="Settle Up"
-            onPress={handleSettleUp}
-          />
-          <View style={styles.actionDivider} />
-          <PressableAction
-            icon={<Icon name="Users" size={22} color={COLORS.green} />}
-            label="Members"
-            onPress={scrollToMembers}
-          />
-          <View style={styles.actionDivider} />
-          <PressableAction
-            icon={<Icon name="Settings" size={22} color={COLORS.green} />}
-            label="Group Settings"
+        {/* Action Grid (Neobrutalism Style) */}
+        <View style={styles.quickActionsGrid}>
+          <Pressable style={styles.quickActionCard} onPress={handleAddExpense}>
+            <View style={styles.quickActionIconWrap}>
+              <Icon name="Plus" size={22} color="#1FA855" />
+            </View>
+            <Text style={styles.quickActionTitle}>Add Expense</Text>
+            <Text style={styles.quickActionSubtitle}>Split a new bill</Text>
+          </Pressable>
+
+          <Pressable style={styles.quickActionCard} onPress={handleSettleUp}>
+            <View style={styles.quickActionIconWrap}>
+              <Icon name="Coins" size={20} color="#1FA855" />
+            </View>
+            <Text style={styles.quickActionTitle}>Settle Up</Text>
+            <Text style={styles.quickActionSubtitle}>Pay back debts</Text>
+          </Pressable>
+
+          <Pressable style={styles.quickActionCard} onPress={scrollToMembers}>
+            <View style={styles.quickActionIconWrap}>
+              <Icon name="Users" size={22} color="#1FA855" />
+            </View>
+            <Text style={styles.quickActionTitle}>Members</Text>
+            <Text style={styles.quickActionSubtitle}>View group members</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.quickActionCard}
             onPress={() => {
               Alert.alert('Group Settings', 'Group settings are not connected yet.');
             }}
-          />
+          >
+            <View style={styles.quickActionIconWrap}>
+              <Icon name="Settings" size={22} color="#1FA855" />
+            </View>
+            <Text style={styles.quickActionTitle}>Settings</Text>
+            <Text style={styles.quickActionSubtitle}>Manage options</Text>
+          </Pressable>
         </View>
 
-        {/* Group summary */}
-        <Text style={styles.sectionTitle}>Group Overview</Text>
+        {/* Suggested settlements (Simplify Debt) */}
+        <Text style={styles.sectionTitle}>Group Settlements</Text>
+        <View style={styles.listCard}>
+          {!balancesData || balancesData.settlements.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Icon name="CircleCheck" size={24} color={COLORS.green} />
+              <Text style={styles.emptyStateTitle}>All settled up!</Text>
+              <Text style={styles.emptyStateText}>No transactions are needed to settle the group.</Text>
+            </View>
+          ) : (
+            balancesData.settlements.map((s, idx) => {
+              const isFromYou = s.fromUser.id === userId;
+              const isToYou = s.toUser.id === userId;
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Members</Text>
-            <Text style={[styles.summaryValue, styles.greenText]}>
-              {memberCount}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Your Role</Text>
-            <Text style={[styles.summaryValue, styles.greenText]}>
-              {isCreator ? 'Creator' : 'Member'}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Expenses</Text>
-            <Text style={styles.summaryValue}>
-              Coming Soon
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Spent</Text>
-            <Text style={styles.summaryValue}>
-              ₹0
-            </Text>
-          </View>
-
-          <View style={styles.summaryDivider} />
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Created By</Text>
-            <Text style={styles.summaryValue}>
-              {isCreator ? 'You' : 'Another member'}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Settlement Status</Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                { color: COLORS.green }
-              ]}
-            >
-              All Settled
-            </Text>
-          </View>
+              return (
+                <React.Fragment key={idx}>
+                  <View style={styles.settleRow}>
+                    <View style={styles.settleIconWrap}>
+                      <Icon name="ArrowRight" size={16} color="#000000" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.settleText}>
+                        <Text style={{ fontWeight: '900', color: isFromYou ? '#FF3366' : '#000000' }}>
+                          {isFromYou ? 'You' : s.fromUser.name}
+                        </Text>
+                        {' owes '}
+                        <Text style={{ fontWeight: '900', color: isToYou ? '#1FA855' : '#000000' }}>
+                          {isToYou ? 'You' : s.toUser.name}
+                        </Text>
+                      </Text>
+                    </View>
+                    <Text style={styles.settleAmount}>
+                      ₹{s.amount.toFixed(2)}
+                    </Text>
+                  </View>
+                  {idx < balancesData.settlements.length - 1 && (
+                    <View style={styles.rowDivider} />
+                  )}
+                </React.Fragment>
+              );
+            })
+          )}
         </View>
 
         {/* Recent expenses */}
@@ -350,13 +373,24 @@ export default function GroupDetailScreen() {
           <View style={styles.listCard}>
             {(group?.members ?? []).map((member, i) => {
               const isYou = member.id === userId;
+              const mBalance = !isYou ? getMemberGroupBalance(member.id) : null;
 
               return (
                 <React.Fragment key={member.id}>
-                  <View style={styles.memberRow}>
+                  <Pressable
+                    style={styles.memberRow}
+                    onPress={() => {
+                      if (!isYou && member.dbId) {
+                        router.push({
+                          pathname: '/(tabs)/FriendSplits',
+                          params: { friendId: member.dbId, friendName: member.name },
+                        });
+                      }
+                    }}
+                  >
                     <View style={styles.avatarSm}>
                       <Text style={styles.avatarSmText}>
-                        {(isYou ? "You" : member.name).slice(0, 2).toUpperCase()}
+                        {getInitials(isYou ? "You" : member.name)}
                       </Text>
                     </View>
 
@@ -378,16 +412,33 @@ export default function GroupDetailScreen() {
                       </Text>
                     </View>
 
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={styles.memberRightLabel}>
-                        {isYou ? "Current user" : "Member"}
-                      </Text>
-
-                      <Text style={styles.memberAmount}>
-                        {member.id.slice(0, 6)}...
-                      </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {!isYou && mBalance && (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[
+                            styles.memberBalanceLabel,
+                            mBalance.amount > 0 ? styles.owesYouText : mBalance.amount < 0 ? styles.youOweText : styles.settledText
+                          ]}>
+                            {mBalance.label}
+                          </Text>
+                          {mBalance.amount !== 0 && (
+                            <Text style={[
+                              styles.memberBalanceAmount,
+                              mBalance.amount > 0 ? styles.owesYouText : styles.youOweText
+                            ]}>
+                              ₹{Math.abs(mBalance.amount).toFixed(2)}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                      {isYou && (
+                        <Text style={styles.memberRightLabel}>Current user</Text>
+                      )}
+                      {!isYou && (
+                        <Icon name="ChevronRight" size={18} color="#000000" />
+                      )}
                     </View>
-                  </View>
+                  </Pressable>
 
                   {i < (group?.members.length ?? 0) - 1 && (
                     <View style={styles.rowDivider} />
@@ -411,10 +462,51 @@ export default function GroupDetailScreen() {
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Settle Up</Text>
 
-            <View style={styles.modalEmptyState}>
-              <Icon name="CircleAlert" size={40} color={COLORS.green} />
-              <Text style={styles.modalEmptyText}>Settle up is connected, but balance data is not loaded yet.</Text>
-            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {(() => {
+                const mySettlements = balancesData?.settlements.filter(
+                  s => s.fromUser.id === userId || s.toUser.id === userId
+                ) ?? [];
+
+                if (mySettlements.length === 0) {
+                  return (
+                    <View style={styles.modalEmptyState}>
+                      <Icon name="CircleCheck" size={40} color={COLORS.green} />
+                      <Text style={styles.modalEmptyText}>You are all settled up with everyone in the group!</Text>
+                    </View>
+                  );
+                }
+
+                return mySettlements.map((s, idx) => {
+                  const isFromYou = s.fromUser.id === userId;
+                  const targetUser = isFromYou ? s.toUser : s.fromUser;
+                  
+                  return (
+                    <View key={idx} style={styles.settleModalRow}>
+                      <View style={[styles.avatarSm, { backgroundColor: isFromYou ? '#FFD4D4' : '#C3FFD8' }]}>
+                        <Text style={styles.avatarSmText}>
+                          {getInitials(targetUser.name)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#000000' }}>
+                          {targetUser.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#555555' }}>
+                          {isFromYou ? 'You owe them' : 'Owes you'}
+                        </Text>
+                      </View>
+                      <Text style={[
+                        { fontSize: 16, fontWeight: '900' },
+                        isFromYou ? { color: '#FF3366' } : { color: '#1FA855' }
+                      ]}>
+                        ₹{s.amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
 
             <Pressable
               style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.7 }]}
@@ -443,7 +535,7 @@ const styles = StyleSheet.create({
   circleBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
@@ -458,7 +550,7 @@ const styles = StyleSheet.create({
   avatarLg: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
@@ -473,10 +565,10 @@ const styles = StyleSheet.create({
 
   balanceCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 18,
+    borderRadius: 8,
     padding: 22,
     marginBottom: 20,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 5, height: 5 },
@@ -489,43 +581,52 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  balanceTitle: { fontSize: 19, fontWeight: '900', color: COLORS.textDark },
-  balanceAmount: { fontSize: 22, fontWeight: '900', color: COLORS.green },
+  balanceTitle: { fontSize: 17, fontWeight: '900', color: COLORS.textDark, flex: 1, marginRight: 8 },
+  balanceAmount: { fontSize: 20, fontWeight: '900', color: COLORS.green },
   balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6, fontWeight: '600' },
 
-  actionsCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
+  quickActionsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 20,
-    marginBottom: 28,
-    borderWidth: 2,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 12,
+    marginBottom: 24,
+  },
+  quickActionCard: {
+    width: '48%',
+    minHeight: 110,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
     borderColor: '#000000',
+    padding: 14,
+    gap: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 5, height: 5 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    elevation: 3,
   },
-  actionItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 9,
-    paddingVertical: 4,
-    borderRadius: 14,
-  },
-  actionIconWrap: {
+  quickActionIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.greenLight,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#C3FFD8',
     borderWidth: 2,
     borderColor: '#000000',
   },
-  actionLabel: { fontSize: 11, color: COLORS.textGray, textAlign: 'center', fontWeight: '800' },
-  actionDivider: { width: 2, height: 28, backgroundColor: '#000000' },
+  quickActionTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  quickActionSubtitle: {
+    fontSize: 11,
+    color: '#555555',
+    fontWeight: '700',
+  },
 
   sectionTitle: { fontSize: 17, fontWeight: '900', color: COLORS.textDark, marginBottom: 12 },
   sectionHeaderRow: {
@@ -535,34 +636,12 @@ const styles = StyleSheet.create({
   },
   viewAll: { fontSize: 14, color: COLORS.green, fontWeight: '800', marginBottom: 12 },
 
-  summaryCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 28,
-    borderWidth: 2,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 9,
-  },
-  summaryLabel: { fontSize: 14, color: COLORS.textGray, fontWeight: '600' },
-  summaryValue: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
-  summaryDivider: { height: 2, backgroundColor: '#000000', marginVertical: 10 },
-  greenText: { color: COLORS.green },
-
   listCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 18,
-    paddingHorizontal: 18,
+    borderRadius: 8,
+    paddingHorizontal: 16,
     marginBottom: 28,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 5, height: 5 },
@@ -570,28 +649,6 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
   },
   rowDivider: { height: 2, backgroundColor: '#000000' },
-
-  expenseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 18,
-    gap: 14,
-  },
-  expenseIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-  },
-  expenseTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
-  expenseSubtitle: { fontSize: 12, color: COLORS.textGray, marginTop: 3, fontWeight: '600' },
-  expenseGroup: { fontSize: 12, color: COLORS.textGray, marginTop: 1, fontWeight: '600' },
-  expenseAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
-  expenseSplit: { fontSize: 12, color: COLORS.textGray, marginTop: 3, fontWeight: '600' },
 
   emptyState: {
     alignItems: 'center',
@@ -604,17 +661,17 @@ const styles = StyleSheet.create({
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
-    gap: 14,
+    paddingVertical: 16,
+    gap: 12,
   },
   avatarSm: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#000000',
   },
   avatarSmText: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
@@ -630,8 +687,13 @@ const styles = StyleSheet.create({
   },
   youBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   memberSub: { fontSize: 12, color: COLORS.textGray, marginTop: 4, fontWeight: '600' },
-  memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontWeight: '600' },
-  memberAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark, marginTop: 3 },
+  memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontWeight: '700' },
+  
+  memberBalanceLabel: { fontSize: 11, fontWeight: '800' },
+  memberBalanceAmount: { fontSize: 14, fontWeight: '900', marginTop: 2 },
+  owesYouText: { color: '#1FA855' },
+  youOweText: { color: '#FF3366' },
+  settledText: { color: '#8A8A9E' },
 
   // Modal
   modalOverlay: {
@@ -645,9 +707,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 32,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
     borderColor: '#000000',
   },
   modalHandle: {
@@ -661,23 +723,42 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: '900', color: COLORS.textDark, marginBottom: 18 },
   modalEmptyState: { alignItems: 'center', paddingVertical: 24, gap: 10 },
   modalEmptyText: { fontSize: 14, color: COLORS.textGray, textAlign: 'center', fontWeight: '600' },
+  
   settleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 14,
     gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
-  settleText: { flex: 1, fontSize: 14, color: COLORS.textDark, fontWeight: '600' },
-  settleAmount: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  settleIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFE999',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
+  },
+  settleText: { fontSize: 14, color: COLORS.textDark, fontWeight: '700' },
+  settleAmount: { fontSize: 16, fontWeight: '900', color: COLORS.green },
+
+  settleModalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#000000',
+  },
+
   modalCloseBtn: {
     marginTop: 20,
     backgroundColor: '#00FF66',
-    borderRadius: 16,
+    borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#000000',
     shadowColor: '#000000',
     shadowOffset: { width: 4, height: 4 },

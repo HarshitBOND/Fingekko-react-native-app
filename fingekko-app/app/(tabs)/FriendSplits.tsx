@@ -41,6 +41,30 @@ type ExpenseItem = {
   netBalance: number;
   yourAmountPaid: number;
   yourAmountOwed: number;
+  category?: string;
+  notes?: string;
+};
+
+const getCategoryEmoji = (category?: string) => {
+  switch (category?.toLowerCase()) {
+    case 'food':
+    case 'dining':
+      return '🍔';
+    case 'travel':
+    case 'transport':
+    case 'cab':
+      return '🚗';
+    case 'shopping':
+      return '🛍️';
+    case 'bills':
+    case 'utilities':
+      return '⚡';
+    case 'entertainment':
+    case 'movies':
+      return '🎬';
+    default:
+      return '💵';
+  }
 };
 
 export default function FriendSplitsScreen() {
@@ -268,7 +292,7 @@ export default function FriendSplitsScreen() {
               <Card key={item.id} variant="tactile" style={styles.expenseCard}>
                 <View style={styles.row}>
                   <View style={styles.iconWrap}>
-                    <Text style={styles.emoji}>💵</Text>
+                    <Text style={styles.emoji}>{getCategoryEmoji(item.category)}</Text>
                   </View>
                   <View style={styles.body}>
                     <Text style={styles.title}>{item.description}</Text>
@@ -283,6 +307,23 @@ export default function FriendSplitsScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* Additional split summary details */}
+                <View style={styles.splitsDetailRow}>
+                  <Text style={styles.detailLabel}>
+                    Total Expense: <Text style={styles.detailValue}>₹{item.amount?.toFixed(2)}</Text>
+                  </Text>
+                  <View style={styles.tagBadge}>
+                    <Text style={styles.tagBadgeText}>{item.category || 'Others'}</Text>
+                  </View>
+                </View>
+
+                {/* Notes section (if provided) */}
+                {!!item.notes && item.notes.trim() !== '' && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesText}>📝 {item.notes.trim()}</Text>
+                  </View>
+                )}
 
                 <View style={styles.cardFooter}>
                   <View style={[styles.badge, { backgroundColor: isSettled ? '#C3FFD8' : '#FFF2C2' }]}>
@@ -456,5 +497,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 2,
+  },
+  splitsDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: '#e5e7eb',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#4b5563',
+    fontWeight: '700',
+  },
+  detailValue: {
+    fontWeight: '900',
+    color: '#000000',
+  },
+  tagBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+  },
+  tagBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#000000',
+    textTransform: 'uppercase',
+  },
+  notesContainer: {
+    padding: 8,
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  notesText: {
+    fontSize: 12,
+    color: '#b45309',
+    fontWeight: '700',
   },
 });
