@@ -52,6 +52,8 @@ export interface Category{
     id: string;
     label: string;
     emoji : string;
+    icon: string;
+    color: string;
     type: TransactionType;
 }
 

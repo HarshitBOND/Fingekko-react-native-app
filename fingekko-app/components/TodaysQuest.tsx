@@ -734,11 +734,6 @@ export default function TodaysQuest() {
           );
         })}
       </View>
-
-      <Image
-        source={require('../assets/images/+75xp.png')}
-        style={{ width: '100%', height: 48, marginTop: spacing.md, borderRadius: radius.md, resizeMode: 'contain' }}
-      />
     </Card>
   );
 }

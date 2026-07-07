@@ -13,6 +13,7 @@ import {
 import Navbar from '../../components/Navbar';
 import AppText from '../../components/ui/AppText';
 import Card from '../../components/ui/Card';
+import AnimatedIcon from '../../components/ui/AnimatedIcon';
 import Icon from '../../components/ui/Icon';
 import PressableScale from '../../components/ui/PressableScale';
 import ScreenContainer from '../../components/ui/ScreenContainer';
@@ -205,7 +206,13 @@ export default function AddScreen() {
                 style={[styles.chip, selected && styles.chipSelected]}
                 onPress={() => setCategory(item.label)}
               >
-                <AppText style={styles.chipEmoji}>{item.emoji}</AppText>
+                <AnimatedIcon
+                  name={item.icon as any}
+                  color={item.color}
+                  size={20}
+                  style={styles.chipEmoji}
+                  mode="pulse"
+                />
                 <AppText
                   variant="caption"
                   weight="bold"
@@ -389,7 +396,7 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
   },
   chipEmoji: {
-    fontSize: 14,
+    marginRight: 2,
   },
   dateWrap: {
     flexDirection: 'row',

@@ -3,13 +3,15 @@ import { apiRequest } from '@/utils/api';
 import { getLevelProgress } from '@/utils/gamification';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, View } from 'react-native';
 import Navbar from '../../components/Navbar';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
 import Button from '../../components/ui/Button';
+import Icon from '../../components/ui/Icon';
 import { palette, spacing, layout, radius, shadows } from '../../constants/design';
 
 export default function ProfileScreen() {
@@ -74,6 +76,37 @@ export default function ProfileScreen() {
   const emailAddress =
     clerkUser?.primaryEmailAddress?.emailAddress || profile?.email || 'Email unavailable';
 
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const hasPhoto = Boolean(clerkUser?.hasImage && clerkUser?.imageUrl);
+
+  const handlePickPhoto = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow access to your photo gallery to set a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri || !clerkUser) return;
+
+    setUploadingPhoto(true);
+    try {
+      const response = await fetch(result.assets[0].uri);
+      const blob = await response.blob();
+      await clerkUser.setProfileImage({ file: blob });
+    } catch (uploadError) {
+      Alert.alert('Upload failed', 'Could not update your profile picture. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [clerkUser]);
+
   return (
     <ScreenContainer
       contentStyle={{ gap: spacing.lg }}
@@ -84,12 +117,32 @@ export default function ProfileScreen() {
       }
     >
       <Card variant="elevated" padding={20}>
-        <AppText variant="h1" color="textPrimary">
-          Profile
-        </AppText>
-        <AppText variant="caption" color="textSecondary" style={styles.subtitle}>
-          Manage your account and session.
-        </AppText>
+        <View style={styles.avatarRow}>
+          <Pressable onPress={handlePickPhoto} disabled={uploadingPhoto} style={styles.avatarWrap}>
+            {hasPhoto ? (
+              <Image source={{ uri: clerkUser!.imageUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="User" size={32} color={palette.primary} clickable />
+              </View>
+            )}
+            <View style={styles.avatarEditBadge}>
+              {uploadingPhoto ? (
+                <ActivityIndicator size="small" color={palette.white} />
+              ) : (
+                <Icon name="Plus" size={14} color={palette.white} clickable />
+              )}
+            </View>
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <AppText variant="h1" color="textPrimary">
+              Profile
+            </AppText>
+            <AppText variant="caption" color="textSecondary" style={styles.subtitle}>
+              Tap your photo to update it from your gallery.
+            </AppText>
+          </View>
+        </View>
       </Card>
 
       <Card variant="elevated" padding={20} style={styles.levelCard}>
@@ -159,6 +212,47 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   subtitle: {
     marginTop: 4,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.base,
+  },
+  avatarWrap: {
+    width: 72,
+    height: 72,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: palette.card,
+    ...shadows.sm,
+  },
+  avatarPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: palette.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    ...shadows.sm,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: palette.card,
   },
   profileCard: {
     gap: spacing.base,

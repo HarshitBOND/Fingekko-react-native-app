@@ -1,13 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, useUser } from '@clerk/clerk-expo';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { apiRequest } from '../utils/api';
 import AppText from './ui/AppText';
 import Icon from './ui/Icon';
-import { fontFamily, gradients, palette, radius, shadows } from '../constants/design';
+import UserAvatar from './ui/UserAvatar';
+import { fontFamily, palette, radius, shadows } from '../constants/design';
 
 export default function Navbar() {
   const { user } = useUser();
@@ -58,21 +58,10 @@ export default function Navbar() {
     }
   }, [user, navigation]);
 
-  const initials = (() => {
-    if (!user) return 'FG';
-    const first = user.firstName?.trim() || '';
-    const last = user.lastName?.trim() || '';
-    const fallback = user.username?.trim() || user.fullName?.trim() || '';
-    const source = first || fallback;
-    const initialA = source ? source.charAt(0).toUpperCase() : 'F';
-    const initialB = last ? last.charAt(0).toUpperCase() : 'G';
-    return `${initialA}${initialB}`;
-  })();
-
   return (
     <View style={styles.header}>
       <View style={styles.logoWrap}>
-        <Image source={require('../assets/images/navgekko.png')} style={styles.logoImage} />
+        <Image source={require('../assets/images/mainlogoNobg.png')} style={styles.logoImage} />
       </View>
 
       <View style={styles.headerActions}>
@@ -85,11 +74,7 @@ export default function Navbar() {
           )}
         </Pressable>
 
-        <Pressable onPress={() => router.push('/(tabs)/profile')}>
-          <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
-            <AppText style={styles.avatarText}>{initials}</AppText>
-          </LinearGradient>
-        </Pressable>
+        <UserAvatar size={42} />
       </View>
     </View>
   );
@@ -108,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoImage: {
-    width: 118,
+    width: 40,
     height: 40,
     resizeMode: 'contain',
   },
@@ -144,18 +129,5 @@ const styles = StyleSheet.create({
     color: palette.white,
     fontSize: 9,
     fontFamily: fontFamily.bold,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.sm,
-  },
-  avatarText: {
-    fontFamily: fontFamily.bold,
-    color: palette.white,
-    fontSize: 15,
   },
 });

@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native';
 import { apiRequest } from '../../utils/api';
+import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/ui/Icon';
+import AnimatedIcon from '../../components/ui/AnimatedIcon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
@@ -45,25 +47,25 @@ type ExpenseItem = {
   notes?: string;
 };
 
-const getCategoryEmoji = (category?: string) => {
+const getCategoryIcon = (category?: string): { name: keyof typeof Ionicons.glyphMap; color: string } => {
   switch (category?.toLowerCase()) {
     case 'food':
     case 'dining':
-      return '🍔';
+      return { name: 'fast-food', color: '#F97316' };
     case 'travel':
     case 'transport':
     case 'cab':
-      return '🚗';
+      return { name: 'car-sport', color: '#3B82F6' };
     case 'shopping':
-      return '🛍️';
+      return { name: 'bag-handle', color: '#EC4899' };
     case 'bills':
     case 'utilities':
-      return '⚡';
+      return { name: 'flash', color: '#EAB308' };
     case 'entertainment':
     case 'movies':
-      return '🎬';
+      return { name: 'film', color: '#8B5CF6' };
     default:
-      return '💵';
+      return { name: 'cash', color: '#84CC16' };
   }
 };
 
@@ -318,7 +320,7 @@ export default function FriendSplitsScreen() {
             <Card key={item.id} variant="elevated" style={styles.expenseCard} padding={16}>
               <View style={styles.row}>
                 <View style={styles.iconWrap}>
-                  <AppText style={styles.emoji}>{getCategoryEmoji(item.category)}</AppText>
+                  <AnimatedIcon {...getCategoryIcon(item.category)} size={20} mode="pulse" />
                 </View>
                 <View style={styles.body}>
                   <AppText variant="bodySm" color="textPrimary" weight="bold">
