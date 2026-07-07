@@ -92,6 +92,50 @@ async function updateByclerkId(
   return User.findOneAndUpdate({ clerkId }, update, { new: true }).lean();
 }
 
+// Keep in sync with utils/gamification.ts on the frontend (XP_PER_LEVEL).
+const XP_PER_LEVEL = 500;
+
+type AwardXpResult = {
+  xp: number;
+  level: number;
+  leveledUp: boolean;
+  xpDelta: number;
+};
+
+async function awardXp(userId: string, xpDelta: number): Promise<AwardXpResult> {
+  if (!xpDelta) {
+    const current = await User.findById(userId).select('xp level').lean<{ xp: number; level: number } | null>();
+    return { xp: current?.xp ?? 0, level: current?.level ?? 1, leveledUp: false, xpDelta: 0 };
+  }
+
+  const previous = await User.findById(userId).select('level').lean<{ level: number } | null>();
+  const previousLevel = previous?.level ?? 1;
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $inc: { xp: xpDelta } },
+    { new: true }
+  ).select('xp level').lean<{ xp: number; level: number } | null>();
+
+  if (!updated) {
+    throw new Error('User not found');
+  }
+
+  const nextLevel = Math.floor(Math.max(0, updated.xp ?? 0) / XP_PER_LEVEL) + 1;
+  const leveledUp = nextLevel > previousLevel;
+
+  if (leveledUp) {
+    await User.findByIdAndUpdate(userId, { level: nextLevel });
+  }
+
+  return {
+    xp: updated.xp ?? 0,
+    level: nextLevel,
+    leveledUp,
+    xpDelta,
+  };
+}
+
 
 async function searchUsers(query: string) {
   return User.find({
@@ -109,5 +153,6 @@ export {
   updateByclerkId,
   updateById,
   updateUserStats,
+  awardXp,
   searchUsers,
 };

@@ -1,10 +1,26 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
-import { createGoal, deleteGoal, listGoals, updateGoal } from '../repositories/goalRepository.js';
+import { createGoal, deleteGoal, getGoalById, listGoals, updateGoal } from '../repositories/goalRepository.js';
+import { awardXp } from '../repositories/userRepository.js';
 
 const router = Router();
 
 router.use(authMiddleware);
+
+// Gamification tuning: how much XP goal actions earn.
+const XP_NEW_GOAL = 15;
+const XP_MIN_CONTRIBUTION = 5;
+const XP_MAX_CONTRIBUTION = 100;
+const XP_GOAL_COMPLETE = 200;
+
+function xpForContribution(amount: number) {
+  if (amount <= 0) return 0;
+  return Math.min(XP_MAX_CONTRIBUTION, Math.max(XP_MIN_CONTRIBUTION, Math.round(amount / 50)));
+}
+
+function isGoalComplete(goal: { targetAmount: number; currentAmount: number }) {
+  return goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount;
+}
 
 async function getCurrentUserId(req: any) {
   if (!req.user) {
@@ -50,7 +66,9 @@ router.post('/', async (req: Request, res: Response) => {
       emoji: emoji || '🎯',
     });
 
-    return res.status(201).json({ goal });
+    const xpResult = await awardXp(currentUserId, XP_NEW_GOAL);
+
+    return res.status(201).json({ goal, xpEarned: XP_NEW_GOAL, justCompleted: false, ...xpResult });
   } catch (error) {
     console.error(error);
     return res.status(400).json({ message: error instanceof Error ? error.message : 'Failed to create goal' });
@@ -66,6 +84,13 @@ router.put('/:goalId', async (req: Request, res: Response) => {
 
   try {
     const currentUserId = await getCurrentUserId(req);
+    const goalId = String(req.params.goalId);
+
+    const previous = await getGoalById(currentUserId, goalId);
+    if (!previous) {
+      return res.status(404).json({ message: 'Goal not found' });
+    }
+
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title;
     if (targetAmount !== undefined) updates.targetAmount = targetAmount;
@@ -73,8 +98,21 @@ router.put('/:goalId', async (req: Request, res: Response) => {
     if (deadline !== undefined) updates.deadline = deadline;
     if (emoji !== undefined) updates.emoji = emoji;
 
-    const goal = await updateGoal(currentUserId, String(req.params.goalId), updates);
-    return res.json({ goal });
+    const goal = await updateGoal(currentUserId, goalId, updates);
+
+    // Gamification: reward real progress (money actually added toward the
+    // goal), plus a bigger one-time bonus the moment it's fully reached.
+    const contribution = typeof currentAmount === 'number' ? Math.max(0, currentAmount - previous.currentAmount) : 0;
+    const wasComplete = isGoalComplete(previous);
+    const nowComplete = isGoalComplete(goal);
+    const justCompleted = nowComplete && !wasComplete;
+
+    const xpEarned = xpForContribution(contribution) + (justCompleted ? XP_GOAL_COMPLETE : 0);
+    const xpResult = xpEarned > 0
+      ? await awardXp(currentUserId, xpEarned)
+      : { xp: undefined, level: undefined, leveledUp: false, xpDelta: 0 };
+
+    return res.json({ goal, xpEarned, justCompleted, ...xpResult });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : 'Failed to update goal';

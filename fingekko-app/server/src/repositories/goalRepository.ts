@@ -63,6 +63,11 @@ export async function listGoals(userId: string): Promise<SerializedGoal[]> {
   }
 }
 
+export async function getGoalById(userId: string, goalId: string): Promise<SerializedGoal | null> {
+  const goal = await Goal.findOne({ _id: goalId, userId }).lean();
+  return goal ? serializeGoal(goal) : null;
+}
+
 export async function createGoal(
   userId: string,
   data: CreateGoalInput

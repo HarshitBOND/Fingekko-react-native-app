@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import Navbar from '@/components/Navbar';
+import GoalRewardModal, { type GoalRewardInfo } from '@/components/goals/GoalRewardModal';
+import XpBar from '@/components/goals/XpBar';
 import AppText from '@/components/ui/AppText';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -21,9 +23,18 @@ import Input from '@/components/ui/Input';
 import ProgressRing from '@/components/ui/ProgressRing';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import { layout, palette, radius, spacing } from '@/constants/design';
-import type { ApiGoal, GoalsResponse } from '@/types';
+import type { ApiGoal, GoalsResponse, ProfileResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { formatCurrency } from '@/utils/helpers';
+
+type GoalActionResponse = {
+  goal: ApiGoal;
+  xpEarned: number;
+  justCompleted: boolean;
+  xp?: number;
+  level?: number;
+  leveledUp?: boolean;
+};
 
 const EMOJI_OPTIONS = ['🎯', '✈️', '🏠', '🚗', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -91,6 +102,9 @@ export default function GoalsScreen() {
   const [contributing, setContributing] = useState(false);
   const [contributeError, setContributeError] = useState('');
 
+  const [userXp, setUserXp] = useState(0);
+  const [reward, setReward] = useState<GoalRewardInfo | null>(null);
+
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
       setGoals([]);
@@ -99,8 +113,12 @@ export default function GoalsScreen() {
     try {
       const token = await getToken();
       if (!token) return;
-      const response = await apiRequest<GoalsResponse>('/api/goals', {}, token);
-      setGoals(response?.goals ?? []);
+      const [goalsResponse, profileResponse] = await Promise.all([
+        apiRequest<GoalsResponse>('/api/goals', {}, token),
+        apiRequest<ProfileResponse>('/api/profile', {}, token),
+      ]);
+      setGoals(goalsResponse?.goals ?? []);
+      setUserXp(profileResponse?.user?.xp ?? 0);
       setLoadError('');
     } catch (error) {
       console.warn('Failed to load goals:', error);
@@ -209,15 +227,24 @@ export default function GoalsScreen() {
         emoji,
       };
 
-      if (editingGoalId) {
-        await apiRequest({ method: 'put', url: `/api/goals/${editingGoalId}`, token, data: payload });
-      } else {
-        await apiRequest({ method: 'post', url: '/api/goals', token, data: payload });
-      }
+      const response = editingGoalId
+        ? await apiRequest<GoalActionResponse>({ method: 'put', url: `/api/goals/${editingGoalId}`, token, data: payload })
+        : await apiRequest<GoalActionResponse>({ method: 'post', url: '/api/goals', token, data: payload });
 
       setCreateVisible(false);
       resetForm();
       await fetchGoals();
+
+      if (response?.xpEarned > 0) {
+        setUserXp(response.xp ?? userXp);
+        setReward({
+          xpEarned: response.xpEarned,
+          justCompleted: response.justCompleted,
+          leveledUp: !!response.leveledUp,
+          newLevel: response.level,
+          goalTitle: response.goal?.title,
+        });
+      }
     } catch (error: any) {
       setFormError(error?.message || 'Something went wrong saving this goal.');
     } finally {
@@ -265,7 +292,7 @@ export default function GoalsScreen() {
       const token = await getToken();
       if (!token) return;
       const nextAmount = Math.min(contributeGoal.targetAmount, contributeGoal.currentAmount + amount);
-      await apiRequest({
+      const response = await apiRequest<GoalActionResponse>({
         method: 'put',
         url: `/api/goals/${contributeGoal.id}`,
         token,
@@ -274,6 +301,17 @@ export default function GoalsScreen() {
       setContributeGoal(null);
       setContributeAmount('');
       await fetchGoals();
+
+      if (response?.xpEarned > 0) {
+        setUserXp(response.xp ?? userXp);
+        setReward({
+          xpEarned: response.xpEarned,
+          justCompleted: response.justCompleted,
+          leveledUp: !!response.leveledUp,
+          newLevel: response.level,
+          goalTitle: response.goal?.title,
+        });
+      }
     } catch (error: any) {
       setContributeError(error?.message || 'Failed to update goal.');
     } finally {
@@ -309,6 +347,8 @@ export default function GoalsScreen() {
           + New Goal
         </Button>
       </View>
+
+      <XpBar xp={userXp} />
 
       {loading && goals.length === 0 ? (
         <View style={styles.centerBox}>
@@ -595,6 +635,8 @@ export default function GoalsScreen() {
           </View>
         </View>
       </Modal>
+
+      <GoalRewardModal reward={reward} onDismiss={() => setReward(null)} />
     </ScreenContainer>
   );
 }
