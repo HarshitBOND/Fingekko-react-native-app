@@ -1,7 +1,9 @@
 import type { ApiUser, ProfileResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { getLevelProgress } from '@/utils/gamification';
 import { useAuth, useUser } from '@clerk/clerk-expo';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Navbar from '../../components/Navbar';
 import ScreenContainer from '../../components/ui/ScreenContainer';
@@ -21,38 +23,43 @@ export default function ProfileScreen() {
     getTokenRef.current = getToken;
   }, [getToken]);
 
-  useEffect(() => {
-    let isActive = true;
+  // Reload on every focus so XP/level earned elsewhere in the app shows up here.
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-    const loadProfile = async () => {
-      if (!isSignedIn) {
-        setProfile(null);
-        return;
-      }
-
-      try {
-        const token = await getTokenRef.current();
-        if (!token) {
+      const loadProfile = async () => {
+        if (!isSignedIn) {
+          setProfile(null);
           return;
         }
-        const response = await apiRequest<ProfileResponse>('/api/profile', {}, token);
-        if (isActive) {
-          setProfile(response.user);
-          setError(null);
-        }
-      } catch (fetchError) {
-        if (isActive) {
-          setError('Unable to load profile.');
-        }
-      }
-    };
 
-    loadProfile();
+        try {
+          const token = await getTokenRef.current();
+          if (!token) {
+            return;
+          }
+          const response = await apiRequest<ProfileResponse>('/api/profile', {}, token);
+          if (isActive) {
+            setProfile(response.user);
+            setError(null);
+          }
+        } catch (fetchError) {
+          if (isActive) {
+            setError('Unable to load profile.');
+          }
+        }
+      };
 
-    return () => {
-      isActive = false;
-    };
-  }, [isSignedIn]);
+      loadProfile();
+
+      return () => {
+        isActive = false;
+      };
+    }, [isSignedIn])
+  );
+
+  const levelProgress = useMemo(() => getLevelProgress(profile?.xp ?? 0), [profile?.xp]);
 
   const displayName = useMemo(() => {
     return (
@@ -82,6 +89,30 @@ export default function ProfileScreen() {
         </AppText>
         <AppText variant="caption" color="textSecondary" style={styles.subtitle}>
           Manage your account and session.
+        </AppText>
+      </Card>
+
+      <Card variant="elevated" padding={20} style={styles.levelCard}>
+        <View style={styles.levelHeaderRow}>
+          <View>
+            <AppText variant="micro" color="textSecondary" style={styles.fieldLabel}>
+              Your journey
+            </AppText>
+            <AppText variant="h2" color="textPrimary">
+              Level {profile?.level ?? levelProgress.level}
+            </AppText>
+          </View>
+          <View style={styles.xpPill}>
+            <AppText variant="caption" color="primaryDeep" weight="bold">
+              ⚡ {profile?.xp ?? 0} XP
+            </AppText>
+          </View>
+        </View>
+        <View style={styles.levelBarBg}>
+          <View style={[styles.levelBarFill, { width: `${Math.round(levelProgress.progress * 100)}%` }]} />
+        </View>
+        <AppText variant="micro" color="textSecondary">
+          {levelProgress.xpIntoLevel} / {levelProgress.xpForNextLevel} XP to the next level
         </AppText>
       </Card>
 
@@ -131,6 +162,31 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     gap: spacing.base,
+  },
+  levelCard: {
+    gap: spacing.sm,
+  },
+  levelHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  xpPill: {
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  levelBarBg: {
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: palette.track,
+    overflow: 'hidden',
+  },
+  levelBarFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: palette.primary,
   },
   fieldRow: {
     gap: 4,

@@ -2,6 +2,7 @@ import Navbar from '@/components/Navbar';
 import type { Transaction } from '@/constants/types';
 import type { ApiUser, ProfileResponse, TransactionsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { getLevelProgress } from '@/utils/gamification';
 import { formatCurrency } from '@/utils/helpers';
 import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -448,6 +449,60 @@ export default function InsightsScreen() {
           <Text style={s.heading}>Insights</Text>
           <Text style={s.subHeading}>Understand. Improve. Level up. 🌿</Text>
         </View>
+
+        {/* ── LEVEL / XP STRIP — updates as expenses earn XP ──── */}
+        {profile ? (
+          (() => {
+            const lp = getLevelProgress(profile.xp ?? 0);
+            return (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  marginBottom: 14,
+                }}
+              >
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#EAF8E5',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>⚡</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontWeight: '800', color: AMOUNT_DARK, fontSize: 13 }}>
+                      Level {profile.level ?? lp.level}
+                    </Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
+                      {lp.xpIntoLevel} / {lp.xpForNextLevel} XP
+                    </Text>
+                  </View>
+                  <View style={{ height: 6, borderRadius: 3, backgroundColor: '#EDEFEC', overflow: 'hidden' }}>
+                    <View
+                      style={{
+                        width: `${Math.round(lp.progress * 100)}%`,
+                        height: '100%',
+                        borderRadius: 3,
+                        backgroundColor: GREEN,
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+            );
+          })()
+        ) : null}
 
         {/* Month picker modal */}
         <Modal visible={monthPickerVisible} animationType="slide" transparent>

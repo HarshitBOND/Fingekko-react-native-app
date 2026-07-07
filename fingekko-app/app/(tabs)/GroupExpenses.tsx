@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
@@ -53,9 +53,13 @@ export default function GroupExpensesScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchExpenses();
-  }, [groupId]);
+  // Refresh on focus so expenses added from the group's add screen show up on return.
+  useFocusEffect(
+    useCallback(() => {
+      fetchExpenses();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [groupId])
+  );
 
   return (
     <ScreenContainer

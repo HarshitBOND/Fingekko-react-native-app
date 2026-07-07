@@ -9,6 +9,7 @@ async function createExpense(expenseData: {
   amount: number;
   currency: string;
   notes: string;
+  category?: string;
   expenseDate?: string;
   participants: { userId: string; amount: number; settled: boolean }[];
   history: { action: string; performedBy: string }[];

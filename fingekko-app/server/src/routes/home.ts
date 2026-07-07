@@ -2,7 +2,12 @@ import express , {Request, Response} from 'express';
 import authMiddleware from "../middleware/auth.js";
 import {getQuestState, setQuestState } from '../repositories/questRepository.js';
 import { createTransaction, listTransactions } from '../repositories/transactionRepository.js';
-import { updateById, updateUserStats } from '../repositories/userRepository.js';
+import { awardXp, updateById, updateUserStats } from '../repositories/userRepository.js';
+import { logXpEvent } from '../repositories/xpEventRepository.js';
+
+// XP granted for logging a personal transaction — keep in sync with the
+// expense-split reward in communityExpense.routes.ts.
+const XP_FOR_TRANSACTION = 10;
 
 
 const router = express.Router();
@@ -117,7 +122,19 @@ router.post('/transactions', authMiddleware, async (req: Request, res: Response,
       date,
     });
 
-    return res.status(201).json({ transaction });
+    let xpAward = null;
+    try {
+      xpAward = await awardXp(userId, XP_FOR_TRANSACTION);
+      await logXpEvent(userId, {
+        type: 'transaction_added',
+        amount: XP_FOR_TRANSACTION,
+        description: `Tracked ${type}: ${category}`,
+      });
+    } catch (xpError) {
+      console.error('Failed to award XP for transaction:', xpError);
+    }
+
+    return res.status(201).json({ transaction, xpAward });
   } catch (error) {
     return next(error);
   }

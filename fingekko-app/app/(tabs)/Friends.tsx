@@ -1,6 +1,7 @@
 import type { FriendRelationship, FriendSearchResponse, FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
+import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -62,15 +63,12 @@ function useFriends() {
     }
   }, [isSignedIn]);
 
-  useEffect(() => {
-    let active = true;
-    if (active) {
+  // Refresh on focus so incoming requests / new friends show up on return.
+  useFocusEffect(
+    useCallback(() => {
       loadFriends();
-    }
-    return () => {
-      active = false;
-    };
-  }, [loadFriends]);
+    }, [loadFriends])
+  );
 
   const acceptRequest = useCallback(async (friendshipId: string) => {
     try {

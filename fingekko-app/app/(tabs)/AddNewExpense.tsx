@@ -156,7 +156,10 @@ export default function AddNewExpense() {
         selectedSplitType === 'equalPaidByOthers' ||
         selectedSplitType === 'fullyOwedPaidByOthers';
 
-      await apiRequest({
+      const response = await apiRequest<{
+        expense: unknown;
+        xpAward: { xp: number; level: number; leveledUp: boolean; xpDelta: number } | null;
+      }>({
         method: 'post',
         url: '/api/expenses',
         token,
@@ -173,7 +176,6 @@ export default function AddNewExpense() {
         },
       });
 
-      Alert.alert('Saved', 'Expense added successfully.');
       setDescription('');
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
@@ -181,6 +183,17 @@ export default function AddNewExpense() {
       setCategory('');
       setSelectedFriendIds([]);
       setSelectedSplitType('equalPaidByYou');
+
+      const award = response?.xpAward;
+      const xpLine = award
+        ? award.leveledUp
+          ? `+${award.xpDelta} XP — you reached Level ${award.level}! 🎉`
+          : `+${award.xpDelta} XP earned ⚡`
+        : 'Expense added successfully.';
+
+      Alert.alert('Saved! 🎉', xpLine, [
+        { text: 'Done', onPress: () => router.back() },
+      ]);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
     } finally {
@@ -204,7 +217,7 @@ export default function AddNewExpense() {
             <Icon name="Flame" size={24} color="#000000" />
           </View>
           <View style={styles.balanceCopy}>
-            <Text style={styles.balanceLabel}>Let's GekkoSplit!</Text>
+            <Text style={styles.balanceLabel}>Let&apos;s GekkoSplit!</Text>
             <Text style={styles.balanceValue}>Keep the calculations clean & the friendships closer! 🌿</Text>
           </View>
         </View>

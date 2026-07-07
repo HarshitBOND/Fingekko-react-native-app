@@ -1,7 +1,7 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
 import { apiRequest } from '../../utils/api';
 import { showConfirm } from '@/utils/showConfirm';
@@ -88,9 +88,13 @@ export default function YourGroups() {
         }
     };
 
-    useEffect(() => {
-        fetchGroups();
-    }, []);
+    // Refresh on focus so groups created/joined elsewhere show up immediately.
+    useFocusEffect(
+        useCallback(() => {
+            fetchGroups();
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [])
+    );
 
     const leaveGroup = async (groupId: string) => {
         const token = await getToken();

@@ -92,6 +92,10 @@ const communityExpenseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    category: {
+      type: String,
+      default: '',
+    },
     participants: {
       type: [participantSchema],
       default: [],

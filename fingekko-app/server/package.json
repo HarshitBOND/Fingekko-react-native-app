@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "expo lint"
   },
   "dependencies": {
     "@clerk/backend": "^3.10.0",

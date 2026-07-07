@@ -1,7 +1,7 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   ImageBackground,
@@ -81,10 +81,13 @@ export default function NonGroupExpenses() {
     }
   };
 
-  useEffect(() => {
-    fetchExpensesAndFriends();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Refresh whenever the screen regains focus so newly added splits appear.
+  useFocusEffect(
+    useCallback(() => {
+      fetchExpensesAndFriends();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   const getAmountColor = (balance: number) => {
     if (balance > 0) return '#148a46';
@@ -419,7 +422,9 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    // Sits above the floating tab bar (which occupies the bottom ~76px) so the
+    // add button is actually visible and tappable.
+    bottom: layout.navBarHeight + layout.navBarBottomInset + 16,
     right: 24,
     width: 56,
     height: 56,

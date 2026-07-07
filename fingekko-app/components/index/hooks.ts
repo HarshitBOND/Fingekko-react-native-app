@@ -3,7 +3,8 @@ import type { HomeResponse, TransactionsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { summarizeByPayCycle } from '@/utils/pay-cycle';
 import { useAuth } from '@clerk/clerk-expo';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Theme } from './constants';
 import type { ProgressItem } from './types';
 import { formatDateLabel, getFirstName } from './utils';
@@ -42,15 +43,14 @@ export const useHomeScreen = () => {
     }
   };
 
-  useEffect(() => {
-    let isActive = true;
-    (async () => {
-      if (isActive) await loadRealData();
-    })();
-    return () => {
-      isActive = false;
-    };
-  }, [isSignedIn]);
+  // Refetch every time the Home tab regains focus — tab screens stay mounted,
+  // so a one-shot useEffect would never pick up expenses added on other screens.
+  useFocusEffect(
+    useCallback(() => {
+      loadRealData();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isSignedIn])
+  );
 
   const profile = homeData?.user ?? null;
 

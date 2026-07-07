@@ -92,6 +92,7 @@ type CreateExpenseInput = {
   currency: string;
   paidBy: string;
   groupId?: string;
+  category?: string;
 };
 
 function buildParticipants(
@@ -160,6 +161,7 @@ export async function createCommunityExpense(currentUserId: string, input: Creat
     amount: input.amount,
     currency: input.currency,
     notes: input.notes,
+    category: input.category ?? '',
     expenseDate: input.expenseDate,
     participants,
     history: [{ action: 'CREATED', performedBy: currentUserId }],

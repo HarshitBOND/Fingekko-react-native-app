@@ -1,6 +1,6 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -123,9 +123,13 @@ export default function FriendSplitsScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchFriendExpenses();
-  }, [friendId]);
+  // Refresh on focus so newly added or settled splits show up on return.
+  useFocusEffect(
+    useCallback(() => {
+      fetchFriendExpenses();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [friendId])
+  );
 
   // Compute overall balance with this friend
   const totalBalance = expenses.reduce((sum, exp) => {

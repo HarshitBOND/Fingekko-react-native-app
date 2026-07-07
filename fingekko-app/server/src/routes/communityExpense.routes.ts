@@ -2,8 +2,15 @@ import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import communityExpenseRepository from '../repositories/communityExpenseRepository.js';
 import { createCommunityExpense, updateCommunityExpense } from '../services/communityExpenseService.js';
+import { createTransaction } from '../repositories/transactionRepository.js';
+import { awardXp } from '../repositories/userRepository.js';
+import { logXpEvent } from '../repositories/xpEventRepository.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
+
+// XP granted for logging an expense — keeps the gamification loop alive from the
+// most common action in the app.
+const XP_FOR_EXPENSE = 15;
 
 const router = Router();
 
@@ -93,6 +100,7 @@ function serializeExpense(expense: any, currentUserId?: string) {
     expenseDate: expense.expenseDate?.toISOString?.() ?? expense.expenseDate ?? null,
     currency: expense.currency,
     notes: expense.notes,
+    category: expense.category ?? '',
     createdBy: serializeUser(expense.createdBy),
     paidBy: paidByList,
     participants,
@@ -219,10 +227,44 @@ router.post('/', async (req: Request, res: Response) => {
       currency: String(req.body?.currency ?? 'INR'),
       paidBy: resolvedPaidBy,
       groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
+      category: req.body?.category ? String(req.body.category) : '',
     });
 
+    // Mirror the current user's own share into their personal transactions so
+    // Home / Insights (which read /api/transactions) reflect this expense too.
+    const myShare = (expense.participants ?? [])
+      .filter((p: any) => toId(p.userId) === currentUserId)
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    if (myShare > 0) {
+      try {
+        await createTransaction(currentUserId, {
+          type: 'expense',
+          amount: roundTwo(myShare),
+          category: req.body?.category ? String(req.body.category) : 'Other',
+          date: String(req.body?.expenseDate ?? new Date().toISOString()),
+        });
+      } catch (mirrorError) {
+        console.error('Failed to mirror expense into transactions:', mirrorError);
+      }
+    }
+
+    // Reward the action so streak/XP surfaces actually move when users track spending.
+    let xpAward = null;
+    try {
+      const award = await awardXp(currentUserId, XP_FOR_EXPENSE);
+      await logXpEvent(currentUserId, {
+        type: 'expense_added',
+        amount: XP_FOR_EXPENSE,
+        description: `Tracked expense: ${String(req.body?.description ?? '')}`.trim(),
+      });
+      xpAward = award;
+    } catch (xpError) {
+      console.error('Failed to award XP for expense:', xpError);
+    }
+
     const populated = await communityExpenseRepository.findById(expense._id.toString());
-    return res.status(201).json({ expense: serializeExpense(populated || expense) });
+    return res.status(201).json({ expense: serializeExpense(populated || expense), xpAward });
   } catch (error) {
     console.error(error);
     return res.status(400).json({ message: error instanceof Error ? error.message : 'Failed to create expense' });
