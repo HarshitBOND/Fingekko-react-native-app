@@ -6,6 +6,10 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     monthlyIncome: { type: Number, default: 0 },
+    // Day of month (1-31) the user is usually paid. Lets us anchor the
+    // "current pay cycle" to the user's real payday instead of assuming
+    // income lands on the 1st, since salaries often land mid-month.
+    payday: { type: Number, default: null, min: 1, max: 31 },
     currency: { type: String, default: 'INR' },
     level: { type: Number, default: 1 },
     xp: { type: Number, default: 0, min: 0 },

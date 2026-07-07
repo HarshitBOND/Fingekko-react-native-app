@@ -11,6 +11,7 @@ type UpdateUserData = Partial<{
   name: string;
   email: string;
   monthlyIncome: number;
+  payday: number | null;
   currency: string;
 }>
 

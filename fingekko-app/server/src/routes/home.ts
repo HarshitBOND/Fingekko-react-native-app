@@ -2,7 +2,7 @@ import express , {Request, Response} from 'express';
 import authMiddleware from "../middleware/auth.js";
 import {getQuestState, setQuestState } from '../repositories/questRepository.js';
 import { createTransaction, listTransactions } from '../repositories/transactionRepository.js';
-import { updateUserStats } from '../repositories/userRepository.js';
+import { updateById, updateUserStats } from '../repositories/userRepository.js';
 
 
 const router = express.Router();
@@ -25,6 +25,9 @@ router.get('/home', authMiddleware, (req: Request, res: Response) => {
       points: safeUser.points ?? 0,
       userGekko: safeUser.userGekko ?? 'Planner Gekko',
       avatarKey: safeUser.avatarKey ?? 'planner',
+      monthlyIncome: safeUser.monthlyIncome ?? 0,
+      payday: safeUser.payday ?? null,
+      currency: safeUser.currency ?? 'INR',
     },
     stats: {
       dayStreak: stats.dayStreak ?? 0,
@@ -39,6 +42,41 @@ router.get('/home', authMiddleware, (req: Request, res: Response) => {
 
 router.get('/profile', authMiddleware, (req: Request, res: Response) => {
   return res.json({ user: (req.user) });
+});
+
+router.put('/profile', authMiddleware, async (req: Request, res: Response, next: Function) => {
+  const { monthlyIncome, payday, currency } = req.body ?? {};
+  const update: Record<string, unknown> = {};
+
+  if (monthlyIncome !== undefined) {
+    if (!Number.isFinite(monthlyIncome) || monthlyIncome < 0) {
+      return res.status(400).json({ error: 'Monthly income must be a positive number.' });
+    }
+    update.monthlyIncome = monthlyIncome;
+  }
+
+  if (payday !== undefined && payday !== null) {
+    if (!Number.isInteger(payday) || payday < 1 || payday > 31) {
+      return res.status(400).json({ error: 'Payday must be a day of month between 1 and 31.' });
+    }
+    update.payday = payday;
+  }
+
+  if (currency !== undefined) {
+    update.currency = currency;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return res.status(400).json({ error: 'Nothing to update.' });
+  }
+
+  try {
+    const userId = req.user.id ?? req.user._id?.toString();
+    const user = await updateById(userId, update);
+    return res.json({ user });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get('/transactions', authMiddleware, async (req: Request, res: Response, next: Function) => {

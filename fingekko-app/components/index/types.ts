@@ -11,10 +11,6 @@ export type ProgressItem = {
 };
 
 export type HomeScreenState = {
-  useDummyData: boolean;
-  demoTransactions: Transaction[];
-  dummyAmount: string;
-  dummyCategory: string;
   activeProfileName: string;
   currentDateLabel: string;
   balanceAmount: number;

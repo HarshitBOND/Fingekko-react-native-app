@@ -41,39 +41,6 @@ type QuickAction = {
     href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses' | '/(tabs)/insights';
 };
 
-const GROUPS: GroupItem[] = [
-    {
-        id: 'g1',
-        name: 'Office Team Lunch',
-        members: ['u1', 'u2', 'u3'],
-        icon: '🍱',
-        createdBy: 'John Doe',
-        amountLabel: 'You are owed',
-        amount: '₹1,240',
-        amountColor: '#148a46',
-    },
-    {
-        id: 'g2',
-        name: 'Goa Trip',
-        members: ['u1', 'u2', 'u3', 'u4', 'u5'],
-        icon: '🏝️',
-        createdBy: 'Jane Smith',
-        amountLabel: 'You owe',
-        amount: '₹860',
-        amountColor: '#eb5a4f',
-    },
-    {
-        id: 'g3',
-        name: 'Flatmates',
-        members: ['u1', 'u2', 'u3', 'u4'],
-        icon: '🏠',
-        createdBy: 'Alice Johnson',
-        amountLabel: 'You are settled up',
-        amount: '₹0',
-        amountColor: '#6b7280',
-    },
-];
-
 const QUICK_ACTIONS: QuickAction[] = [
     {
         id: 'add-expense',

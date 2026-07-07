@@ -1,11 +1,13 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
   Pressable,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -24,6 +26,13 @@ import { apiRequest } from '@/utils/api';
 import { formatCurrency } from '@/utils/helpers';
 
 const EMOJI_OPTIONS = ['🎯', '✈️', '🏠', '🚗', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const QUICK_DEADLINES = [
+  { label: '1 month', months: 1 },
+  { label: '3 months', months: 3 },
+  { label: '6 months', months: 6 },
+  { label: '1 year', months: 12 },
+];
 
 function parseDeadline(deadline: string): Date | null {
   const parsed = new Date(deadline);
@@ -38,88 +47,179 @@ function daysUntil(deadline: string): number | null {
   return Math.round((date.getTime() - startOfToday.getTime()) / 86400000);
 }
 
+function toIsoDate(year: number, month: number, day: number): string {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, daysInMonth)).toISOString().split('T')[0];
+}
+
+function addMonths(date: Date, months: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function formatDeadlineLabel(deadline: string): string {
+  const date = parseDeadline(deadline);
+  if (!date) return 'Select a date';
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function GoalsScreen() {
   const { getToken, isSignedIn } = useAuth();
   const [goals, setGoals] = useState<ApiGoal[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const [createVisible, setCreateVisible] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [deadline, setDeadline] = useState('');
   const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0]);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const today = useMemo(() => new Date(), []);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(today.getMonth());
+  const [pickerDay, setPickerDay] = useState(today.getDate());
 
   const [contributeGoal, setContributeGoal] = useState<ApiGoal | null>(null);
   const [contributeAmount, setContributeAmount] = useState('');
   const [contributing, setContributing] = useState(false);
+  const [contributeError, setContributeError] = useState('');
 
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
       setGoals([]);
       return;
     }
-    setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
       const response = await apiRequest<GoalsResponse>('/api/goals', {}, token);
       setGoals(response?.goals ?? []);
+      setLoadError('');
     } catch (error) {
       console.warn('Failed to load goals:', error);
-    } finally {
-      setLoading(false);
+      setLoadError('Could not load your goals. Check your connection and try again.');
     }
   }, [getToken, isSignedIn]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchGoals();
+      setLoading(true);
+      fetchGoals().finally(() => setLoading(false));
     }, [fetchGoals])
   );
 
-  const resetCreateForm = () => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchGoals();
+    setRefreshing(false);
+  };
+
+  const sortedGoals = useMemo(() => {
+    return [...goals].sort((a, b) => {
+      const aDone = a.targetAmount > 0 && a.currentAmount >= a.targetAmount;
+      const bDone = b.targetAmount > 0 && b.currentAmount >= b.targetAmount;
+      if (aDone !== bDone) return aDone ? 1 : -1;
+
+      const aTime = parseDeadline(a.deadline)?.getTime() ?? Infinity;
+      const bTime = parseDeadline(b.deadline)?.getTime() ?? Infinity;
+      return aTime - bTime;
+    });
+  }, [goals]);
+
+  const summary = useMemo(() => {
+    const activeGoals = goals.filter((g) => !(g.targetAmount > 0 && g.currentAmount >= g.targetAmount));
+    const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
+    return { activeCount: activeGoals.length, totalSaved };
+  }, [goals]);
+
+  const resetForm = () => {
+    setEditingGoalId(null);
     setTitle('');
     setTargetAmount('');
     setDeadline('');
     setEmoji(EMOJI_OPTIONS[0]);
+    setFormError('');
   };
 
-  const handleCreateGoal = async () => {
+  const openCreate = () => {
+    resetForm();
+    setCreateVisible(true);
+  };
+
+  const openEdit = (goal: ApiGoal) => {
+    setEditingGoalId(goal.id);
+    setTitle(goal.title);
+    setTargetAmount(String(goal.targetAmount));
+    setDeadline(goal.deadline);
+    setEmoji(goal.emoji || EMOJI_OPTIONS[0]);
+    setFormError('');
+    setCreateVisible(true);
+  };
+
+  const openDatePicker = () => {
+    const existing = parseDeadline(deadline);
+    const base = existing ?? today;
+    setPickerYear(base.getFullYear());
+    setPickerMonth(base.getMonth());
+    setPickerDay(base.getDate());
+    setDatePickerVisible(true);
+  };
+
+  const applyQuickDeadline = (months: number) => {
+    const next = addMonths(today, months);
+    setDeadline(toIsoDate(next.getFullYear(), next.getMonth(), next.getDate()));
+  };
+
+  const confirmCustomDate = () => {
+    setDeadline(toIsoDate(pickerYear, pickerMonth, pickerDay));
+    setDatePickerVisible(false);
+  };
+
+  const handleSaveGoal = async () => {
     const amount = Number(targetAmount);
     if (!title.trim()) {
-      Alert.alert('Missing title', 'Give your goal a name.');
+      setFormError('Give your goal a name.');
       return;
     }
     if (!amount || Number.isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a target amount greater than 0.');
+      setFormError('Enter a target amount greater than 0.');
       return;
     }
-    if (!deadline.trim()) {
-      Alert.alert('Missing deadline', 'Enter a target date (YYYY-MM-DD).');
+    if (!deadline.trim() || !parseDeadline(deadline)) {
+      setFormError('Choose a target date.');
       return;
     }
 
     setSaving(true);
+    setFormError('');
     try {
       const token = await getToken();
       if (!token) return;
-      await apiRequest({
-        method: 'post',
-        url: '/api/goals',
-        token,
-        data: {
-          title: title.trim(),
-          targetAmount: amount,
-          deadline: deadline.trim(),
-          emoji,
-        },
-      });
+      const payload = {
+        title: title.trim(),
+        targetAmount: amount,
+        deadline: deadline.trim(),
+        emoji,
+      };
+
+      if (editingGoalId) {
+        await apiRequest({ method: 'put', url: `/api/goals/${editingGoalId}`, token, data: payload });
+      } else {
+        await apiRequest({ method: 'post', url: '/api/goals', token, data: payload });
+      }
+
       setCreateVisible(false);
-      resetCreateForm();
+      resetForm();
       await fetchGoals();
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to create goal.');
+      setFormError(error?.message || 'Something went wrong saving this goal.');
     } finally {
       setSaving(false);
     }
@@ -148,17 +248,19 @@ export default function GoalsScreen() {
   const openContribute = (goal: ApiGoal) => {
     setContributeGoal(goal);
     setContributeAmount('');
+    setContributeError('');
   };
 
   const handleContribute = async () => {
     if (!contributeGoal) return;
     const amount = Number(contributeAmount);
     if (!amount || Number.isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter an amount greater than 0.');
+      setContributeError('Enter an amount greater than 0.');
       return;
     }
 
     setContributing(true);
+    setContributeError('');
     try {
       const token = await getToken();
       if (!token) return;
@@ -173,11 +275,13 @@ export default function GoalsScreen() {
       setContributeAmount('');
       await fetchGoals();
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to update goal.');
+      setContributeError(error?.message || 'Failed to update goal.');
     } finally {
       setContributing(false);
     }
   };
+
+  const daysInPickerMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
 
   return (
     <ScreenContainer
@@ -186,17 +290,22 @@ export default function GoalsScreen() {
           <Navbar />
         </View>
       }
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primaryDeep} />
+      }
     >
       <View style={styles.headerRow}>
-        <View>
+        <View style={{ flex: 1 }}>
           <AppText variant="title" color="textPrimary" weight="bold">
             Your Goals
           </AppText>
           <AppText variant="caption" color="textSecondary">
-            Save toward what matters, one goal at a time.
+            {goals.length === 0
+              ? 'Save toward what matters, one goal at a time.'
+              : `${summary.activeCount} active • ${formatCurrency(summary.totalSaved)} saved so far`}
           </AppText>
         </View>
-        <Button variant="primary" size="sm" fullWidth={false} onPress={() => setCreateVisible(true)}>
+        <Button variant="primary" size="sm" fullWidth={false} onPress={openCreate}>
           + New Goal
         </Button>
       </View>
@@ -205,26 +314,34 @@ export default function GoalsScreen() {
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color={palette.primaryDeep} />
         </View>
+      ) : loadError && goals.length === 0 ? (
+        <EmptyState
+          icon="CircleAlert"
+          title="Couldn't load goals"
+          subtitle={loadError}
+          actionLabel="Try again"
+          onAction={fetchGoals}
+        />
       ) : goals.length === 0 ? (
         <EmptyState
           icon="Target"
           title="No goals yet"
           subtitle="Create your first savings goal to start tracking progress toward it."
           actionLabel="Create a goal"
-          onAction={() => setCreateVisible(true)}
+          onAction={openCreate}
         />
       ) : (
-        goals.map((goal) => {
+        sortedGoals.map((goal) => {
           const progress = goal.targetAmount > 0 ? Math.min(1, goal.currentAmount / goal.targetAmount) : 0;
           const pct = Math.round(progress * 100);
           const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
           const daysLeft = daysUntil(goal.deadline);
-          const isComplete = goal.currentAmount >= goal.targetAmount && goal.targetAmount > 0;
+          const isComplete = goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount;
           const isOverdue = daysLeft !== null && daysLeft < 0 && !isComplete;
 
           return (
             <Card key={goal.id} variant="elevated" padding={16} style={styles.goalCard}>
-              <View style={styles.goalTopRow}>
+              <Pressable style={styles.goalTopRow} onPress={() => openEdit(goal)} hitSlop={4}>
                 <View style={styles.emojiBadge}>
                   <AppText style={{ fontSize: 22 }}>{goal.emoji || '🎯'}</AppText>
                 </View>
@@ -249,7 +366,7 @@ export default function GoalsScreen() {
                     {pct}%
                   </AppText>
                 </ProgressRing>
-              </View>
+              </Pressable>
 
               <View style={styles.amountsRow}>
                 <AppText variant="bodySm" color="textPrimary" weight="bold">
@@ -267,11 +384,16 @@ export default function GoalsScreen() {
               )}
 
               <View style={styles.goalActions}>
-                <Pressable style={styles.addFundsBtn} onPress={() => openContribute(goal)}>
-                  <Icon name="Plus" size={14} color={palette.primaryDeep} />
-                  <AppText variant="micro" color="primaryDeep" weight="bold">
-                    Add funds
-                  </AppText>
+                {!isComplete && (
+                  <Pressable style={styles.addFundsBtn} onPress={() => openContribute(goal)}>
+                    <Icon name="Plus" size={14} color={palette.primaryDeep} />
+                    <AppText variant="micro" color="primaryDeep" weight="bold">
+                      Add funds
+                    </AppText>
+                  </Pressable>
+                )}
+                <Pressable style={styles.editBtn} onPress={() => openEdit(goal)}>
+                  <Icon name="Settings" size={14} color={palette.textSecondary} />
                 </Pressable>
                 <Pressable style={styles.deleteBtn} onPress={() => handleDeleteGoal(goal)}>
                   <Icon name="Trash" size={14} color={palette.danger} />
@@ -282,12 +404,12 @@ export default function GoalsScreen() {
         })
       )}
 
-      {/* Create goal modal */}
+      {/* Create / edit goal modal */}
       <Modal visible={createVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.md }}>
-              New Goal
+              {editingGoalId ? 'Edit Goal' : 'New Goal'}
             </AppText>
 
             <Input label="Title" placeholder="e.g. Goa trip" value={title} onChangeText={setTitle} />
@@ -299,13 +421,17 @@ export default function GoalsScreen() {
               onChangeText={setTargetAmount}
               containerStyle={{ marginTop: spacing.md }}
             />
-            <Input
-              label="Deadline"
-              placeholder="YYYY-MM-DD"
-              value={deadline}
-              onChangeText={setDeadline}
-              containerStyle={{ marginTop: spacing.md }}
-            />
+
+            <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md, marginBottom: 6 }}>
+              Deadline
+            </AppText>
+            <Pressable style={styles.deadlineField} onPress={openDatePicker}>
+              <Icon name="CalendarDays" size={16} color={palette.textSecondary} />
+              <AppText variant="bodySm" color={deadline ? 'textPrimary' : 'textTertiary'} style={{ flex: 1, marginLeft: 8 }}>
+                {formatDeadlineLabel(deadline)}
+              </AppText>
+              <Icon name="ChevronRight" size={16} color={palette.textTertiary} />
+            </Pressable>
 
             <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md, marginBottom: 6 }}>
               Emoji
@@ -322,20 +448,114 @@ export default function GoalsScreen() {
               ))}
             </View>
 
+            {!!formError && (
+              <AppText variant="caption" color="danger" style={{ marginTop: spacing.sm }}>
+                {formError}
+              </AppText>
+            )}
+
             <View style={styles.modalActions}>
               <Button
                 variant="outline"
                 size="md"
                 onPress={() => {
                   setCreateVisible(false);
-                  resetCreateForm();
+                  resetForm();
                 }}
                 style={{ flex: 1 }}
               >
                 Cancel
               </Button>
-              <Button variant="primary" size="md" onPress={handleCreateGoal} disabled={saving} style={{ flex: 1 }}>
-                {saving ? <ActivityIndicator color="#fff" /> : 'Create'}
+              <Button variant="primary" size="md" onPress={handleSaveGoal} disabled={saving} style={{ flex: 1 }}>
+                {saving ? <ActivityIndicator color="#fff" /> : editingGoalId ? 'Save' : 'Create'}
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date picker modal */}
+      <Modal visible={datePickerVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.md }}>
+              Choose a date
+            </AppText>
+
+            <View style={styles.quickRow}>
+              {QUICK_DEADLINES.map((option) => (
+                <Pressable key={option.label} style={styles.quickChip} onPress={() => applyQuickDeadline(option.months)}>
+                  <AppText variant="caption" color="primaryDeep" weight="bold">
+                    {option.label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+
+            <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md, marginBottom: 6 }}>
+              Or pick an exact date
+            </AppText>
+
+            <AppText variant="micro" color="textTertiary">
+              Year
+            </AppText>
+            <View style={styles.pickerRow}>
+              {[0, 1, 2, 3, 4].map((offset) => {
+                const year = today.getFullYear() + offset;
+                return (
+                  <Pressable
+                    key={year}
+                    onPress={() => setPickerYear(year)}
+                    style={[styles.pickerChip, pickerYear === year && styles.pickerChipActive]}
+                  >
+                    <AppText variant="caption" color={pickerYear === year ? 'onDark' : 'textPrimary'}>
+                      {year}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <AppText variant="micro" color="textTertiary" style={{ marginTop: spacing.sm }}>
+              Month
+            </AppText>
+            <View style={styles.pickerRow}>
+              {MONTH_SHORT.map((label, index) => (
+                <Pressable
+                  key={label}
+                  onPress={() => setPickerMonth(index)}
+                  style={[styles.pickerChip, pickerMonth === index && styles.pickerChipActive]}
+                >
+                  <AppText variant="caption" color={pickerMonth === index ? 'onDark' : 'textPrimary'}>
+                    {label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+
+            <AppText variant="micro" color="textTertiary" style={{ marginTop: spacing.sm }}>
+              Day
+            </AppText>
+            <ScrollView style={styles.dayScroll} contentContainerStyle={styles.pickerRow}>
+              {Array.from({ length: daysInPickerMonth }, (_, i) => i + 1).map((day) => (
+                <Pressable
+                  key={day}
+                  onPress={() => setPickerDay(day)}
+                  style={[styles.dayChip, pickerDay === day && styles.pickerChipActive]}
+                >
+                  <AppText variant="caption" color={pickerDay === day ? 'onDark' : 'textPrimary'}>
+                    {day}
+                  </AppText>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button variant="outline" size="md" onPress={() => setDatePickerVisible(false)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="md" onPress={confirmCustomDate} style={{ flex: 1 }}>
+                Use this date
               </Button>
             </View>
           </View>
@@ -350,7 +570,7 @@ export default function GoalsScreen() {
               Add funds
             </AppText>
             <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.md }}>
-              {contributeGoal?.title}
+              {contributeGoal?.title} • {formatCurrency(Math.max(0, (contributeGoal?.targetAmount ?? 0) - (contributeGoal?.currentAmount ?? 0)))} left to reach the goal
             </AppText>
             <Input
               label="Amount"
@@ -359,6 +579,11 @@ export default function GoalsScreen() {
               value={contributeAmount}
               onChangeText={setContributeAmount}
             />
+            {!!contributeError && (
+              <AppText variant="caption" color="danger" style={{ marginTop: spacing.sm }}>
+                {contributeError}
+              </AppText>
+            )}
             <View style={styles.modalActions}>
               <Button variant="outline" size="md" onPress={() => setContributeGoal(null)} style={{ flex: 1 }}>
                 Cancel
@@ -380,6 +605,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
+    gap: spacing.md,
   },
   centerBox: { paddingVertical: spacing.xxxl, alignItems: 'center' },
   goalCard: { marginBottom: spacing.md, borderRadius: radius.lg },
@@ -396,7 +622,8 @@ const styles = StyleSheet.create({
   goalActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
@@ -410,6 +637,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.pill,
+    marginRight: 'auto',
+  },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: palette.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteBtn: {
     width: 32,
@@ -429,6 +665,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
     borderRadius: radius.xl,
     padding: spacing.lg,
+    maxHeight: '88%',
   },
   emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   emojiOption: {
@@ -443,4 +680,42 @@ const styles = StyleSheet.create({
   },
   emojiOptionActive: { borderColor: palette.primary, backgroundColor: palette.primaryLight },
   modalActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  deadlineField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    backgroundColor: palette.card,
+  },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
+  },
+  pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  pickerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  pickerChipActive: { backgroundColor: palette.primary, borderColor: palette.primary },
+  dayScroll: { maxHeight: 130 },
+  dayChip: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
 });

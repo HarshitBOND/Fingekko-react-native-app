@@ -2,13 +2,12 @@ import Navbar from '@/components/Navbar';
 import type { Transaction } from '@/constants/types';
 import type { ApiUser, ProfileResponse, TransactionsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
-import { appendDummyExpense, createDummyProfile, createDummyTransactions } from '@/utils/demo-finance';
 import { formatCurrency } from '@/utils/helpers';
 import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../ui/Icon';
@@ -19,7 +18,6 @@ export default function InsightsScreen() {
   const { getToken, isSignedIn } = useAuth();
   const [profile, setProfile] = useState<ApiUser | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [useDummyData, setUseDummyData] = useState(false);
   const getTokenRef = useRef(getToken);
 
   useEffect(() => {
@@ -31,7 +29,6 @@ export default function InsightsScreen() {
       let isActive = true;
 
       const loadData = async () => {
-        if (useDummyData) return;
         if (!isSignedIn) {
           setProfile(null);
           setTransactions([]);
@@ -61,7 +58,7 @@ export default function InsightsScreen() {
       return () => {
         isActive = false;
       };
-    }, [isSignedIn, useDummyData])
+    }, [isSignedIn])
   );
 
   const currency = profile?.currency ?? '₹';
@@ -420,30 +417,6 @@ export default function InsightsScreen() {
     Alert.alert('Quick tip', "Track subscriptions you don't use. You could save up to ₹600/month!");
   };
 
-  // --- Dummy data / testing helpers -------------------------------------------------
-  const [dummyAmount, setDummyAmount] = useState('');
-  const dummyCategory = 'Shopping';
-
-  const enableDummy = () => {
-    setProfile(createDummyProfile());
-    setTransactions(createDummyTransactions());
-    setUseDummyData(true);
-  };
-
-  const disableDummy = () => {
-    setUseDummyData(false);
-    setProfile(null);
-    setTransactions([]);
-  };
-
-  const addDummyExpense = () => {
-    const amt = Number(dummyAmount);
-    if (!amt || Number.isNaN(amt)) { Alert.alert('Invalid amount'); return; }
-    const nowD = new Date();
-    setTransactions((t) => appendDummyExpense(t, amt, dummyCategory || 'Misc', nowD));
-    setDummyAmount('');
-  };
-
   // month navigation helpers
   const goPrevMonth = () => {
     const m = selectedMonth - 1;
@@ -472,47 +445,9 @@ export default function InsightsScreen() {
 
         {/* ── HEADER ─────────────────────────────────────────── */}
         <View style={s.header}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View>
-              <Text style={s.heading}>Insights</Text>
-              <Text style={s.subHeading}>Understand. Improve. Level up. 🌿</Text>
-            </View>
-            {__DEV__ && (
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                {!useDummyData ? (
-                  <TouchableOpacity onPress={enableDummy} style={s.dummyBtn}>
-                    <Text style={s.dummyBtnText}>Use dummy data</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity onPress={disableDummy} style={[s.dummyBtn, s.dummyBtnActive]}>
-                    <Text style={[s.dummyBtnText, { color: '#fff' }]}>Disable dummy</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
+          <Text style={s.heading}>Insights</Text>
+          <Text style={s.subHeading}>Understand. Improve. Level up. 🌿</Text>
         </View>
-
-        {__DEV__ && useDummyData && (
-          <View style={s.dummyControls}>
-            <Text style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 6 }}>Quick test: add a dummy expense</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput
-                placeholder="Amount"
-                keyboardType="numeric"
-                value={dummyAmount}
-                onChangeText={setDummyAmount}
-                style={s.input}
-              />
-              <TouchableOpacity style={s.addBtn} onPress={addDummyExpense}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.clearBtn} onPress={() => { setTransactions([]); }}>
-                <Text style={{ color: TEXT_MUTED }}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Month picker modal */}
         <Modal visible={monthPickerVisible} animationType="slide" transparent>

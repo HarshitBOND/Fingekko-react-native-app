@@ -3,6 +3,7 @@ export type ApiUser = {
 	name: string;
 	email: string;
 	monthlyIncome?: number;
+	payday?: number | null;
 	currency?: string;
 	level: number;
 	xp: number;

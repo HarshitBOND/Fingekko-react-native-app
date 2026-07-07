@@ -7,7 +7,6 @@ import TodaysProgress from '@/components/TodaysProgress';
 import TodaysQuest from '@/components/TodaysQuest';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import BalanceCard from './BalanceCard';
-import DemoDataCard from './DemoDataCard';
 import Header from './Header';
 import PlannerCard from './PlannerCard';
 import StreakCard from './StreakCard';
@@ -41,6 +40,10 @@ export function HomeScreen() {
           avgDailySpend={home.avgDailySpend}
           spendProgress={home.spendProgress}
           remainingProgress={home.remainingProgress}
+          hasIncomeSetup={home.hasIncomeSetup}
+          payday={home.payday}
+          savingIncome={home.savingIncome}
+          onSaveIncome={home.saveIncomeSetup}
         />
       </Section>
 
@@ -51,21 +54,6 @@ export function HomeScreen() {
       <Section delay={130}>
         <TodaysQuest />
       </Section>
-
-      {__DEV__ && (
-        <Section delay={160}>
-          <DemoDataCard
-            useDummyData={home.useDummyData}
-            dummyAmount={home.dummyAmount}
-            dummyCategory={home.dummyCategory}
-            onToggleDemo={home.handleToggleDemo}
-            onAmountChange={home.setDummyAmount}
-            onCategoryChange={home.setDummyCategory}
-            onAddExpense={home.handleAddExpense}
-            onResetSample={home.resetDemoTransactions}
-          />
-        </Section>
-      )}
 
       <Section delay={220}>
         <PlannerCard onViewInsights={() => router.push('/insights')} />
