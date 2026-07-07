@@ -5,13 +5,15 @@ import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import Navbar from '../../components/Navbar';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/ui/Icon';
+import Toast from '../../components/ui/Toast';
+import { useToast } from '../../hooks/useToast';
 import { palette, spacing, layout, radius, shadows } from '../../constants/design';
 
 export default function ProfileScreen() {
@@ -77,12 +79,17 @@ export default function ProfileScreen() {
     clerkUser?.primaryEmailAddress?.emailAddress || profile?.email || 'Email unavailable';
 
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
   const hasPhoto = Boolean(clerkUser?.hasImage && clerkUser?.imageUrl);
 
   const handlePickPhoto = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow access to your photo gallery to set a profile picture.');
+      showToast({
+        title: 'Permission needed',
+        message: 'Allow photo access to set a profile picture.',
+        tone: 'info',
+      });
       return;
     }
 
@@ -90,24 +97,35 @@ export default function ProfileScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
 
-    if (result.canceled || !result.assets?.[0]?.uri || !clerkUser) return;
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset?.base64 || !clerkUser) return;
 
     setUploadingPhoto(true);
     try {
-      const response = await fetch(result.assets[0].uri);
-      const blob = await response.blob();
-      await clerkUser.setProfileImage({ file: blob });
+      // Clerk on React Native reliably accepts a base64 data URI string;
+      // a Blob from fetch() is flaky on Android/Hermes.
+      const mime = asset.mimeType ?? 'image/jpeg';
+      await clerkUser.setProfileImage({ file: `data:${mime};base64,${asset.base64}` });
+      await clerkUser.reload();
+      showToast({ title: 'Profile photo updated! 🎉', tone: 'success', duration: 2000 });
     } catch (uploadError) {
-      Alert.alert('Upload failed', 'Could not update your profile picture. Please try again.');
+      showToast({
+        title: 'Upload failed',
+        message: 'Could not update your photo. Please try again.',
+        tone: 'error',
+      });
     } finally {
       setUploadingPhoto(false);
     }
-  }, [clerkUser]);
+  }, [clerkUser, showToast]);
 
   return (
+    <>
+      <Toast toast={toast} onDismiss={dismissToast} />
     <ScreenContainer
       contentStyle={{ gap: spacing.lg }}
       header={
@@ -123,14 +141,14 @@ export default function ProfileScreen() {
               <Image source={{ uri: clerkUser!.imageUrl }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Icon name="User" size={32} color={palette.primary} clickable />
+                <Icon name="User" size={32} color={palette.primary} clickable={false} />
               </View>
             )}
             <View style={styles.avatarEditBadge}>
               {uploadingPhoto ? (
                 <ActivityIndicator size="small" color={palette.white} />
               ) : (
-                <Icon name="Plus" size={14} color={palette.white} clickable />
+                <Icon name="Camera" size={13} color={palette.white} clickable={false} />
               )}
             </View>
           </Pressable>
@@ -206,6 +224,7 @@ export default function ProfileScreen() {
         Sign out
       </Button>
     </ScreenContainer>
+    </>
   );
 }
 

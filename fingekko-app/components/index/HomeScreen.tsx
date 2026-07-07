@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { RefreshControl, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { layout, spacing } from '@/constants/design';
+import { layout, palette, spacing } from '@/constants/design';
 import Navbar from '@/components/Navbar';
 import TodaysProgress from '@/components/TodaysProgress';
 import TodaysQuest from '@/components/TodaysQuest';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import BalanceCard from './BalanceCard';
 import Header from './Header';
@@ -19,6 +21,17 @@ const Section = ({ delay, children }: { delay: number; children: React.ReactNode
 
 export function HomeScreen() {
   const home = useHomeScreen();
+  const [refreshing, setRefreshing] = useState(false);
+
+  if (home.initialLoading) {
+    return <LoadingScreen label="Getting your finances ready..." />;
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await home.refresh();
+    setRefreshing(false);
+  };
 
   return (
     <ScreenContainer
@@ -28,8 +41,11 @@ export function HomeScreen() {
           <Navbar />
         </View>
       }
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primaryDeep} />
+      }
     >
-      <Header name={home.activeProfileName} dateLabel={home.currentDateLabel} />
+      <Header name={home.activeProfileName || 'there'} dateLabel={home.currentDateLabel} />
 
       <Section delay={40}>
         <BalanceCard

@@ -3,7 +3,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   View,
@@ -15,7 +14,10 @@ import AnimatedIcon from '../../components/ui/AnimatedIcon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import ScreenContainer from '../../components/ui/ScreenContainer';
+import Toast from '../../components/ui/Toast';
+import { useToast } from '../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 type ParticipantShare = {
@@ -79,6 +81,10 @@ export default function FriendSplitsScreen() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [settling, setSettling] = useState(false);
+  const [settleConfirm, setSettleConfirm] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
 
   const fetchFriendExpenses = async () => {
     if (!friendId) return;
@@ -151,97 +157,81 @@ export default function FriendSplitsScreen() {
     return sum;
   }, 0);
 
-  const handleSettleUp = async () => {
+  const handleSettleUp = () => {
     if (totalBalance === 0) {
-      Alert.alert('Settled', 'You are already fully settled up!');
+      showToast({ title: 'All settled up! 🎉', message: 'Nothing to settle with this friend.', tone: 'info' });
       return;
     }
-
-
-
-    Alert.alert(
-      'Settle Up',
-      `Are you sure you want to settle the balance of ₹${Math.abs(totalBalance).toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Settle',
-          onPress: async () => {
-            setSettling(true);
-            try {
-              const token = await getToken();
-              if (!token) return;
-
-              // Find unsettled expenses with this friend
-              const unsettled = expenses.filter(exp => {
-                const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-                if (creatorId === dbUserId) {
-                  const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-                  return friendPart && !friendPart.settled;
-                } else if (creatorId === friendId) {
-                  const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-                  return userPart && !userPart.settled;
-                }
-                return false;
-              });
-
-              // Call settle endpoint for each unsettled expense
-              for (const exp of unsettled) {
-                await apiRequest({
-                  method: 'post',
-                  url: `/api/expenses/${exp.id}/settle`,
-                  token,
-                  data: {
-                    userId: totalBalance > 0 ? friendId : dbUserId
-                  }
-                });
-              }
-
-              Alert.alert('Success', 'Balances successfully settled!');
-              fetchFriendExpenses();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to settle balance.');
-            } finally {
-              setSettling(false);
-            }
-          }
-        }
-      ]
-    );
+    setSettleConfirm(true);
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
-    Alert.alert(
-      'Delete Expense',
-      'Are you sure you want to delete this expense? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await getToken();
-              if (!token) return;
+  const confirmSettleUp = async () => {
+    setSettling(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
 
-              await apiRequest({
-                method: 'delete',
-                url: `/api/expenses/${expenseId}`,
-                token,
-              });
+      // Find unsettled expenses with this friend
+      const unsettled = expenses.filter(exp => {
+        const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
+        if (creatorId === dbUserId) {
+          const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
+          return friendPart && !friendPart.settled;
+        } else if (creatorId === friendId) {
+          const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
+          return userPart && !userPart.settled;
+        }
+        return false;
+      });
 
-              Alert.alert('Deleted', 'Expense deleted successfully.');
-              fetchFriendExpenses();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete expense.');
-            }
-          },
-        },
-      ]
-    );
+      // Call settle endpoint for each unsettled expense
+      for (const exp of unsettled) {
+        await apiRequest({
+          method: 'post',
+          url: `/api/expenses/${exp.id}/settle`,
+          token,
+          data: {
+            userId: totalBalance > 0 ? friendId : dbUserId
+          }
+        });
+      }
+
+      setSettleConfirm(false);
+      showToast({ title: 'Balances settled! 🎉', message: 'You are all square now.', tone: 'success' });
+      fetchFriendExpenses();
+    } catch (err: any) {
+      showToast({ title: 'Could not settle', message: err.message || 'Please try again.', tone: 'error' });
+    } finally {
+      setSettling(false);
+    }
+  };
+
+  const confirmDeleteExpense = async () => {
+    if (!deleteTargetId) return;
+    setDeleting(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      await apiRequest({
+        method: 'delete',
+        url: `/api/expenses/${deleteTargetId}`,
+        token,
+      });
+
+      setDeleteTargetId(null);
+      showToast({ title: 'Expense deleted', tone: 'info', duration: 2200 });
+      fetchFriendExpenses();
+    } catch (err: any) {
+      showToast({ title: 'Could not delete', message: err.message || 'Please try again.', tone: 'error' });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
+    <>
+    <Toast toast={toast} onDismiss={dismissToast} />
     <ScreenContainer
       header={
         <View style={styles.header}>
@@ -383,7 +373,7 @@ export default function FriendSplitsScreen() {
                 {userPaid && (
                   <Pressable
                     style={styles.deleteBtn}
-                    onPress={() => handleDeleteExpense(item.id)}
+                    onPress={() => setDeleteTargetId(item.id)}
                   >
                     <Icon name="Trash2" size={16} color={palette.danger} />
                   </Pressable>
@@ -393,7 +383,29 @@ export default function FriendSplitsScreen() {
           );
         })
       )}
+
+      <ConfirmDialog
+        visible={settleConfirm}
+        title="Settle up"
+        message={`Settle the balance of ₹${Math.abs(totalBalance).toFixed(2)} with ${friendName || 'this friend'}?`}
+        confirmText="Settle"
+        loading={settling}
+        onConfirm={confirmSettleUp}
+        onCancel={() => setSettleConfirm(false)}
+      />
+
+      <ConfirmDialog
+        visible={!!deleteTargetId}
+        title="Delete expense"
+        message="Delete this expense? This action cannot be undone."
+        confirmText="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDeleteExpense}
+        onCancel={() => setDeleteTargetId(null)}
+      />
     </ScreenContainer>
+    </>
   );
 }
 

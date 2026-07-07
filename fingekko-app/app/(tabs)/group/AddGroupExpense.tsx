@@ -6,7 +6,6 @@ import Icon from '../../../components/ui/Icon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -19,6 +18,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from '../../../components/ui/Toast';
+import { useToast } from '../../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
 
 const WALLET_ILLUSTRATION = require('../../../assets/images/bgadd.png');
@@ -67,6 +68,7 @@ export default function AddNewExpense() {
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { toast, showToast, dismissToast } = useToast();
 
   const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -274,7 +276,7 @@ export default function AddNewExpense() {
         },
       });
 
-      Alert.alert('Saved', 'Expense added successfully.');
+      showToast({ title: 'Expense added! 🎉', message: 'The split has been shared.', tone: 'success', duration: 1600 });
       setDescription('');
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
@@ -283,6 +285,7 @@ export default function AddNewExpense() {
       setCustomOwesMe({});
       setCustomIOwe({});
       setSelectedUserIds(isGroupMode ? peopleList.map((p) => p.id) : []);
+      setTimeout(() => router.back(), 700);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
     } finally {
@@ -292,8 +295,9 @@ export default function AddNewExpense() {
 
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
+      <Toast toast={toast} onDismiss={dismissToast} />
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.push(`/(tabs)/group/${groupId}`)}>
+        <Pressable style={styles.headerButton} onPress={() => (router.canGoBack() ? router.back() : router.replace(`/(tabs)/group/${groupId}`))}>
           <Icon name="ChevronLeft" size={20} color="#148a46" />
         </Pressable>
         <Text style={styles.headerTitle}>Add Expense</Text>
@@ -537,7 +541,7 @@ export default function AddNewExpense() {
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <Pressable style={[styles.primaryButton, { marginBottom: 16 }]} onPress={handleSave} disabled={saving}>
+            <Pressable style={[styles.primaryButton, { marginBottom: layout.navBarHeight + layout.navBarBottomInset + 16 }]} onPress={handleSave} disabled={saving}>
               {saving ? (
                 <ActivityIndicator color="#000000" />
               ) : (
@@ -699,7 +703,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.base,
-    paddingBottom: 32,
+    paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28,
     gap: spacing.base,
   },
   balanceCard: {

@@ -6,7 +6,6 @@ import Icon from '../../components/ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -17,6 +16,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from '../../components/ui/Toast';
+import { useToast } from '../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 // NOTE: swap this out for the real illustration when you have it.
@@ -52,6 +53,7 @@ export default function AddNewExpense() {
 
   const [friendPickerOpen, setFriendPickerOpen] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
 
   const getTokenRef = useRef(getToken);
 
@@ -191,9 +193,8 @@ export default function AddNewExpense() {
           : `+${award.xpDelta} XP earned ⚡`
         : 'Expense added successfully.';
 
-      Alert.alert('Saved! 🎉', xpLine, [
-        { text: 'Done', onPress: () => router.back() },
-      ]);
+      showToast({ title: 'Saved! 🎉', message: xpLine, tone: 'success', duration: 1600 });
+      setTimeout(() => router.back(), 700);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
     } finally {
@@ -203,6 +204,7 @@ export default function AddNewExpense() {
 
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
+      <Toast toast={toast} onDismiss={dismissToast} />
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => router.back()}>
           <Icon name="ChevronLeft" size={20} color="#148a46" />
@@ -482,7 +484,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.base,
-    paddingBottom: 32,
+    paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28,
     gap: spacing.base,
   },
   balanceCard: {

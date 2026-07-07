@@ -4,12 +4,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
 import { apiRequest } from '../../utils/api';
-import { showConfirm } from '@/utils/showConfirm';
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Icon from '../../components/ui/Icon';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import AppText from '../../components/ui/AppText';
 import Card from '../../components/ui/Card';
+import Toast from '../../components/ui/Toast';
+import { useToast } from '../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 const ICONS = {
@@ -65,6 +66,8 @@ export default function YourGroups() {
 
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [deletingGroup, setDeletingGroup] = useState(false);
+    const { toast, showToast, dismissToast } = useToast();
 
     const { user } = useUser();
     const { getToken } = useAuth();
@@ -119,7 +122,7 @@ export default function YourGroups() {
         const token = await getToken();
         if (!token) {
             console.error('No token available for API request.');
-            return;
+            return false;
         }
         try {
             await apiRequest({
@@ -129,8 +132,10 @@ export default function YourGroups() {
             });
             // Refresh the groups list after deleting a group
             fetchGroups();
+            return true;
         } catch (error) {
             console.error('Error deleting group:', error);
+            return false;
         }
     };
 
@@ -310,6 +315,7 @@ export default function YourGroups() {
                 confirmText="Delete"
                 cancelText="Cancel"
                 destructive
+                loading={deletingGroup}
                 onCancel={() => {
                     setShowDeleteDialog(false);
                     setSelectedGroupId(null);
@@ -317,12 +323,22 @@ export default function YourGroups() {
                 onConfirm={async () => {
                     if (!selectedGroupId) return;
 
-                    await deleteGroup(selectedGroupId);
+                    setDeletingGroup(true);
+                    const ok = await deleteGroup(selectedGroupId);
+                    setDeletingGroup(false);
 
                     setShowDeleteDialog(false);
                     setSelectedGroupId(null);
+
+                    showToast(
+                        ok
+                            ? { title: 'Group deleted', tone: 'info', duration: 2200 }
+                            : { title: 'Could not delete group', message: 'Please try again.', tone: 'error' }
+                    );
                 }}
             />
+
+            <Toast toast={toast} onDismiss={dismissToast} />
         </ScreenContainer>
     );
 }

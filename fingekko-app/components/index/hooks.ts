@@ -14,6 +14,7 @@ export const useHomeScreen = () => {
   const { getToken, isSignedIn } = useAuth();
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const getTokenRef = useRef(getToken);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export const useHomeScreen = () => {
     if (!isSignedIn) {
       setHomeData(null);
       setTransactions([]);
+      setInitialLoading(false);
       return;
     }
 
@@ -40,6 +42,8 @@ export const useHomeScreen = () => {
       setTransactions(transactionsResponse?.transactions ?? []);
     } catch (error) {
       console.warn('Failed to load home data:', error);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -111,6 +115,7 @@ export const useHomeScreen = () => {
 
   return {
     now,
+    initialLoading,
     activeProfileName,
     currentDateLabel,
     balanceAmount,

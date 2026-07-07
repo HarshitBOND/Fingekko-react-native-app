@@ -1,4 +1,4 @@
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-expo';
+import { ClerkLoaded, ClerkLoading, ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import {
     PlusJakartaSans_400Regular,
@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import LoadingScreen from '../components/ui/LoadingScreen';
 import { palette } from '../constants/design';
 
 // Keep the native splash visible until fonts are ready.
@@ -40,7 +41,11 @@ export default function RootLayout() {
     }, [ready]);
 
     if (!ready) {
-        return null; // splash stays up
+        return (
+            <SafeAreaProvider>
+                <LoadingScreen />
+            </SafeAreaProvider>
+        ); // splash stays up until this becomes visible
     }
 
     if (!publishableKey) {
@@ -58,17 +63,23 @@ export default function RootLayout() {
             <SafeAreaProvider>
                 <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
                     <StatusBar style="dark" />
-                    <SignedIn>
-                        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
-                            <Stack.Screen name="(tabs)" />
-                        </Stack>
-                    </SignedIn>
+                    <ClerkLoading>
+                        <LoadingScreen />
+                    </ClerkLoading>
 
-                    <SignedOut>
-                        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
-                            <Stack.Screen name="(auth)" />
-                        </Stack>
-                    </SignedOut>
+                    <ClerkLoaded>
+                        <SignedIn>
+                            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
+                                <Stack.Screen name="(tabs)" />
+                            </Stack>
+                        </SignedIn>
+
+                        <SignedOut>
+                            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
+                                <Stack.Screen name="(auth)" />
+                            </Stack>
+                        </SignedOut>
+                    </ClerkLoaded>
                 </ClerkProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

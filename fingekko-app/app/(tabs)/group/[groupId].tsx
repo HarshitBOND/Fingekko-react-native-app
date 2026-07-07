@@ -3,7 +3,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Icon from '../../../components/ui/Icon';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -15,6 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
+import Toast from '../../../components/ui/Toast';
+import { useToast } from '../../../hooks/useToast';
 
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
 
@@ -107,6 +108,7 @@ export default function GroupDetailScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const membersY = useRef(0);
   const [settleUpVisible, setSettleUpVisible] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
 
   const [group, setGroup] = useState<GroupItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -256,6 +258,7 @@ export default function GroupDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <Toast toast={toast} onDismiss={dismissToast} />
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
       {/* Header stays outside the scroll so it never collides with the status bar / notch */}
@@ -346,7 +349,7 @@ export default function GroupDetailScreen() {
           <Pressable
             style={styles.quickActionCard}
             onPress={() => {
-              Alert.alert('Group Settings', 'Group settings are not connected yet.');
+              showToast({ title: 'Coming soon', message: 'Group settings aren’t available yet.', tone: 'info' });
             }}
           >
             <View style={styles.quickActionIconWrap}>
@@ -632,7 +635,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontFamily: fontFamily.bold, color: COLORS.textDark },
   headerSubtitle: { fontSize: 13, color: COLORS.textGray, marginTop: 2, fontFamily: fontFamily.semibold },
 
-  scrollContent: { paddingHorizontal: layout.gutter, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28 },
 
   balanceCard: {
     backgroundColor: COLORS.card,

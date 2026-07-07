@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   TextInput,
@@ -17,8 +16,10 @@ import AnimatedIcon from '../../components/ui/AnimatedIcon';
 import Icon from '../../components/ui/Icon';
 import PressableScale from '../../components/ui/PressableScale';
 import ScreenContainer from '../../components/ui/ScreenContainer';
+import Toast from '../../components/ui/Toast';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../constants/categories';
 import { fontFamily, gradients, layout, palette, radius, shadows, spacing } from '../../constants/design';
+import { useToast } from '../../hooks/useToast';
 import { apiRequest } from '../../utils/api';
 
 type XpAward = {
@@ -45,6 +46,7 @@ export default function AddScreen() {
   const [date, setDate] = useState(todayIso());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { toast, showToast, dismissToast } = useToast();
 
   const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
 
@@ -108,16 +110,16 @@ export default function AddScreen() {
         ? award.leveledUp
           ? `+${award.xpDelta} XP — you reached Level ${award.level}! 🎉`
           : `+${award.xpDelta} XP earned ⚡ (${award.xp} total)`
-        : 'Saved successfully.';
+        : 'Your Home and Insights are updated.';
 
-      Alert.alert(
-        type === 'expense' ? 'Expense added!' : 'Income added!',
-        `${xpLine}\nYour Home and Insights are updated.`,
-        [
-          { text: 'View Insights', onPress: () => router.push('/(tabs)/insights') },
-          { text: 'Done', onPress: () => router.push('/(tabs)'), style: 'default' },
-        ]
-      );
+      // Stay on this screen instead of forcing a redirect — the user can add
+      // another entry right away, and tap into Insights only if they want to.
+      showToast({
+        title: type === 'expense' ? 'Expense added! 🎉' : 'Income added! 🎉',
+        message: xpLine,
+        tone: 'success',
+        action: { label: 'View Insights', onPress: () => router.push('/(tabs)/insights') },
+      });
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save. Try again.');
     } finally {
@@ -126,14 +128,16 @@ export default function AddScreen() {
   };
 
   return (
-    <ScreenContainer
-      contentStyle={{ gap: spacing.lg }}
-      header={
-        <View style={{ paddingHorizontal: layout.gutter }}>
-          <Navbar />
-        </View>
-      }
-    >
+    <>
+      <Toast toast={toast} onDismiss={dismissToast} />
+      <ScreenContainer
+        contentStyle={{ gap: spacing.lg }}
+        header={
+          <View style={{ paddingHorizontal: layout.gutter }}>
+            <Navbar />
+          </View>
+        }
+      >
       <View style={styles.headerBlock}>
         <AppText variant="h1" color="textPrimary">
           Add {type === 'expense' ? 'Expense' : 'Income'}
@@ -326,7 +330,8 @@ export default function AddScreen() {
         </View>
         <Icon name="ChevronRight" size={16} color={palette.textSecondary} clickable={false} />
       </Card>
-    </ScreenContainer>
+      </ScreenContainer>
+    </>
   );
 }
 

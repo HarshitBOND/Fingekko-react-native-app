@@ -19,7 +19,7 @@ import { apiRequest } from '../../../utils/api';
 import { useFocusEffect } from 'expo-router';
 import { BackHandler } from 'react-native';
 import { useCallback } from 'react';
-import { palette, spacing, radius, shadows, fontFamily } from '../../../constants/design';
+import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
 
 // Same icon set used on YourGroups so a group created here renders consistently there.
 const ICON_KEYS = [
@@ -272,7 +272,7 @@ export default function AddNewGroup() {
 
                     <View style={styles.topBar}>
                         <View style={styles.brandRow}>
-                            <Pressable style={styles.logoCircle} onPress={() => router.replace('/(tabs)/YourGroups')}>
+                            <Pressable style={styles.logoCircle} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}>
                                 <Icon name="ChevronLeft" size={20} color="#148a46" />
                             </Pressable>
                             <Text style={styles.brandTitle}>New Group</Text>
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF8E7',
     },
     container: {
-        paddingBottom: 40,
+        paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28,
         gap: 16,
     },
     heroSection: {

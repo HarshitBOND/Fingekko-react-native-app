@@ -5,6 +5,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../../components/ui/Icon';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 import { fontFamily, gradients, layout, palette, radius, shadows } from '../../constants/design';
 
 // ─── Custom Tab Bar Icon ─────────────────────────────────────────
@@ -48,7 +49,7 @@ export default function TabLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   const insets = useSafeAreaInsets();
 
-  if (!isLoaded) return null;
+  if (!isLoaded) return <LoadingScreen />;
   if (!isSignedIn) return <Redirect href="/(auth)/login" />;
 
   return (

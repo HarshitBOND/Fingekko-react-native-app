@@ -3,7 +3,6 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -12,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import Navbar from '@/components/Navbar';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import BadgesRow from '@/components/goals/BadgesRow';
 import GoalRewardModal, { type GoalRewardInfo } from '@/components/goals/GoalRewardModal';
 import XpBar from '@/components/goals/XpBar';
@@ -24,6 +24,8 @@ import Icon from '@/components/ui/Icon';
 import Input from '@/components/ui/Input';
 import ProgressRing from '@/components/ui/ProgressRing';
 import ScreenContainer from '@/components/ui/ScreenContainer';
+import Toast from '@/components/ui/Toast';
+import { useToast } from '@/hooks/useToast';
 import { layout, palette, radius, spacing } from '@/constants/design';
 import type {
   ApiGoal,
@@ -52,7 +54,11 @@ type GoalActionResponse = {
   streakIncreased?: boolean;
 };
 
-const EMOJI_OPTIONS = ['🎯', '✈️', '🏠', '🚗', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
+// Kept in sync with the spending-category vocabulary used on the Insights screen
+// (shopping / food / home / travel / transport / bills / entertainment) so a goal
+// and its matching spending category read as the same visual language, plus the
+// classic life-goal emojis (savings target, education, wedding, gift, health).
+const EMOJI_OPTIONS = ['🎯', '🛍️', '🍽️', '🏠', '✈️', '🚗', '⚡', '🎬', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const QUICK_DEADLINES = [
   { label: '1 month', months: 1 },
@@ -141,6 +147,10 @@ export default function GoalsScreen() {
   const [historyVisible, setHistoryVisible] = useState(false);
   const [xpEvents, setXpEvents] = useState<XpEventDto[]>([]);
   const [xpEventsLoading, setXpEventsLoading] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<ApiGoal | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
 
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
@@ -312,23 +322,24 @@ export default function GoalsScreen() {
   };
 
   const handleDeleteGoal = (goal: ApiGoal) => {
-    Alert.alert('Delete goal', `Delete "${goal.title}"? This can't be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const token = await getToken();
-            if (!token) return;
-            await apiRequest({ method: 'delete', url: `/api/goals/${goal.id}`, token });
-            await fetchGoals();
-          } catch (error: any) {
-            Alert.alert('Error', error?.message || 'Failed to delete goal.');
-          }
-        },
-      },
-    ]);
+    setDeleteTarget(goal);
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await apiRequest({ method: 'delete', url: `/api/goals/${deleteTarget.id}`, token });
+      await fetchGoals();
+      setDeleteTarget(null);
+      showToast({ title: 'Goal deleted', tone: 'info', duration: 2200 });
+    } catch (error: any) {
+      showToast({ title: 'Could not delete goal', message: error?.message, tone: 'error' });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const openContribute = (goal: ApiGoal) => {
@@ -711,6 +722,19 @@ export default function GoalsScreen() {
         loading={xpEventsLoading}
         onClose={() => setHistoryVisible(false)}
       />
+
+      <ConfirmDialog
+        visible={!!deleteTarget}
+        title="Delete goal"
+        message={`Delete "${deleteTarget?.title}"? This can't be undone.`}
+        confirmText="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDeleteGoal}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </ScreenContainer>
   );
 }

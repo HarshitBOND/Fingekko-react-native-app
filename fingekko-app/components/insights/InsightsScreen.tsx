@@ -12,6 +12,7 @@ import { Alert, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'r
 import { LineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../ui/Icon';
+import { fontFamily, palette } from '@/constants/design';
 import { GREEN, TEXT_MUTED, AMOUNT_DARK } from './constants';
 import { s } from './style';
 
@@ -481,10 +482,10 @@ export default function InsightsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontWeight: '800', color: AMOUNT_DARK, fontSize: 13 }}>
+                    <Text style={{ fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, fontSize: 13 }}>
                       Level {profile.level ?? lp.level}
                     </Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: fontFamily.medium }}>
                       {lp.xpIntoLevel} / {lp.xpForNextLevel} XP
                     </Text>
                   </View>
@@ -515,13 +516,13 @@ export default function InsightsScreen() {
                   const y = d.getFullYear();
                   return (
                     <TouchableOpacity key={`${m}-${y}`} onPress={() => selectMonthYear(m, y)} style={{ paddingVertical: 10 }}>
-                      <Text style={{ fontSize: 16 }}>{monthNames[m]} {y}</Text>
+                      <Text style={{ fontSize: 16, color: AMOUNT_DARK, fontFamily: fontFamily.semibold }}>{monthNames[m]} {y}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
               <TouchableOpacity onPress={() => setMonthPickerVisible(false)} style={{ padding: 12, alignItems: 'center' }}>
-                <Text style={{ color: TEXT_MUTED }}>Close</Text>
+                <Text style={{ color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -555,13 +556,13 @@ export default function InsightsScreen() {
             <Text style={s.sectionLabel}>SPENDING COMPARISON</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TouchableOpacity onPress={goPrevMonth}>
-                <Text style={{ fontSize: 16, color: TEXT_MUTED }}>‹</Text>
+                <Text style={{ fontSize: 16, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>‹</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={openMonthPicker}>
-                <Text style={{ fontWeight: '700' }}>{monthNames[selectedMonth]} {selectedYear}</Text>
+                <Text style={{ fontSize: 13, color: AMOUNT_DARK, fontFamily: fontFamily.bold }}>{monthNames[selectedMonth]} {selectedYear}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={goNextMonth}>
-                <Text style={{ fontSize: 16, color: TEXT_MUTED }}>›</Text>
+                <Text style={{ fontSize: 16, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>›</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -569,48 +570,71 @@ export default function InsightsScreen() {
           {/* Month amounts row */}
           <View style={{ flexDirection: 'row', gap: 24, marginBottom: 14 }}>
             <View>
-              <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{lastMonthLabel} (last month)</Text>
-              <Text style={{ fontSize: 22, fontWeight: '800', color: AMOUNT_DARK, marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>{lastMonthLabel} (last month)</Text>
+              <Text style={{ fontSize: 22, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, marginTop: 2, letterSpacing: -0.3 }}>
                 {formatAmount(insights.expensesLastMonth)}
               </Text>
-              <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2, fontFamily: fontFamily.medium }}>
                 avg {formatAmount(insights.avgLastMonth)} / day
               </Text>
             </View>
             <View>
-              <Text style={{ fontSize: 11, color: GREEN }}>{currentMonthLabel} (this month)</Text>
-              <Text style={{ fontSize: 22, fontWeight: '800', color: AMOUNT_DARK, marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: palette.primaryDeep, fontFamily: fontFamily.semibold }}>{currentMonthLabel} (this month)</Text>
+              <Text style={{ fontSize: 22, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, marginTop: 2, letterSpacing: -0.3 }}>
                 {formatAmount(insights.expensesThisMonth)}
               </Text>
-              <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2, fontFamily: fontFamily.medium }}>
                 avg {formatAmount(insights.avgThisMonth)} / day
               </Text>
             </View>
           </View>
 
-          {/* Line chart */}
+          {/* Line chart — brand green focus line with a soft area fill, recessive
+              neutral comparison line, and dashed projection, all on the app palette. */}
           <LineChart
             data={chartDisplay.data}
             data2={chartDisplay.data2}
             data3={chartDisplay.data3}
-            height={110}
+            height={120}
             spacing={12}
-            color1="rgba(160,175,190,0.7)"
-            color2={GREEN}
-            color3="rgba(120,194,109,0.45)"
-            strokeDashArray1={[4, 2]}
-            strokeDashArray3={[4, 2]}
-            thickness1={1.5}
-            thickness2={2}
+            // When viewing a past month there's a single series — make it the green
+            // focus line (with fill). For the current month, data (last month) stays
+            // a recessive neutral and data2 (this month) becomes the green focus.
+            color1={viewingCurrent ? palette.textTertiary : palette.primary}
+            color2={palette.primary}
+            color3="rgba(102,204,68,0.4)"
+            strokeDashArray1={viewingCurrent ? [5, 4] : undefined}
+            strokeDashArray3={[5, 4]}
+            thickness1={viewingCurrent ? 1.5 : 2.5}
+            thickness2={2.5}
             thickness3={1.5}
+            areaChart={!viewingCurrent}
+            startFillColor={palette.primary}
+            endFillColor={palette.primary}
+            startOpacity={0.16}
+            endOpacity={0.01}
+            areaChart2
+            startFillColor2={palette.primary}
+            endFillColor2={palette.primary}
+            startOpacity2={0.18}
+            endOpacity2={0.01}
             hideDataPoints
-            yAxisTextStyle={{ color: TEXT_MUTED, fontSize: 9 }}
-            xAxisLabelTextStyle={{ color: TEXT_MUTED, fontSize: 9 }}
+            hideYAxisText={false}
+            yAxisColor="transparent"
+            xAxisColor={palette.border}
+            yAxisThickness={0}
+            xAxisThickness={1}
+            rulesType="dashed"
+            rulesColor="rgba(30,30,30,0.05)"
+            dashWidth={4}
+            dashGap={6}
+            yAxisTextStyle={{ color: palette.textTertiary, fontSize: 10, fontFamily: fontFamily.medium }}
+            xAxisLabelTextStyle={{ color: palette.textTertiary, fontSize: 10, fontFamily: fontFamily.medium }}
             xAxisLabelTexts={chartDisplay.labels}
             noOfSections={4}
             curved
-            initialSpacing={6}
-            endSpacing={6}
+            initialSpacing={8}
+            endSpacing={8}
             adjustToWidth={false}
             showScrollIndicator
             scrollAnimation
@@ -623,26 +647,26 @@ export default function InsightsScreen() {
           />
 
           {/* Chart legend */}
-          <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 12 }}>
             {viewingCurrent ? (
               <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 16, height: 2, backgroundColor: 'rgba(160,175,190,0.7)' }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED }}>Last month</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.textTertiary }} />
+                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Last month</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 16, height: 2, backgroundColor: GREEN }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED }}>This month</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.primary }} />
+                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>This month</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 16, height: 2, backgroundColor: 'rgba(120,194,109,0.45)' }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED }}>Expected</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: 'rgba(102,204,68,0.4)' }} />
+                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Expected</Text>
                 </View>
               </>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={{ width: 16, height: 2, backgroundColor: 'rgba(160,175,190,0.7)' }} />
-                <Text style={{ fontSize: 11, color: TEXT_MUTED }}>Spending ({monthNames[selectedMonth]} {selectedYear})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.primary }} />
+                <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Spending ({monthNames[selectedMonth]} {selectedYear})</Text>
               </View>
             )}
           </View>

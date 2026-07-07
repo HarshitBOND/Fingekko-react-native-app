@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   View,
@@ -15,7 +14,10 @@ import Icon from '../../components/ui/Icon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import ScreenContainer from '../../components/ui/ScreenContainer';
+import Toast from '../../components/ui/Toast';
+import { useToast } from '../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 type NotificationItem = {
@@ -37,6 +39,8 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [declineTarget, setDeclineTarget] = useState<{ id: string; name: string } | null>(null);
+  const { toast, showToast, dismissToast } = useToast();
 
   const fetchAllNotifications = async () => {
     setLoading(true);
@@ -78,10 +82,10 @@ export default function NotificationsScreen() {
         token,
       });
 
-      Alert.alert('Success', 'Friend request accepted.');
+      showToast({ title: 'Friend added! 🎉', message: 'You are now connected.', tone: 'success' });
       fetchAllNotifications();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not accept friend request.');
+      showToast({ title: 'Could not accept', message: err.message || 'Please try again.', tone: 'error' });
     } finally {
       setActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
@@ -99,31 +103,17 @@ export default function NotificationsScreen() {
         token,
       });
 
-      Alert.alert('Declined', 'Friend request declined.');
+      showToast({ title: 'Request declined', tone: 'info', duration: 2200 });
       fetchAllNotifications();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not decline friend request.');
+      showToast({ title: 'Could not decline', message: err.message || 'Please try again.', tone: 'error' });
     } finally {
       setActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
   };
 
   const handleShowDeclineMenu = (requestId: string, senderName: string) => {
-    Alert.alert(
-      'Friend Request Options',
-      `Manage friend request from ${senderName}`,
-      [
-        {
-          text: 'Decline Request',
-          style: 'destructive',
-          onPress: () => handleDeclineFriend(requestId),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    setDeclineTarget({ id: requestId, name: senderName });
   };
 
   const groupNotifications = (list: NotificationItem[]) => {
@@ -158,6 +148,21 @@ export default function NotificationsScreen() {
   const groupedNotifications = groupNotifications(notifications);
 
   return (
+    <>
+    <Toast toast={toast} onDismiss={dismissToast} />
+    <ConfirmDialog
+      visible={!!declineTarget}
+      title="Decline request"
+      message={`Decline the friend request from ${declineTarget?.name || 'this person'}?`}
+      confirmText="Decline"
+      destructive
+      onConfirm={() => {
+        const id = declineTarget?.id;
+        setDeclineTarget(null);
+        if (id) handleDeclineFriend(id);
+      }}
+      onCancel={() => setDeclineTarget(null)}
+    />
     <ScreenContainer
       header={
         <View style={styles.header}>
@@ -297,6 +302,7 @@ export default function NotificationsScreen() {
         })
       )}
     </ScreenContainer>
+    </>
   );
 }
 
