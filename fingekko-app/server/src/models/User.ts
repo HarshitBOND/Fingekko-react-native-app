@@ -14,9 +14,13 @@ const userSchema = new mongoose.Schema(
     avatarKey: { type: String, default: 'planner' },
     stats: {
       dayStreak: { type: Number, default: 0 },
+      bestStreak: { type: Number, default: 0 },
       questsDone: { type: Number, default: 0 },
       questsTarget: { type: Number, default: 4 },
       betterThanYesterday: { type: Number, default: 0 },
+      currentDate: { type: String, default: null },
+      lastCompletedDate: { type: String, default: null },
+      previousDayQuestsDone: { type: Number, default: 0 },
     },
   },
   { timestamps: true }

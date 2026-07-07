@@ -1,66 +1,104 @@
+import { Image, StyleSheet, View } from 'react-native';
+import { palette, radius, shadows, spacing } from '@/constants/design';
+import AppText from '../ui/AppText';
 import Button from '../ui/Button';
 import Icon from '../ui/Icon';
-import { Image, Text, View } from 'react-native';
-import { Theme } from './constants';
-import { styles } from './styles';
 
 type PlannerCardProps = {
   onViewInsights: () => void;
 };
 
+const TRAITS = [
+  { icon: 'PiggyBank', label: 'Budgeting' },
+  { icon: 'Star', label: 'Saving' },
+  { icon: 'Shield', label: 'Avoiding Debt' },
+];
+
 export default function PlannerCard({ onViewInsights }: PlannerCardProps) {
   return (
-    <View style={styles.plannerCard}>
-      <View style={styles.balanceLabelRow}>
-        <Text style={{ fontSize: 12, color: Theme.textMuted, fontWeight: '600' }}>Your Financial Personality</Text>
-        <Icon name="CircleAlert" size={18} color={Theme.mountainTeal} style={{ marginLeft: 4 }} />
-      </View>
+    <View style={styles.card}>
+      <AppText variant="micro" color="textTertiary" style={styles.eyebrow}>
+        YOUR MONEY PERSONALITY
+      </AppText>
 
-      <View style={styles.plannerHeroRow}>
-        <View style={styles.plannerLeft}>
-          <Text style={styles.plannerTypeName}>The Monk Spender</Text>
-          <View style={styles.plannerIconGrid}>
-            <View style={styles.plannerIconBox}><Icon name="CalendarDays" size={20} color={Theme.primaryDark} /></View>
-            <View style={styles.plannerIconBox}><Icon name="BarChart3" size={20} color={Theme.mountainTeal} /></View>
-            <View style={styles.plannerIconBox}><Icon name="Target" size={20} color={Theme.primary} /></View>
-            <View style={styles.plannerIconBox}><Icon name="Shield" size={20} color={Theme.primaryDark} /></View>
+      <View style={styles.heroRow}>
+        <View style={styles.left}>
+          <AppText variant="h2">The Monk Spender</AppText>
+          <View style={styles.banner}>
+            <View style={styles.bannerIcon}>
+              <Icon name="TrendingUp" size={14} color={palette.white} />
+            </View>
+            <AppText variant="caption" color="textSecondary" style={styles.bannerText}>
+              You plan ahead and make smart money moves.
+            </AppText>
           </View>
         </View>
-
-        <View style={styles.plannerImageContainer}>
-          <Image
-            source={require('../../assets/images/cardImageMonkgekko.png')}
-            style={styles.plannerImage}
-            resizeMode="contain"
-          />
-        </View>
+        <Image
+          source={require('../../assets/images/cardImageMonkgekko.png')}
+          style={styles.image}
+          resizeMode="contain"
+        />
       </View>
 
-      <View style={styles.plannerBanner}>
-        <View style={styles.plannerBannerIcon}><Icon name="TrendingUp" size={16} color={Theme.primaryDark} /></View>
-        <Text style={styles.plannerBannerText}>You plan ahead and make smart money moves.</Text>
-      </View>
-
-      <Text style={styles.goodAtLabel}>You are good at:</Text>
+      <AppText variant="label" color="textSecondary" style={styles.goodAt}>
+        You&apos;re good at
+      </AppText>
       <View style={styles.traitRow}>
-        <View style={styles.traitPill}><Icon name="PiggyBank" size={13} color={Theme.primaryDark} /><Text style={styles.traitText}>Budgeting</Text></View>
-        <View style={styles.traitPill}><Icon name="Star" size={13} color={Theme.primary} /><Text style={styles.traitText}>Saving</Text></View>
-      </View>
-      <View style={[styles.traitRow, { marginTop: 6 }]}>
-        <View style={styles.traitPill}><Icon name="Shield" size={13} color={Theme.primaryDark} /><Text style={styles.traitText}>Avoiding Debt</Text></View>
+        {TRAITS.map((t) => (
+          <View key={t.label} style={styles.traitPill}>
+            <Icon name={t.icon} size={14} color={palette.primaryDeep} />
+            <AppText variant="caption" color="primaryDeep">
+              {t.label}
+            </AppText>
+          </View>
+        ))}
       </View>
 
-      <Button
-        variant="primary"
-        size="md"
-        onPress={onViewInsights}
-        style={{ marginTop: 12 }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ color: '#000000', fontWeight: '800', fontSize: 14 }}>View Full Insights</Text>
-          <Icon name="ChevronRight" size={16} color={Theme.primaryDark} />
-        </View>
+      <Button variant="primary" size="md" onPress={onViewInsights} style={styles.cta}>
+        View Full Insights
       </Button>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: palette.card,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.md,
+  },
+  eyebrow: { letterSpacing: 1, marginBottom: spacing.md },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  left: { flex: 1, gap: spacing.md },
+  image: { width: 104, height: 104 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  bannerIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerText: { flex: 1, lineHeight: 18 },
+  goodAt: { marginTop: spacing.lg, marginBottom: spacing.sm },
+  traitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  traitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
+  },
+  cta: { marginTop: spacing.lg },
+});

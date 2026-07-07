@@ -1,21 +1,23 @@
-export const GREEN = '#00FF66';
+import { palette } from '@/constants/design';
 
-export const CARD_BG = '#FFFFFF';
-export const PAGE_BG = '#FFF8E7';
-export const BORDER = '#000000';
+export const GREEN = palette.primary;
 
-export const TEXT_PRIMARY = '#000000';
-export const TEXT_SECONDARY = '#000000';
-export const TEXT_MUTED = '#1E293B';
-export const TEXT_HELPER = '#334155';
+export const CARD_BG = palette.card;
+export const PAGE_BG = palette.bg;
+export const BORDER = palette.border;
 
-export const AMOUNT_DARK = '#000000';
+export const TEXT_PRIMARY = palette.textPrimary;
+export const TEXT_SECONDARY = palette.textSecondary;
+export const TEXT_MUTED = palette.textSecondary;
+export const TEXT_HELPER = palette.textTertiary;
+
+export const AMOUNT_DARK = palette.textPrimary;
 
 export const FONTS = {
-  xs: 10,
-  sm: 11,
-  base: 12,
-  md: 13,
+  xs: 11,
+  sm: 12,
+  base: 13,
+  md: 14,
   lg: 18,
   xl: 16,
   xxl: 22,

@@ -1,270 +1,184 @@
 import { useAuth } from '@clerk/clerk-expo';
-import { Redirect, Tabs, usePathname } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Redirect, Tabs } from 'expo-router';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../../components/ui/Icon';
-import { Colors } from '../../constants/Colors';
+import { fontFamily, gradients, layout, palette, radius, shadows } from '../../constants/design';
 
-// ─── Custom Tab Bar Icon Component ───────────────────────────────
-
+// ─── Custom Tab Bar Icon ─────────────────────────────────────────
 type TabIconProps = {
-  name: string;            // Icon name key
-  label: string;           // Tab label text
-  focused: boolean;        // Is this tab currently active?
-  activeColor: string;
+  name: string;
+  label: string;
+  focused: boolean;
 };
 
-function TabIcon({ name, label, focused, activeColor }: TabIconProps) {
+function TabIcon({ name, label, focused }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
-      <View style={[
-        styles.iconWrapper,
-        focused && styles.iconWrapperActive
-      ]}>
-        <Icon name={name} size={18} color={focused ? '#000000' : Colors.tabBarInactive} clickable={true} />
+      <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+        <Icon name={name} size={22} color={focused ? palette.primaryDeep : palette.textTertiary} clickable={false} />
       </View>
-      <Text style={[
-        styles.tabLabel,
-        {
-          color: focused ? Colors.tabBarActive : Colors.tabBarInactive,
-          textAlign: 'center',
-          fontWeight: focused ? '800' : '600'
-        }
-      ]} numberOfLines={1}>
+      <Text style={[styles.tabLabel, { color: focused ? palette.primaryDeep : palette.textTertiary }]} numberOfLines={1}>
         {label}
       </Text>
     </View>
   );
 }
 
+// ─── Frosted floating background ─────────────────────────────────
+function FloatingTabBackground() {
+  return (
+    <View style={styles.barBackground}>
+      <BlurView
+        intensity={40}
+        tint="light"
+        experimentalBlurMethod="dimezisBlurView"
+        style={StyleSheet.absoluteFill}
+      />
+      {/* translucent overlay — also the Android fallback when blur is unavailable */}
+      <View style={styles.barOverlay} />
+    </View>
+  );
+}
+
 // ─── Main Tab Layout ─────────────────────────────────────────────
 export default function TabLayout() {
-
   const { isLoaded, isSignedIn } = useAuth();
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
 
-  //if loading the page
-  if(!isLoaded){
-    return null;
-  }
-  // If not signed in, redirect to auth flow
-  if (!isSignedIn) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  const activeColor = '#10B981'; // default green
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <Redirect href="/(auth)/login" />;
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,      // Hide the top header bar
+        headerShown: false,
+        tabBarShowLabel: false,
+        sceneStyle: { backgroundColor: palette.bg },
+        tabBarBackground: () => <FloatingTabBackground />,
+        tabBarItemStyle: styles.tabItem,
         tabBarStyle: {
-          ...styles.tabBar,
-          paddingBottom: insets.bottom + 8, // Add safe area inset to padding
+          position: 'absolute',
+          left: 16,
+          right: 16,
+          bottom: insets.bottom > 0 ? insets.bottom : layout.navBarBottomInset,
+          height: layout.navBarHeight,
+          borderRadius: radius.xxl,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
+          elevation: 0,
+          paddingHorizontal: 6,
+          ...shadows.lg,
         },
-        tabBarShowLabel: false,  // We handle labels in our custom icon
       }}
     >
-      {/* Each Tabs.Screen = one tab in the bottom bar */}
-
       <Tabs.Screen
-        name="index"             // matches app/(tabs)/index.tsx
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="Home" label="Home" focused={focused} activeColor={activeColor} />
-          ),
-        }}
+        name="index"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="Home" label="Home" focused={focused} /> }}
       />
 
       <Tabs.Screen
-        name="insights"          // matches app/(tabs)/insights.tsx
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="BarChart" label="Insights" focused={focused} activeColor={activeColor} />
-          ),
-        }}
+        name="insights"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="BarChart3" label="Insights" focused={focused} /> }}
       />
 
-      {/* CENTER ADD BUTTON — special tab, bigger and green */}
+      {/* CENTER ACTION — raised gradient FAB */}
       <Tabs.Screen
         name="add"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <View style={styles.addButton}>
-              <Icon name="Repeat" size={24} color="#000000" clickable={true} />
+          tabBarIcon: () => (
+            <View style={styles.fabWrap}>
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.fab}
+              >
+                <Icon name="Plus" size={26} color={palette.white} clickable={false} />
+              </LinearGradient>
             </View>
           ),
         }}
       />
 
       <Tabs.Screen
-        name="goals"             // matches app/(tabs)/goals.tsx
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="Target" label="Goals" focused={focused} activeColor={activeColor} />
-          ),
-        }}
+        name="goals"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="Target" label="Goals" focused={focused} /> }}
       />
 
       <Tabs.Screen
-        name="profile"           // matches app/(tabs)/profile.tsx
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="User" label="Profile" focused={focused} activeColor={activeColor} />
-          ),
-        }}
+        name="profile"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="User" label="Profile" focused={focused} /> }}
       />
 
-      <Tabs.Screen
-        name="safe-to-spend"     // matches app/(tabs)/safe-to-spend.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="AddNewExpense"     // matches app/(tabs)/AddNewExpense.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="YourGroups"     // matches app/(tabs)/YourGroups.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="Friends"
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="NonGroupExpenses"     // matches app/(tabs)/NonGroupExpenses.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="GroupExpenses"     // matches app/(tabs)/GroupExpenses.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="Notifications"     // matches app/(tabs)/Notifications.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="FriendSplits"     // matches app/(tabs)/FriendSplits.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="group/[groupId]"     // matches app/(tabs)/groupId.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="AddExpense"     // matches app/(tabs)/AddExpense.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="group/AddNewGroup"     // matches app/(tabs)/AddNewGroup.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="group/AddGroupExpense"     // matches app/(tabs)/AddGroupExpense.tsx
-        options={{
-          href: null,
-        }}
-      />
-
-
-
+      {/* ─── Hidden routes (navigable, not shown in bar) — unchanged ─── */}
+      <Tabs.Screen name="safe-to-spend" options={{ href: null }} />
+      <Tabs.Screen name="AddNewExpense" options={{ href: null }} />
+      <Tabs.Screen name="YourGroups" options={{ href: null }} />
+      <Tabs.Screen name="Friends" options={{ href: null }} />
+      <Tabs.Screen name="NonGroupExpenses" options={{ href: null }} />
+      <Tabs.Screen name="GroupExpenses" options={{ href: null }} />
+      <Tabs.Screen name="Notifications" options={{ href: null }} />
+      <Tabs.Screen name="FriendSplits" options={{ href: null }} />
+      <Tabs.Screen name="group/[groupId]" options={{ href: null }} />
+      <Tabs.Screen name="AddExpense" options={{ href: null }} />
+      <Tabs.Screen name="group/AddNewGroup" options={{ href: null }} />
+      <Tabs.Screen name="group/AddGroupExpense" options={{ href: null }} />
     </Tabs>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────
-// StyleSheet.create() is React Native's way of writing CSS
-// Note: no hyphens! (background-color → backgroundColor)
-
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: Colors.tabBar,
-    borderTopWidth: 2,
-    borderTopColor: '#000000',
-    height: 72,              // Taller than default for better touch area
-    paddingBottom: 8,
-    paddingTop: 8,
+  barBackground: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.xxl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  barOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Platform.select({ ios: 'rgba(255,255,255,0.72)', default: 'rgba(255,255,255,0.94)' }),
+  },
+  tabItem: {
+    height: layout.navBarHeight,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   tabIconContainer: {
-    alignItems: 'center',    // center horizontally (like align-items in CSS)
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 3,
+    width: 64,
   },
   tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 10.5,
+    fontFamily: fontFamily.semibold,
   },
   iconWrapper: {
-    width: 42,
-    height: 28,
-    borderRadius: 14,
+    width: 46,
+    height: 30,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    marginBottom: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
   },
   iconWrapperActive: {
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
+    backgroundColor: palette.primaryLight,
   },
-  // The big green + button in the center
-  addButton: {
-    backgroundColor: Colors.primary,
-    width: 52,
-    height: 52,
-    borderRadius: 26,        // Half of width/height = perfect circle
+  fabWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,        // Lifts it above the tab bar
-    borderWidth: 2,
-    borderColor: '#000000',
-    // Shadow
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
+  },
+  fab: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+    ...shadows.primary,
   },
 });

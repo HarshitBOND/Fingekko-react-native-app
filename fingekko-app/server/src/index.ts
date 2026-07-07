@@ -9,6 +9,7 @@ import { connectDb, getDbStatus } from "./db.js";
 import clerkWebhookRoutes from "./routes/clerkWebhook.js";
 import expenseRoutes from "./routes/communityExpense.routes.js";
 import friendRoutes from "./routes/friends.routes.js";
+import goalRoutes from "./routes/goal.routes.js";
 import groupRoutes from "./routes/group.routes.js";
 import homeRoutes from "./routes/home.js";
 import notificationRoutes from "./routes/notification.routes.js";
@@ -68,6 +69,7 @@ app.use('/api', homeRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/goals", goalRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 

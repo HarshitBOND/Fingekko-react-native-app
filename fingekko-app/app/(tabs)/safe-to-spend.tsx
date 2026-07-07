@@ -4,11 +4,15 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Animated, StyleSheet, View } from 'react-native';
 import Icon from '../../components/ui/Icon';
 import Navbar from '../../components/Navbar';
-import { Colors, FontSizes, Spacing } from '../../constants/Colors';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import Card from '../../components/ui/Card';
+import AppText from '../../components/ui/AppText';
+import ProgressBar from '../../components/ProgressBar';
+import PressableScale from '../../components/ui/PressableScale';
+import { palette, spacing, layout, radius, shadows, gradients } from '../../constants/design';
 import { Goal, Transaction, UserProfile } from '../../constants/types';
 import { formatCurrency } from '../../utils/helpers';
 import { calculateSafeToSpend } from '../../utils/safe-to-spend';
@@ -123,107 +127,133 @@ export default function SafeToSpendScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Navbar />
-        <Animated.View
-          style={[
-            styles.contentWrap,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          ]}
-        >
-          <View style={styles.topBar}>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => router.back()}
-              accessibilityLabel="Go back"
+    <ScreenContainer
+      contentStyle={{ gap: spacing.lg }}
+      header={
+        <View style={{ paddingHorizontal: layout.gutter }}>
+          <Navbar />
+        </View>
+      }
+    >
+      <Animated.View
+        style={[
+          styles.contentWrap,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
+      >
+        <View style={styles.topBar}>
+          <PressableScale
+            style={styles.iconButton}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+          >
+            <Icon name="ChevronLeft" size={20} color={palette.textPrimary} />
+          </PressableScale>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Safe to Spend
+          </AppText>
+          <View style={styles.iconPlaceholder} />
+        </View>
+
+        <Card variant="elevated" padding={20} style={styles.heroCard}>
+          <View style={styles.heroBadge}>
+            <AppText variant="micro" color="primaryDeep" weight="bold" style={styles.heroBadgeText}>
+              YOU CAN SAFELY SPEND
+            </AppText>
+          </View>
+          <View style={styles.heroAmountRow}>
+            <AppText
+              variant="display"
+              color="primaryDeep"
+              weight="extrabold"
+              style={styles.heroAmount}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
-              <Icon name="ChevronLeft" size={20} color={Colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.screenTitle}>Safe to Spend</Text>
-            <View style={styles.iconPlaceholder} />
+              {formatAmount(safeSpendData.safeToSpend, true)}
+            </AppText>
+            <AppText variant="body" color="textSecondary" weight="semibold" style={styles.heroAmountSuffix}>
+              today
+            </AppText>
           </View>
 
-          <View style={styles.heroCard}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>You can safely spend</Text>
-            </View>
-            <View style={styles.heroAmountRow}>
-                <Text
-                  style={styles.heroAmount}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  {formatAmount(safeSpendData.safeToSpend, true)}
-                </Text>
-              <Text style={styles.heroAmountSuffix}>today</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${safeSpendData.progress * 100}%` }]} />
-            </View>
-            <Text style={styles.heroFootnote}>
-              Based on your current balance, expenses, and goals.
-            </Text>
-
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Next income in</Text>
-                <Text style={styles.metricValue}>{safeSpendData.daysLeft} days</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Goal reserve/day</Text>
-                <Text style={styles.metricValue}>
-                  {formatAmount(safeSpendData.goalDailyReserve, true)}
-                </Text>
-              </View>
-            </View>
+          <View style={styles.progressWrap}>
+            <ProgressBar
+              progress={safeSpendData.progress}
+              height={8}
+              radius={radius.pill}
+              colors={gradients.brand}
+              trackColor={palette.primaryLight}
+            />
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Monthly Summary</Text>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryItem}>
-                <View style={[styles.summaryDot, { backgroundColor: Colors.income }]} />
-                <Text style={styles.summaryLabel}>Income</Text>
-                <Text style={styles.summaryValue}>
-                  {formatAmount(safeSpendData.cycleIncome, true)}
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <View style={[styles.summaryDot, { backgroundColor: Colors.expense }]} />
-                <Text style={styles.summaryLabel}>Expenses</Text>
-                <Text style={styles.summaryValue}>
-                  {formatAmount(safeSpendData.cycleExpenses, true)}
-                </Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <View style={[styles.summaryDot, { backgroundColor: Colors.savings }]} />
-                <Text style={styles.summaryLabel}>Savings</Text>
-                <Text style={[styles.summaryValue, styles.summaryValuePositive]}>
-                  {formatAmount(safeSpendData.savings)}
-                </Text>
-              </View>
-            </View>
+          <AppText variant="caption" color="textSecondary" style={styles.heroFootnote}>
+            Based on your current balance, expenses, and goals.
+          </AppText>
+
+          <View style={styles.metricRow}>
+            <Card variant="flat" padding={12} style={styles.metricCard}>
+              <AppText variant="micro" color="textSecondary" style={styles.metricLabel}>
+                Next income in
+              </AppText>
+              <AppText variant="body" color="textPrimary" weight="bold" style={styles.metricValue}>
+                {safeSpendData.daysLeft} days
+              </AppText>
+            </Card>
+            <Card variant="flat" padding={12} style={styles.metricCard}>
+              <AppText variant="micro" color="textSecondary" style={styles.metricLabel}>
+                Goal reserve/day
+              </AppText>
+              <AppText variant="body" color="textPrimary" weight="bold" style={styles.metricValue}>
+                {formatAmount(safeSpendData.goalDailyReserve, true)}
+              </AppText>
+            </Card>
           </View>
-        </Animated.View>
-      </ScrollView>
-    </SafeAreaView>
+        </Card>
+
+        <View style={styles.section}>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Monthly Summary
+          </AppText>
+          <Card variant="elevated" padding={20} style={styles.summaryCard}>
+            <View style={styles.summaryItem}>
+              <View style={[styles.summaryDot, { backgroundColor: palette.primary }]} />
+              <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
+                Income
+              </AppText>
+              <AppText variant="bodySm" color="textPrimary" weight="bold">
+                {formatAmount(safeSpendData.cycleIncome, true)}
+              </AppText>
+            </View>
+            <View style={styles.summaryItem}>
+              <View style={[styles.summaryDot, { backgroundColor: palette.danger }]} />
+              <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
+                Expenses
+              </AppText>
+              <AppText variant="bodySm" color="textPrimary" weight="bold">
+                {formatAmount(safeSpendData.cycleExpenses, true)}
+              </AppText>
+            </View>
+            <View style={styles.summaryItem}>
+              <View style={[styles.summaryDot, { backgroundColor: palette.success }]} />
+              <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
+                Savings
+              </AppText>
+              <AppText variant="bodySm" color="success" weight="bold">
+                {formatAmount(safeSpendData.savings)}
+              </AppText>
+            </View>
+          </Card>
+        </View>
+      </Animated.View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#f4f6f5',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-  },
   contentWrap: {
-    gap: 16,
+    gap: spacing.base,
   },
   topBar: {
     flexDirection: 'row',
@@ -231,192 +261,81 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: palette.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.sm,
   },
   iconPlaceholder: {
-    width: 36,
-    height: 36,
-  },
-  screenTitle: {
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    width: 38,
+    height: 38,
   },
   heroCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    padding: Spacing.base,
-    shadowColor: '#000000',
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 10,
-    borderWidth: 3,
-    borderColor: '#000000',
+    gap: spacing.sm,
   },
   heroBadge: {
     alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    paddingHorizontal: Spacing.base,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(52, 152, 219, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 152, 219, 0.24)',
+    backgroundColor: palette.primaryLight,
   },
   heroBadgeText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-    color: Colors.savings,
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
   },
   heroAmountRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: Spacing.sm,
-    marginTop: Spacing.base,
-    minWidth: 0,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   heroAmount: {
-    fontSize: 46,
-    fontWeight: '700',
-    color: Colors.savings,
-    flexShrink: 1,
+    lineHeight: 46,
   },
   heroAmountSuffix: {
-    fontSize: FontSizes.base,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  progressTrack: {
-    height: 10,
-    backgroundColor: Colors.border,
-    borderRadius: 999,
-    overflow: 'hidden',
-    marginTop: Spacing.base,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.savings,
-    borderRadius: 999,
+  progressWrap: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
   },
   heroFootnote: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
     lineHeight: 18,
   },
   metricRow: {
     flexDirection: 'row',
-    gap: Spacing.base,
-    marginTop: Spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   metricCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    padding: Spacing.base,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
   },
   metricLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
+    letterSpacing: 0.2,
   },
   metricValue: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginTop: 6,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: Spacing.base,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    paddingVertical: Spacing.base,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  actionPrimary: {
-    backgroundColor: Colors.primary,
-    borderColor: '#000000',
-  },
-  actionLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  actionLabelLight: {
-    color: Colors.textLight,
+    marginTop: 4,
   },
   section: {
-    gap: Spacing.base,
-  },
-  sectionTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    gap: spacing.sm,
   },
   summaryCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    padding: Spacing.base,
-    gap: Spacing.base,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    gap: spacing.md,
   },
   summaryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: spacing.sm,
   },
   summaryDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
   },
   summaryLabel: {
     flex: 1,
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  summaryValue: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  summaryValuePositive: {
-    color: Colors.savings,
   },
 });

@@ -1,7 +1,7 @@
 import { useAuth } from '@clerk/clerk-expo';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Icon from '../../../components/ui/Icon';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -16,15 +16,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
 
+import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
+
 const COLORS = {
-  bg: '#FFF8E7',
-  card: '#FFFFFF',
-  green: '#1FA855',
-  greenLight: '#E3F2E7',
-  greenPale: '#CDE9D5',
-  textDark: '#1A1A2E',
-  textGray: '#8A8A9E',
-  border: '#EFEFEF',
+  bg: palette.bg,
+  card: palette.card,
+  green: palette.primaryDeep,
+  greenLight: palette.primaryLight,
+  greenPale: 'rgba(102, 204, 68, 0.2)',
+  textDark: palette.textPrimary,
+  textGray: palette.textSecondary,
+  border: palette.border,
   overlay: 'rgba(0,0,0,0.4)',
 };
 
@@ -69,6 +71,15 @@ interface BalancesResponse {
   expenseCount: number;
 }
 
+interface GroupExpenseItem {
+  id: string;
+  groupId: string | null;
+  description: string;
+  amount: number;
+  expenseDate: string;
+  createdBy: { id: string; name: string; email: string };
+}
+
 function getGroupIconName(iconName?: string): string {
   const nameMap: Record<string, string> = {
     Plane: 'Plane',
@@ -107,6 +118,9 @@ export default function GroupDetailScreen() {
 
   const [balancesData, setBalancesData] = useState<BalancesResponse | null>(null);
   const [balancesLoading, setBalancesLoading] = useState(false);
+
+  const [recentExpenses, setRecentExpenses] = useState<GroupExpenseItem[]>([]);
+  const [expensesLoading, setExpensesLoading] = useState(false);
 
   const fetchGroupDetails = async (groupId: string) => {
     setLoading(true);
@@ -151,12 +165,48 @@ export default function GroupDetailScreen() {
     }
   };
 
+  const fetchGroupExpenses = async (groupId: string) => {
+    setExpensesLoading(true);
+    const token = await getToken();
+    if (!token) {
+      setExpensesLoading(false);
+      return;
+    }
+    try {
+      const response = await apiRequest<{ expenses: GroupExpenseItem[] }>({
+        method: 'get',
+        url: '/api/expenses',
+        token,
+      });
+      const forThisGroup = (response?.expenses || [])
+        .filter((exp) => exp.groupId === groupId)
+        .sort((a, b) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime());
+      setRecentExpenses(forThisGroup);
+    } catch (error) {
+      console.error('Error fetching group expenses:', error);
+    } finally {
+      setExpensesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (resolvedGroupId) {
       fetchGroupDetails(resolvedGroupId);
       fetchGroupBalances(resolvedGroupId);
+      fetchGroupExpenses(resolvedGroupId);
     }
   }, [resolvedGroupId]);
+
+  // Refresh balances/expenses whenever the screen regains focus (e.g. after
+  // adding a new expense or settling up), not just on first mount.
+  useFocusEffect(
+    useCallback(() => {
+      if (resolvedGroupId) {
+        fetchGroupBalances(resolvedGroupId);
+        fetchGroupExpenses(resolvedGroupId);
+      }
+    }, [resolvedGroupId])
+  );
 
   const memberCount = group?.members.length ?? 0;
   const subtitle = group?.description?.trim() || `${memberCount} ${memberCount === 1 ? 'member' : 'members'}`;
@@ -354,17 +404,45 @@ export default function GroupDetailScreen() {
         {/* Recent expenses */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Recent expenses</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View all</Text>
-          </TouchableOpacity>
+          {recentExpenses.length > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/(tabs)/GroupExpenses', params: { groupId: resolvedGroupId, groupName: group?.name ?? '' } })}
+            >
+              <Text style={styles.viewAll}>View all</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.listCard}>
-          <View style={styles.emptyState}>
-            <Icon name="StickyNote" size={22} color={COLORS.green} />
-            <Text style={styles.emptyStateTitle}>No expenses yet</Text>
-            <Text style={styles.emptyStateText}>This screen is connected to the backend, but expenses are not loaded here yet.</Text>
-          </View>
+          {expensesLoading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>Loading expenses...</Text>
+            </View>
+          ) : recentExpenses.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Icon name="StickyNote" size={22} color={COLORS.green} />
+              <Text style={styles.emptyStateTitle}>No expenses yet</Text>
+              <Text style={styles.emptyStateText}>Add your first group expense to see it here.</Text>
+            </View>
+          ) : (
+            recentExpenses.slice(0, 5).map((exp, idx) => (
+              <React.Fragment key={exp.id}>
+                <View style={styles.settleRow}>
+                  <View style={styles.settleIconWrap}>
+                    <Icon name="Receipt" size={16} color="#000000" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settleText}>{exp.description}</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.textGray, marginTop: 2 }}>
+                      Paid by {exp.createdBy?.id === userId ? 'You' : exp.createdBy?.name} on {new Date(exp.expenseDate).toLocaleDateString('en-IN')}
+                    </Text>
+                  </View>
+                  <Text style={styles.settleAmount}>₹{exp.amount.toFixed(2)}</Text>
+                </View>
+                {idx < Math.min(recentExpenses.length, 5) - 1 && <View style={styles.rowDivider} />}
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         {/* Members */}
@@ -526,64 +604,52 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    gap: spacing.md,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: COLORS.bg,
   },
   circleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    ...shadows.sm,
   },
   circleBtnPressed: { backgroundColor: COLORS.border },
   avatarLg: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: radius.pill,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
   },
-  avatarLgText: { fontSize: 18, fontWeight: '800', color: COLORS.textDark },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.textDark },
-  headerSubtitle: { fontSize: 13, color: COLORS.textGray, marginTop: 2, fontWeight: '600' },
+  avatarLgText: { fontSize: 18, fontFamily: fontFamily.bold, color: COLORS.textDark },
+  headerTitle: { fontSize: 18, fontFamily: fontFamily.bold, color: COLORS.textDark },
+  headerSubtitle: { fontSize: 13, color: COLORS.textGray, marginTop: 2, fontFamily: fontFamily.semibold },
 
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingBottom: 40 },
 
   balanceCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 8,
-    padding: 22,
-    marginBottom: 20,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.md,
   },
-  balanceLabel: { fontSize: 13, color: COLORS.textGray, marginBottom: 10, fontWeight: '700' },
+  balanceLabel: { fontSize: 13, color: COLORS.textGray, marginBottom: 10, fontFamily: fontFamily.semibold },
   balanceMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  balanceTitle: { fontSize: 17, fontWeight: '900', color: COLORS.textDark, flex: 1, marginRight: 8 },
-  balanceAmount: { fontSize: 20, fontWeight: '900', color: COLORS.green },
-  balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6, fontWeight: '600' },
+  balanceTitle: { fontSize: 17, fontFamily: fontFamily.bold, color: COLORS.textDark, flex: 1, marginRight: 8 },
+  balanceAmount: { fontSize: 20, fontFamily: fontFamily.bold, color: COLORS.green },
+  balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6, fontFamily: fontFamily.medium },
 
   quickActionsGrid: {
     flexDirection: 'row',
@@ -595,68 +661,55 @@ const styles = StyleSheet.create({
   quickActionCard: {
     width: '48%',
     minHeight: 110,
-    borderRadius: 8,
+    borderRadius: radius.lg,
     backgroundColor: '#ffffff',
-    borderWidth: 3,
-    borderColor: '#000000',
-    padding: 14,
-    gap: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    padding: spacing.md,
+    gap: spacing.xs,
+    ...shadows.xs,
   },
   quickActionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#C3FFD8',
-    borderWidth: 2,
-    borderColor: '#000000',
+    backgroundColor: COLORS.greenLight,
   },
   quickActionTitle: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: fontFamily.bold,
     color: '#000000',
   },
   quickActionSubtitle: {
     fontSize: 11,
-    color: '#555555',
-    fontWeight: '700',
+    color: palette.textSecondary,
+    fontFamily: fontFamily.semibold,
   },
 
-  sectionTitle: { fontSize: 17, fontWeight: '900', color: COLORS.textDark, marginBottom: 12 },
+  sectionTitle: { fontSize: 17, fontFamily: fontFamily.bold, color: COLORS.textDark, marginBottom: 12 },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  viewAll: { fontSize: 14, color: COLORS.green, fontWeight: '800', marginBottom: 12 },
+  viewAll: { fontSize: 14, color: COLORS.green, fontFamily: fontFamily.bold, marginBottom: 12 },
 
   listCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 28,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
   },
-  rowDivider: { height: 2, backgroundColor: '#000000' },
+  rowDivider: { height: 1, backgroundColor: palette.divider },
 
   emptyState: {
     alignItems: 'center',
     paddingVertical: 24,
     gap: 8,
   },
-  emptyStateTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
-  emptyStateText: { fontSize: 12, color: COLORS.textGray, textAlign: 'center', lineHeight: 17, fontWeight: '600' },
+  emptyStateTitle: { fontSize: 15, fontFamily: fontFamily.bold, color: COLORS.textDark },
+  emptyStateText: { fontSize: 12, color: COLORS.textGray, textAlign: 'center', lineHeight: 17, fontFamily: fontFamily.medium },
 
   memberRow: {
     flexDirection: 'row',
@@ -667,33 +720,29 @@ const styles = StyleSheet.create({
   avatarSm: {
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: radius.pill,
     backgroundColor: COLORS.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
   },
-  avatarSmText: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  avatarSmText: { fontSize: 15, fontFamily: fontFamily.bold, color: COLORS.textDark },
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  memberName: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
+  memberName: { fontSize: 15, fontFamily: fontFamily.bold, color: COLORS.textDark },
   youBadge: {
     backgroundColor: COLORS.green,
-    borderRadius: 8,
+    borderRadius: radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderWidth: 1.5,
-    borderColor: '#000000',
   },
-  youBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  memberSub: { fontSize: 12, color: COLORS.textGray, marginTop: 4, fontWeight: '600' },
-  memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontWeight: '700' },
+  youBadgeText: { fontSize: 11, fontFamily: fontFamily.bold, color: '#fff' },
+  memberSub: { fontSize: 12, color: COLORS.textGray, marginTop: 4, fontFamily: fontFamily.semibold },
+  memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontFamily: fontFamily.semibold },
   
-  memberBalanceLabel: { fontSize: 11, fontWeight: '800' },
-  memberBalanceAmount: { fontSize: 14, fontWeight: '900', marginTop: 2 },
-  owesYouText: { color: '#1FA855' },
-  youOweText: { color: '#FF3366' },
-  settledText: { color: '#8A8A9E' },
+  memberBalanceLabel: { fontSize: 11, fontFamily: fontFamily.bold },
+  memberBalanceAmount: { fontSize: 14, fontFamily: fontFamily.bold, marginTop: 2 },
+  owesYouText: { color: palette.success },
+  youOweText: { color: palette.danger },
+  settledText: { color: palette.textTertiary },
 
   // Modal
   modalOverlay: {
@@ -703,14 +752,11 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 32,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderRightWidth: 3,
-    borderColor: '#000000',
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    ...shadows.lg,
   },
   modalHandle: {
     width: 40,
@@ -720,9 +766,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 16,
   },
-  modalTitle: { fontSize: 18, fontWeight: '900', color: COLORS.textDark, marginBottom: 18 },
+  modalTitle: { fontSize: 18, fontFamily: fontFamily.bold, color: COLORS.textDark, marginBottom: 18 },
   modalEmptyState: { alignItems: 'center', paddingVertical: 24, gap: 10 },
-  modalEmptyText: { fontSize: 14, color: COLORS.textGray, textAlign: 'center', fontWeight: '600' },
+  modalEmptyText: { fontSize: 14, color: COLORS.textGray, textAlign: 'center', fontFamily: fontFamily.semibold },
   
   settleRow: {
     flexDirection: 'row',
@@ -733,37 +779,30 @@ const styles = StyleSheet.create({
   settleIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     backgroundColor: '#FFE999',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
   },
-  settleText: { fontSize: 14, color: COLORS.textDark, fontWeight: '700' },
-  settleAmount: { fontSize: 16, fontWeight: '900', color: COLORS.green },
+  settleText: { fontSize: 14, color: COLORS.textDark, fontFamily: fontFamily.semibold },
+  settleAmount: { fontSize: 16, fontFamily: fontFamily.bold, color: COLORS.green },
 
   settleModalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     gap: 12,
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#000000',
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
 
   modalCloseBtn: {
     marginTop: 20,
-    backgroundColor: '#00FF66',
-    borderRadius: 8,
+    backgroundColor: palette.primary,
+    borderRadius: radius.pill,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    ...shadows.sm,
   },
-  modalCloseText: { fontSize: 15, fontWeight: '900', color: '#000000' },
+  modalCloseText: { fontSize: 15, fontFamily: fontFamily.bold, color: palette.white },
 });

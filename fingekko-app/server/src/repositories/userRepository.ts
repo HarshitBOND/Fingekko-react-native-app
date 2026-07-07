@@ -66,6 +66,24 @@ async function updateById(id: string, update: UpdateUserData) {
   return User.findByIdAndUpdate(id, update, { new: true }).lean();
 }
 
+type UpdateUserStatsData = Partial<{
+  dayStreak: number;
+  bestStreak: number;
+  questsDone: number;
+  questsTarget: number;
+  betterThanYesterday: number;
+  currentDate: string | null;
+  lastCompletedDate: string | null;
+  previousDayQuestsDone: number;
+}>;
+
+async function updateUserStats(userId: string, stats: UpdateUserStatsData) {
+  const $set = Object.fromEntries(
+    Object.entries(stats).map(([key, value]) => [`stats.${key}`, value])
+  );
+  return User.findByIdAndUpdate(userId, { $set }, { new: true }).lean();
+}
+
 async function updateByclerkId(
   clerkId: string,
   update: UpdateUserClerkData
@@ -89,5 +107,6 @@ export {
   findByClerkId,
   updateByclerkId,
   updateById,
+  updateUserStats,
   searchUsers,
 };

@@ -19,7 +19,7 @@ import { apiRequest } from '../../../utils/api';
 import { useFocusEffect } from 'expo-router';
 import { BackHandler } from 'react-native';
 import { useCallback } from 'react';
-import { Use } from 'react-native-svg';
+import { palette, spacing, radius, shadows, fontFamily } from '../../../constants/design';
 
 // Same icon set used on YourGroups so a group created here renders consistently there.
 const ICON_KEYS = [
@@ -72,9 +72,6 @@ export default function AddNewGroup() {
     const [friends, setFriends] = useState<Friend[]>([]);
     const [friendsLoading, setFriendsLoading] = useState(false);
 
-    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-    const [pendingRequestsId, setPendingRequestsId] = useState<Friend[]>([]);
-
     // Selected members are stored as plain user records (FriendOfMine), since that's
     // what the backend needs for group creation (actual user ids, not friendship ids).
     const [selectedMembers, setSelectedMembers] = useState<FriendOfMine[]>([]);
@@ -97,32 +94,26 @@ export default function AddNewGroup() {
         setMembersModalVisible(false);
     };
 
-    function toggleGroupMember(userId: string) {
-        setSelectedUsers((prev) =>
-            prev.includes(userId)
-                ? prev.filter((id) => id !== userId)
-                : [...prev, userId]
-        );
-    }
-
-    async function handleSendFriendRequest(userId: string) {
-        if (pendingRequestIds.includes(userId)) return;
+    async function handleSendFriendRequest(result: SearchResult) {
+        if (pendingRequestIds.includes(result.user.id)) return;
 
         try {
             const token = await getToken();
+            if (!token) {
+                console.error('No token available for API request.');
+                return;
+            }
 
-            await fetch("/api/friends/request", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ userId }),
+            await apiRequest({
+                method: 'post',
+                url: '/api/friends/request',
+                token,
+                data: { email: result.user.email },
             });
 
-            setPendingRequestIds((prev) => [...prev, userId]);
+            setPendingRequestIds((prev) => [...prev, result.user.id]);
         } catch (err) {
-            console.log("Friend request failed:", err);
+            console.error('Friend request failed:', err);
         }
     }
 
@@ -216,29 +207,6 @@ export default function AddNewGroup() {
                 ? prev.filter((m) => m.id !== member.id)
                 : [...prev, member]
         );
-    };
-
-    const sendFriendRequestAndAdd = async (result: SearchResult) => {
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return;
-        }
-        try {
-            await apiRequest({
-                method: 'post',
-                url: '/api/friends/request',
-                token,
-                data: { email: result.user.email },
-            });
-            setPendingRequestIds((prev) => [...prev, result.user.id]);
-            // Add them to the group immediately even though the friend request is only pending.
-            setSelectedMembers((prev) =>
-                prev.some((m) => m.id === result.user.id) ? prev : [...prev, result.user]
-            );
-        } catch (error) {
-            console.error('Error sending friend request:', error);
-        }
     };
 
     const removeSelectedMember = (id: string) => {
@@ -503,7 +471,7 @@ export default function AddNewGroup() {
                                                 <View style ={{ flexDirection: 'row', alignItems: 'center', gap: 20 , justifyContent: 'flex-end', marginRight: 10 }}>
                                                 <Pressable
                                                     
-                                                    onPress={() => handleSendFriendRequest(result.user.id)}
+                                                    onPress={() => handleSendFriendRequest(result)}
                                                     disabled={requested}
                                                 >
                                                     {requested ? (
@@ -703,26 +671,21 @@ const styles = StyleSheet.create({
     addMembersButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        borderWidth: 2,
-        borderColor: '#000000',
-        borderRadius: 16,
-        padding: 12,
-        backgroundColor: '#ffffff',
-        shadowColor: '#000000',
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        gap: spacing.md,
+        borderRadius: radius.xl,
+        padding: spacing.md,
+        backgroundColor: palette.card,
+        ...shadows.sm,
     },
     addMembersTitle: {
         fontSize: 14,
-        fontWeight: '800',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.textPrimary,
     },
     addMembersSubtitle: {
         fontSize: 12,
-        color: '#333333',
-        fontWeight: '600',
+        color: palette.textSecondary,
+        fontFamily: fontFamily.semibold,
         marginTop: 1,
     },
     chipsWrap: {
@@ -735,53 +698,40 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#C3FFD8',
-        borderWidth: 2,
-        borderColor: '#000000',
-        borderRadius: 12,
+        backgroundColor: palette.primaryLight,
+        borderRadius: radius.pill,
         paddingVertical: 6,
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         maxWidth: 160,
     },
     chipText: {
         fontSize: 12,
-        fontWeight: '700',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.primaryDeep,
         flexShrink: 1,
     },
     createButton: {
-        backgroundColor: '#00FF66',
-        borderRadius: 16,
+        backgroundColor: palette.primary,
+        borderRadius: radius.pill,
         paddingVertical: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
-        shadowColor: '#000000',
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        ...shadows.primary,
     },
     createButtonDisabled: {
-        backgroundColor: '#a7d7b9',
-        borderWidth: 2,
-        borderColor: '#000000',
+        backgroundColor: palette.border,
+        opacity: 0.6,
     },
     createButtonText: {
-        color: '#000000',
+        color: palette.white,
         fontSize: 15,
-        fontWeight: '900',
+        fontFamily: fontFamily.bold,
     },
     footerBanner: {
-        marginHorizontal: 16,
-        borderRadius: 18,
-        borderWidth: 2,
-        borderColor: '#000000',
+        marginHorizontal: spacing.base,
+        borderRadius: radius.xl,
         overflow: 'hidden',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        ...shadows.sm,
         elevation: 3,
     },
     footerBannerBg: {
@@ -789,12 +739,12 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     footerBannerBgImage: {
-        borderRadius: 15,
+        borderRadius: radius.xl,
     },
     footerBannerOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 222, 67, 0.45)',
-        borderRadius: 15,
+        backgroundColor: 'rgba(102, 204, 68, 0.15)',
+        borderRadius: radius.xl,
     },
     footerBannerContent: {
         padding: 20,
@@ -802,8 +752,8 @@ const styles = StyleSheet.create({
     },
     footerBannerTitle: {
         fontSize: 20,
-        fontWeight: '900',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.textPrimary,
         letterSpacing: -0.3,
         lineHeight: 28,
     },
@@ -811,7 +761,7 @@ const styles = StyleSheet.create({
     // Modal styles
     modalPage: {
         flex: 1,
-        backgroundColor: '#FFF8E7',
+        backgroundColor: palette.bg,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -823,18 +773,17 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontSize: 18,
-        fontWeight: '800',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.textPrimary,
     },
     modalCloseButton: {
         width: 32,
         height: 32,
-        borderRadius: 12,
-        backgroundColor: '#ffffff',
-        borderWidth: 2,
-        borderColor: '#000000',
+        borderRadius: radius.pill,
+        backgroundColor: palette.card,
         alignItems: 'center',
         justifyContent: 'center',
+        ...shadows.xs,
     },
     searchBar: {
         flexDirection: 'row',
@@ -843,27 +792,23 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         marginTop: 8,
         marginBottom: 12,
-        borderWidth: 2,
-        borderColor: '#000000',
-        borderRadius: 16,
+        borderRadius: radius.md,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: '#ffffff',
-        shadowColor: '#000000',
-        shadowOffset: { width: 3, height: 3 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        backgroundColor: palette.bg,
+        borderWidth: 1,
+        borderColor: palette.border,
     },
     searchInput: {
         flex: 1,
         fontSize: 14,
-        color: '#000000',
-        fontWeight: '700',
+        color: palette.textPrimary,
+        fontFamily: fontFamily.semibold,
     },
     sectionLabel: {
         fontSize: 11,
-        color: '#000000',
-        fontWeight: '800',
+        color: palette.textSecondary,
+        fontFamily: fontFamily.bold,
         textTransform: 'uppercase',
         letterSpacing: 0.6,
         marginHorizontal: 20,
@@ -871,13 +816,12 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     emptyText: {
-        fontSize: 30,
-        color: '#000000',
-        justifyContent: 'center',
-        alignItems: 'center',
+        fontSize: 18,
+        color: palette.textSecondary,
+        textAlign: 'center',
         marginHorizontal: 20,
-        marginTop: 8,
-        fontWeight: '700',
+        marginTop: 20,
+        fontFamily: fontFamily.bold,
     },
     friendRow: {
         flexDirection: 'row',
@@ -889,89 +833,79 @@ const styles = StyleSheet.create({
     avatarCircle: {
         width: 40,
         height: 40,
-        borderRadius: 12,
-        backgroundColor: '#C3FFD8',
-        borderWidth: 2,
-        borderColor: '#000000',
+        borderRadius: radius.pill,
+        backgroundColor: palette.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
     },
     avatarInitial: {
         fontSize: 15,
-        fontWeight: '900',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.primaryDeep,
     },
     friendName: {
         fontSize: 14,
-        fontWeight: '800',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.textPrimary,
     },
     friendUsername: {
         fontSize: 12,
-        color: '#333333',
-        fontWeight: '600',
+        color: palette.textSecondary,
+        fontFamily: fontFamily.semibold,
         marginTop: 1,
     },
     checkbox: {
         width: 24,
         height: 24,
-        borderRadius: 8,
-        borderWidth: 2,
-        borderColor: '#000000',
+        borderRadius: radius.sm,
+        borderWidth: 1.5,
+        borderColor: palette.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkboxActive: {
-        backgroundColor: '#00FF66',
-        borderColor: '#000000',
+        backgroundColor: palette.success,
+        borderColor: palette.success,
     },
     addPersonButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#00FF66',
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#000000',
+        backgroundColor: palette.primaryLight,
+        borderRadius: radius.pill,
         paddingVertical: 7,
         paddingHorizontal: 12,
     },
     addPersonButtonDisabled: {
-        backgroundColor: '#C3FFD8',
-        borderWidth: 2,
-        borderColor: '#000000',
+        backgroundColor: palette.bg,
+        opacity: 0.6,
     },
     addPersonText: {
         fontSize: 12,
-        fontWeight: '800',
-        color: '#000000',
+        fontFamily: fontFamily.bold,
+        color: palette.primaryDeep,
     },
     addPersonTextDisabled: {
-        color: '#333333',
+        color: palette.textTertiary,
     },
     modalFooter: {
         paddingHorizontal: 20,
         paddingTop: 8,
         paddingBottom: 12,
-        borderTopWidth: 2,
-        borderTopColor: '#000000',
+        borderTopWidth: 1,
+        borderTopColor: palette.divider,
     },
     doneButton: {
-        backgroundColor: '#00FF66',
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: '#000000',
+        backgroundColor: palette.primary,
+        borderRadius: radius.pill,
         paddingVertical: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000000',
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        ...shadows.primary,
     },
     doneButtonText: {
-        color: '#000000',
+        color: palette.white,
         fontSize: 15,
-        fontWeight: '900',
+        fontFamily: fontFamily.bold,
     },
 });

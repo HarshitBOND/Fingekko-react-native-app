@@ -1,13 +1,15 @@
-import { Colors, FontSizes } from '@/constants/Colors';
 import type { DailyQuest, QuestDefinition, QuestState, QuestStatus, QuestType } from '@/constants/types';
 import type { QuestStateResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import Icon from './ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Divider from './Divider';
 import ProgressBar from './ProgressBar';
+import Card from './ui/Card';
+import AppText from './ui/AppText';
+import { palette, spacing, radius, shadows, fontFamily } from '@/constants/design';
 
 const questBank: QuestDefinition[] = [
   {
@@ -499,10 +501,12 @@ export default function TodaysQuest() {
       if ((!stored || stored.date !== todayKey) && isSignedIn) {
         const token = await getTokenRef.current();
         if (token) {
-          await apiRequest('/api/quests/state', {
-            method: 'PUT',
-            body: JSON.stringify(nextState),
-          }, token);
+          await apiRequest({
+            method: 'put',
+            url: '/api/quests/state',
+            token,
+            data: nextState,
+          });
         }
       }
 
@@ -566,10 +570,12 @@ export default function TodaysQuest() {
         void (async () => {
           const token = await getToken();
           if (token) {
-            await apiRequest('/api/quests/state', {
-              method: 'PUT',
-              body: JSON.stringify(nextState),
-            }, token);
+            await apiRequest({
+              method: 'put',
+              url: '/api/quests/state',
+              token,
+              data: nextState,
+            });
           }
         })();
       }
@@ -603,34 +609,46 @@ export default function TodaysQuest() {
 
   if (isLoading) {
     return (
-      <View style={styles.card}>
+      <Card variant="elevated" padding={20}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{"Today's Quests"}</Text>
+          <AppText variant="label" color="textPrimary" style={styles.title}>
+            {"Today's Quests"}
+          </AppText>
         </View>
-        <Text style={styles.loadingText}>Building your quests...</Text>
-      </View>
+        <AppText variant="bodySm" color="textSecondary" style={styles.loadingText}>
+          Building your quests...
+        </AppText>
+      </Card>
     );
   }
 
   if (totalCount === 0) {
     return (
-      <View style={styles.card}>
+      <Card variant="elevated" padding={20}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{"Today's Quests"}</Text>
-          <Text style={styles.completionText}>0 / 0 completed</Text>
+          <AppText variant="label" color="textPrimary" style={styles.title}>
+            {"Today's Quests"}
+          </AppText>
+          <AppText variant="caption" color="textTertiary" weight="bold">
+            0 / 0 completed
+          </AppText>
         </View>
-        <Text style={styles.emptyText}>No quests available yet.</Text>
-      </View>
+        <AppText variant="bodySm" color="textSecondary" style={styles.emptyText}>
+          No quests available yet.
+        </AppText>
+      </Card>
     );
   }
 
   return (
-    <View style={styles.card}>
+    <Card variant="elevated" padding={20}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>{"Today's Quests"}</Text>
-        <Text style={styles.completionText}>
+        <AppText variant="label" color="textPrimary" style={styles.title}>
+          {"Today's Quests"}
+        </AppText>
+        <AppText variant="caption" color="primaryDeep" weight="bold">
           {completedCount} / {totalCount} completed
-        </Text>
+        </AppText>
       </View>
 
       <View style={styles.list}>
@@ -642,26 +660,33 @@ export default function TodaysQuest() {
             <View key={quest.id}>
               <View style={styles.questRow}>
                 <View style={styles.iconWrap}>
-                  <Icon name={iconName} size={32} color="#16a34a" />
+                  <Icon name={iconName} size={20} color={palette.primaryDeep} />
                 </View>
 
                 <View style={styles.questBody}>
-                  <Text style={styles.questTitle}>{quest.text}</Text>
-                  <Text style={styles.questSubtitle}>{getQuestSubtitle(quest)}</Text>
+                  <AppText variant="bodySm" color="textPrimary" weight="bold" numberOfLines={1}>
+                    {quest.text}
+                  </AppText>
+                  <AppText variant="caption" color="textSecondary" style={styles.questSubtitle}>
+                    {getQuestSubtitle(quest)}
+                  </AppText>
                   <View style={styles.questProgress}>
                     <ProgressBar
                       progress={quest.progress}
                       height={4}
-                      radius={999}
-                      trackColor="#d1d5dd"
+                      radius={radius.pill}
+                      trackColor={palette.border}
+                      colors={[palette.primary, palette.primaryBright]}
                     />
                   </View>
                 </View>
 
                 <View style={styles.questRight}>
                   <View style={styles.xpRow}>
-                    <Icon name="Zap" size={14} color="#f59e0b" />
-                    <Text style={styles.xpText}>+{quest.xp} XP</Text>
+                    <Icon name="Zap" size={12} color="#F5B84D" />
+                    <AppText variant="micro" color="warning" weight="bold">
+                      +{quest.xp} XP
+                    </AppText>
                   </View>
 
                   {quest.status === 'pending' ? (
@@ -670,15 +695,15 @@ export default function TodaysQuest() {
                         onPress={() => updateQuestStatus(quest.id, 'completed')}
                         style={[styles.actionBadge, styles.actionComplete]}
                       >
-                        <Icon name="Check" size={12} color="#ffffff" />
-                        <Text style={styles.actionText}>Done</Text>
+                        <Icon name="Check" size={10} color={palette.success} />
+                        <AppText variant="micro" color="success" weight="bold">Done</AppText>
                       </Pressable>
                       <Pressable
                         onPress={() => updateQuestStatus(quest.id, 'failed')}
                         style={[styles.actionBadge, styles.actionFailed]}
                       >
-                        <Icon name="X" size={12} color="#ffffff" />
-                        <Text style={styles.actionText}>{"Can't"}</Text>
+                        <Icon name="X" size={10} color={palette.danger} />
+                        <AppText variant="micro" color="danger" weight="bold">{"Can't"}</AppText>
                       </Pressable>
                     </View>
                   ) : (
@@ -686,9 +711,9 @@ export default function TodaysQuest() {
                       style={[styles.statusBadge, isDone ? styles.statusDone : styles.statusFailed]}
                     >
                       {isDone ? (
-                        <Icon name="Check" size={14} color="#ffffff" />
+                        <Icon name="Check" size={12} color={palette.success} />
                       ) : (
-                        <Icon name="X" size={14} color="#ffffff" />
+                        <Icon name="X" size={12} color={palette.danger} />
                       )}
                     </View>
                   )}
@@ -699,8 +724,8 @@ export default function TodaysQuest() {
                 <Divider
                   orientation="horizontal"
                   thickness={1}
-                  color="#eef2f7"
-                  inset={6}
+                  color={palette.divider}
+                  inset={4}
                   length="100%"
                   style={styles.questDivider}
                 />
@@ -712,82 +737,49 @@ export default function TodaysQuest() {
 
       <Image
         source={require('../assets/images/+75xp.png')}
-        style={{ flex: 1, width: '100%', height: 60, marginTop: 12 }}
+        style={{ width: '100%', height: 48, marginTop: spacing.md, borderRadius: radius.md, resizeMode: 'contain' }}
       />
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
-    color: '#000000',
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  completionText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
-    color: '#000000',
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: FontSizes.sm,
-    color: '#000000',
+    marginTop: spacing.sm,
   },
   emptyText: {
-    marginTop: 12,
-    fontSize: FontSizes.sm,
-    color: '#000000',
+    marginTop: spacing.sm,
   },
   list: {
-    marginTop: 12,
-    gap: 12,
+    marginTop: spacing.md,
+    gap: spacing.md,
   },
   questRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.sm,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#C3FFD8',
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: palette.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
   },
   questBody: {
     flex: 1,
   },
-  questTitle: {
-    fontSize: FontSizes.sm,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
   questSubtitle: {
-    fontSize: FontSizes.xs,
-    color: '#000000',
     marginTop: 2,
   },
   questProgress: {
@@ -796,105 +788,95 @@ const styles = StyleSheet.create({
   questRight: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 4,
   },
   xpRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  xpText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
-    color: '#000000',
+    gap: 3,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
   actionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
+    borderRadius: radius.sm,
+    borderWidth: 1,
   },
   actionComplete: {
-    backgroundColor: '#00FF66',
+    backgroundColor: palette.successLight,
+    borderColor: 'rgba(92, 184, 92, 0.2)',
   },
   actionFailed: {
-    backgroundColor: '#FF3366',
-  },
-  actionText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
-    color: '#000000',
+    backgroundColor: palette.dangerLight,
+    borderColor: 'rgba(232, 93, 93, 0.2)',
   },
   statusBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 24,
+    height: 24,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
+    borderWidth: 1,
   },
   statusDone: {
-    backgroundColor: '#00FF66',
+    backgroundColor: palette.successLight,
+    borderColor: 'rgba(92, 184, 92, 0.2)',
   },
   statusFailed: {
-    backgroundColor: '#FF3366',
+    backgroundColor: palette.dangerLight,
+    borderColor: 'rgba(232, 93, 93, 0.2)',
   },
   questDivider: {
-    marginLeft: 48,
+    marginLeft: 46,
+    marginVertical: spacing.sm,
   },
   bonusCard: {
-    marginTop: 12,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 3,
-    borderColor: '#000000',
-    backgroundColor: '#FFDE43',
+    borderWidth: 1,
+    borderColor: palette.primary,
+    backgroundColor: palette.primaryLight,
   },
   bonusLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
   bonusIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#ffe2b3',
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: palette.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.xs,
   },
   bonusTitle: {
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-    color: '#111827',
+    fontFamily: fontFamily.bold,
   },
   bonusSubtitle: {
-    fontSize: FontSizes.xs,
-    color: '#6b7280',
+    color: palette.textSecondary,
   },
   bonusXP: {
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
-    color: '#7c3aed',
+    fontFamily: fontFamily.semibold,
+    color: palette.primaryDeep,
     marginTop: 2,
   },
   bonusGekko: {
-    width: 64,
-    height: 64,
+    width: 48,
+    height: 48,
     resizeMode: 'contain',
   },
 });

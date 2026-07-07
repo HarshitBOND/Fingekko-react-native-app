@@ -6,14 +6,16 @@ import {
   ActivityIndicator,
   ImageBackground,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import AppText from '../../components/ui/AppText';
+import Card from '../../components/ui/Card';
+import PressableScale from '../../components/ui/PressableScale';
+import { palette, spacing, radius, shadows, fontFamily, layout, gradients } from '../../constants/design';
 
 type BackendExpenseItem = {
   id: string;
@@ -120,269 +122,265 @@ export default function NonGroupExpenses() {
   };
 
   return (
-    <SafeAreaView style={styles.page} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.heroSection}>
-          <LinearGradient
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            colors={['rgba(20,138,70,0.18)', 'rgba(20,138,70,0.05)', 'transparent']}
-            locations={[0, 0.35, 1]}
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                width: 240,
-                height: 240,
-                top: -70,
-                left: -70,
-                borderRadius: 200,
-              },
-            ]}
-          />
-
-          <View style={styles.topBar}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoCircle}>
-                <Icon name="ArrowDownLeft" size={18} color="#148a46" />
-              </View>
-              <Text style={styles.brandTitle}>Non Group Expenses</Text>
-            </View>
-            <Pressable style={styles.menuButton} onPress={() => router.back()}>
-              <Icon name="Menu" size={20} color="#1f2937" />
-            </Pressable>
-          </View>
-
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>Personal splits</Text>
-            <Text style={styles.heroSubtitle}>A simple view of expenses outside groups.</Text>
-          </View>
-        </View>
-
-        {/* Tab Container */}
-        <View style={styles.tabContainer}>
-          <Pressable
-            style={[styles.tabButton, activeTab === 'expenses' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('expenses')}
-          >
-            <Text style={[styles.tabButtonText, activeTab === 'expenses' && styles.tabButtonTextActive]}>
-              Expenses
-            </Text>
+    <ScreenContainer
+      contentStyle={{ gap: spacing.lg }}
+      header={
+        <View style={styles.header}>
+          <Pressable style={styles.headerButton} onPress={() => router.back()}>
+            <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
           </Pressable>
-
-          <Pressable
-            style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('friends')}
-          >
-            <Text style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}>
-              Friends Summary
-            </Text>
-          </Pressable>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Non Group Expenses
+          </AppText>
+          <View style={{ width: 40 }} />
         </View>
+      }
+    >
+      <View style={styles.heroSection}>
+        <LinearGradient
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          colors={['rgba(102, 204, 68, 0.16)', 'rgba(102, 204, 68, 0.04)', 'transparent']}
+          locations={[0, 0.35, 1]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              width: 240,
+              height: 240,
+              top: -70,
+              left: -70,
+              borderRadius: 200,
+            },
+          ]}
+        />
 
-        <View style={styles.card}>
-          {loading ? (
-            <View style={{ padding: 24, alignItems: 'center' }}>
-              <ActivityIndicator color="#148a46" />
-            </View>
-          ) : activeTab === 'friends' ? (
-            friends.length === 0 ? (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#6b7280', fontWeight: '700' }}>No friends added yet.</Text>
-              </View>
-            ) : (
-              friends.map((item, index) => {
-                const friendUser = item.friend;
-                const friendUserId = friendUser?.id || friendUser?.toString() || '';
-                const friendName = friendUser?.name || friendUser?.email || 'Friend';
-                const balance = getFriendBalance(friendUserId);
+        <View style={styles.heroCopy}>
+          <AppText variant="display" color="textPrimary" weight="bold">
+            Personal splits
+          </AppText>
+          <AppText variant="caption" color="textSecondary">
+            A simple view of expenses outside groups.
+          </AppText>
+        </View>
+      </View>
 
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.groupRow, index !== friends.length - 1 && styles.divider]}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/(tabs)/FriendSplits',
-                        params: { friendId: friendUserId, friendName: friendName },
-                      })
-                    }
-                  >
-                    <View style={styles.groupIconWrap}>
-                      <Text style={styles.groupIconEmoji}>👤</Text>
-                    </View>
-                    <View style={styles.groupTextWrap}>
-                      <Text style={styles.groupName}>{friendName}</Text>
-                      <Text style={styles.groupMembers}>{friendUser?.email || ''}</Text>
-                    </View>
-                    <View style={styles.groupRight}>
-                      <Text style={styles.groupStatusLabel}>{getAmountLabel(balance)}</Text>
-                      <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>
-                        ₹{Math.abs(balance).toFixed(2)}
-                      </Text>
-                    </View>
-                    <Icon name="ChevronRight" size={16} color="#9ca3af" style={styles.groupChevron} />
-                  </Pressable>
-                );
-              })
-            )
-          ) : expenses.length === 0 ? (
+      {/* Tab Container */}
+      <View style={styles.tabContainer}>
+        <Pressable
+          style={[styles.tabButton, activeTab === 'expenses' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('expenses')}
+        >
+          <AppText
+            variant="bodySm"
+            weight="bold"
+            style={[styles.tabButtonText, activeTab === 'expenses' && styles.tabButtonTextActive]}
+          >
+            Expenses
+          </AppText>
+        </Pressable>
+
+        <Pressable
+          style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('friends')}
+        >
+          <AppText
+            variant="bodySm"
+            weight="bold"
+            style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}
+          >
+            Friends Summary
+          </AppText>
+        </Pressable>
+      </View>
+
+      <Card variant="elevated" padding={0} style={styles.listCard}>
+        {loading ? (
+          <View style={{ padding: 24, alignItems: 'center' }}>
+            <ActivityIndicator color={palette.primaryDeep} />
+          </View>
+        ) : activeTab === 'friends' ? (
+          friends.length === 0 ? (
             <View style={{ padding: 24, alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, color: '#6b7280', fontWeight: '700' }}>You have no non-group expenses.</Text>
+              <AppText variant="caption" color="textSecondary">
+                No friends added yet.
+              </AppText>
             </View>
           ) : (
-            expenses.map((item, index) => {
-              const balance = item.netBalance;
-              const participantNames = item.participants
-                .map((p) => p.userId?.name)
-                .filter(Boolean)
-                .join(', ') || 'Self';
+            friends.map((item, index) => {
+              const friendUser = item.friend;
+              const friendUserId = friendUser?.id || friendUser?.toString() || '';
+              const friendName = friendUser?.name || friendUser?.email || 'Friend';
+              const balance = getFriendBalance(friendUserId);
 
               return (
-                <View
+                <Pressable
                   key={item.id}
-                  style={[styles.groupRow, index !== expenses.length - 1 && styles.divider]}
+                  style={[styles.groupRow, index !== friends.length - 1 && styles.divider]}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/FriendSplits',
+                      params: { friendId: friendUserId, friendName: friendName },
+                    })
+                  }
                 >
                   <View style={styles.groupIconWrap}>
-                    <Text style={styles.groupIconEmoji}>💵</Text>
+                    <AppText style={styles.groupIconEmoji}>👤</AppText>
                   </View>
                   <View style={styles.groupTextWrap}>
-                    <Text style={styles.groupName}>{item.description}</Text>
-                    <Text style={styles.groupMembers}>{participantNames}</Text>
+                    <AppText variant="bodySm" color="textPrimary" weight="bold">
+                      {friendName}
+                    </AppText>
+                    <AppText variant="micro" color="textSecondary">
+                      {friendUser?.email || ''}
+                    </AppText>
                   </View>
                   <View style={styles.groupRight}>
-                    <Text style={styles.groupStatusLabel}>{getAmountLabel(balance)}</Text>
-                    <Text style={[styles.groupAmount, { color: getAmountColor(balance) }]}>₹{Math.abs(balance).toFixed(2)}</Text>
+                    <AppText variant="micro" color="textSecondary" weight="bold">
+                      {getAmountLabel(balance)}
+                    </AppText>
+                    <AppText
+                      variant="bodySm"
+                      weight="bold"
+                      style={{ color: getAmountColor(balance) === '#eb5a4f' ? palette.danger : (getAmountColor(balance) === '#148a46' ? palette.success : palette.textPrimary) }}
+                    >
+                      ₹{Math.abs(balance).toFixed(2)}
+                    </AppText>
                   </View>
-                  <Icon name="ChevronRight" size={16} color="#9ca3af" style={styles.groupChevron} />
-                </View>
+                  <Icon name="ChevronRight" size={16} color={palette.textSecondary} style={styles.groupChevron} />
+                </Pressable>
               );
             })
-          )}
-        </View>
+          )
+        ) : expenses.length === 0 ? (
+          <View style={{ padding: 24, alignItems: 'center' }}>
+            <AppText variant="caption" color="textSecondary">
+              You have no non-group expenses.
+            </AppText>
+          </View>
+        ) : (
+          expenses.map((item, index) => {
+            const balance = item.netBalance;
+            const participantNames = item.participants
+              .map((p) => p.userId?.name)
+              .filter(Boolean)
+              .join(', ') || 'Self';
 
-        <View style={styles.footerBanner}>
-          <ImageBackground
-            source={require('../../assets/images/bgadd.png')}
-            style={styles.footerBannerBg}
-            resizeMode="cover"
-            imageStyle={styles.footerBannerBgImage}
-          >
-            <View style={styles.footerBannerOverlay} />
-            <View style={styles.footerBannerContent}>
-              <Text style={styles.footerBannerTitle}>Keep it simple.</Text>
-              <Text style={styles.footerBannerTitle}>Keep it fair.</Text>
-            </View>
-          </ImageBackground>
-        </View>
-      </ScrollView>
+            return (
+              <View
+                key={item.id}
+                style={[styles.groupRow, index !== expenses.length - 1 && styles.divider]}
+              >
+                <View style={styles.groupIconWrap}>
+                  <AppText style={styles.groupIconEmoji}>💵</AppText>
+                </View>
+                <View style={styles.groupTextWrap}>
+                  <AppText variant="bodySm" color="textPrimary" weight="bold">
+                    {item.description}
+                  </AppText>
+                  <AppText variant="micro" color="textSecondary">
+                    {participantNames}
+                  </AppText>
+                </View>
+                <View style={styles.groupRight}>
+                  <AppText variant="micro" color="textSecondary" weight="bold">
+                    {getAmountLabel(balance)}
+                  </AppText>
+                  <AppText
+                    variant="bodySm"
+                    weight="bold"
+                    style={{ color: getAmountColor(balance) === '#eb5a4f' ? palette.danger : (getAmountColor(balance) === '#148a46' ? palette.success : palette.textPrimary) }}
+                  >
+                    ₹{Math.abs(balance).toFixed(2)}
+                  </AppText>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </Card>
+
+      <View style={styles.footerBanner}>
+        <ImageBackground
+          source={require('../../assets/images/bgadd.png')}
+          style={styles.footerBannerBg}
+          resizeMode="cover"
+          imageStyle={styles.footerBannerBgImage}
+        >
+          <View style={styles.footerBannerOverlay} />
+          <View style={styles.footerBannerContent}>
+            <AppText variant="title" color="textPrimary" weight="bold">
+              Keep it simple.
+            </AppText>
+            <AppText variant="title" color="textPrimary" weight="bold">
+              Keep it fair.
+            </AppText>
+          </View>
+        </ImageBackground>
+      </View>
 
       {/* Floating Action Button */}
-      <Pressable
+      <PressableScale
         style={styles.fab}
         onPress={() => router.push('/(tabs)/AddNewExpense')}
       >
-        <Icon name="Plus" size={24} color="#000000" clickable={true} />
-      </Pressable>
-    </SafeAreaView>
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.btnContent}>
+          <Icon name="Plus" size={24} color={palette.white} />
+        </View>
+      </PressableScale>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#FFF8E7',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingVertical: spacing.md,
+    backgroundColor: palette.card,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
-  container: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    gap: 16,
+  headerButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroSection: {
     width: '100%',
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  logoCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
-  brandTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#000000',
-  },
-  menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
   heroCopy: {
-    paddingTop: 24,
-    gap: 4,
+    paddingTop: spacing.sm,
+    gap: 2,
   },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#000000',
-    letterSpacing: -0.8,
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: '#000000',
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+  listCard: {
+    paddingHorizontal: spacing.base,
   },
   divider: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#000000',
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    gap: 12,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   groupIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: '#C3FFD8',
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#000000',
   },
   groupIconEmoji: {
     fontSize: 18,
@@ -391,66 +389,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  groupName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#000000',
-  },
-  groupMembers: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333333',
-  },
   groupRight: {
     alignItems: 'flex-end',
     gap: 2,
-  },
-  groupStatusLabel: {
-    fontSize: 11,
-    color: '#333333',
-    fontWeight: '700',
-  },
-  groupAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
   },
   groupChevron: {
     marginLeft: 4,
   },
   footerBanner: {
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#000000',
+    borderRadius: radius.xl,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    ...shadows.sm,
+    marginBottom: spacing.xxl,
   },
   footerBannerBg: {
-    minHeight: 130,
+    minHeight: 120,
     justifyContent: 'flex-end',
   },
   footerBannerBgImage: {
-    borderRadius: 5,
+    borderRadius: radius.xl,
   },
   footerBannerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 222, 67, 0.45)',
-    borderRadius: 5,
+    backgroundColor: 'rgba(102, 204, 68, 0.12)',
+    borderRadius: radius.xl,
   },
   footerBannerContent: {
-    padding: 20,
-    paddingBottom: 18,
-  },
-  footerBannerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#000000',
-    letterSpacing: -0.3,
-    lineHeight: 28,
+    padding: spacing.lg,
   },
   fab: {
     position: 'absolute',
@@ -459,42 +424,41 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#00FF66',
+    overflow: 'hidden',
+    ...shadows.primary,
+    zIndex: 999,
+  },
+  btnContent: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    elevation: 5,
   },
   tabContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
-    marginHorizontal: 16,
     marginTop: 8,
   },
   tabButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#000000',
-    backgroundColor: '#ffffff',
+    height: 44,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    ...shadows.xs,
   },
   tabButtonActive: {
-    backgroundColor: '#00FF66',
+    backgroundColor: palette.primaryLight,
+    borderColor: palette.primary,
   },
   tabButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#000000',
+    color: palette.textSecondary,
   },
   tabButtonTextActive: {
-    fontWeight: '900',
+    color: palette.primaryDeep,
   },
 });

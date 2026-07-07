@@ -1,230 +1,80 @@
-import React, { useRef } from 'react';
-import {
-  Animated,
-  GestureResponderEvent,
-  Pressable,
-  StyleSheet,
-  View,
-  ViewStyle,
-} from 'react-native';
-import { Colors } from '@/constants/Colors';
+import React from 'react';
+import { GestureResponderEvent, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { palette, radius as R, shadows } from '@/constants/design';
+import PressableScale from './PressableScale';
+
+export type CardVariant =
+  | 'elevated' // white surface + soft shadow (default)
+  | 'flat' // white surface + hairline border, minimal shadow
+  | 'tinted' // soft green tint
+  | 'ghost' // transparent
+  | 'dark' // deep green surface
+  // legacy aliases kept for drop-in compatibility
+  | 'tactile'
+  | 'pressable';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: (event: GestureResponderEvent) => void;
-  variant?: 'flat' | 'tactile' | 'pressable';
+  variant?: CardVariant;
+  padding?: number;
+  radius?: number;
+  /** entrance fade — set false to disable */
+  animateIn?: boolean;
+  /** legacy prop, ignored (kept so old call-sites don't break) */
   shadowHeight?: number;
 }
 
-// Utility to separate layout styles (for the outer container) from inner styling (for the card face)
-const extractContainerStyles = (style: ViewStyle | undefined) => {
-  if (!style) return { containerStyles: {}, topLayerStyles: {} };
-  
-  const containerKeys = [
-    'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical',
-    'flex', 'flexGrow', 'flexShrink', 'flexBasis',
-    'alignSelf',
-    'position', 'top', 'bottom', 'left', 'right',
-    'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
-    'aspectRatio',
-    'zIndex',
-  ];
-  
-  const containerStyles: any = {};
-  const topLayerStyles: any = {};
-  
-  Object.keys(style).forEach((key) => {
-    if (containerKeys.includes(key)) {
-      containerStyles[key] = (style as any)[key];
-    } else {
-      topLayerStyles[key] = (style as any)[key];
-    }
-  });
-  
-  return { containerStyles, topLayerStyles };
+const surfaceForVariant = (variant: CardVariant): ViewStyle => {
+  switch (variant) {
+    case 'flat':
+      return { backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border, ...shadows.xs };
+    case 'tinted':
+      return { backgroundColor: palette.primaryLight };
+    case 'ghost':
+      return { backgroundColor: 'transparent' };
+    case 'dark':
+      return { backgroundColor: palette.primaryDeep, ...shadows.md };
+    case 'elevated':
+    case 'tactile':
+    case 'pressable':
+    default:
+      return { backgroundColor: palette.card, ...shadows.md };
+  }
 };
 
 export default function Card({
   children,
   style,
   onPress,
-  variant = 'tactile',
-  shadowHeight = 6,
+  variant = 'elevated',
+  padding = 20,
+  radius = R.xl,
+  animateIn = false,
 }: CardProps) {
-  const pressAnim = useRef(new Animated.Value(0)).current;
-
+  const surface = surfaceForVariant(variant);
+  const base: ViewStyle = { borderRadius: radius, padding, ...surface };
   const isPressable = variant === 'pressable' || !!onPress;
-  const borderRadius = 18;
-  const customBorderRadius = style?.borderRadius ?? borderRadius;
-
-  const handlePressIn = () => {
-    if (!isPressable) return;
-    Animated.spring(pressAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    if (!isPressable) return;
-    Animated.spring(pressAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start();
-  };
-
-  const translateY = pressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, shadowHeight - 0.5],
-  });
-
-  const scale = pressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0.99],
-  });
-
-  const { containerStyles, topLayerStyles } = extractContainerStyles(style);
-
-  // Separate inner padding to apply it inside the card body rather than the outer view
-  const cardPadding = {
-    padding: topLayerStyles.padding ?? 16,
-    paddingTop: topLayerStyles.paddingTop,
-    paddingBottom: topLayerStyles.paddingBottom,
-    paddingLeft: topLayerStyles.paddingLeft,
-    paddingRight: topLayerStyles.paddingRight,
-    paddingHorizontal: topLayerStyles.paddingHorizontal,
-    paddingVertical: topLayerStyles.paddingVertical,
-  };
-
-  // Strip padding styles from topLayerStyles to avoid duplicate padding
-  const cleanTopLayerStyles = { ...topLayerStyles };
-  delete cleanTopLayerStyles.padding;
-  delete cleanTopLayerStyles.paddingTop;
-  delete cleanTopLayerStyles.paddingBottom;
-  delete cleanTopLayerStyles.paddingLeft;
-  delete cleanTopLayerStyles.paddingRight;
-  delete cleanTopLayerStyles.paddingHorizontal;
-  delete cleanTopLayerStyles.paddingVertical;
 
   if (isPressable) {
     return (
-      <View style={[styles.container, { paddingBottom: shadowHeight }, containerStyles]}>
-        {/* Shadow Layer */}
-        <View
-          style={[
-            styles.shadow,
-            {
-              backgroundColor: '#000000',
-              borderRadius: customBorderRadius,
-              top: shadowHeight,
-            },
-          ]}
-        />
-
-        {/* Top interactive Card Layer */}
-        <Animated.View
-          style={[
-            styles.cardTop,
-            {
-              backgroundColor: '#FFFFFF',
-              borderColor: '#000000',
-              borderWidth: 2,
-              borderRadius: customBorderRadius,
-            },
-            cleanTopLayerStyles,
-            {
-              transform: [{ translateY }, { scale }],
-            },
-          ]}
-        >
-          <Pressable
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            onPress={onPress}
-            style={[styles.content, cardPadding]}
-          >
-            {children}
-          </Pressable>
-        </Animated.View>
-      </View>
+      <PressableScale onPress={onPress} style={[base, style]}>
+        {children}
+      </PressableScale>
     );
   }
 
-  if (variant === 'tactile') {
+  if (animateIn) {
     return (
-      <View style={[styles.container, { paddingBottom: shadowHeight }, containerStyles]}>
-        {/* Shadow Layer */}
-        <View
-          style={[
-            styles.shadow,
-            {
-              backgroundColor: '#000000',
-              borderRadius: customBorderRadius,
-              top: shadowHeight,
-            },
-          ]}
-        />
-
-        {/* Card Body */}
-        <View
-          style={[
-            styles.cardTop,
-            {
-              backgroundColor: '#FFFFFF',
-              borderColor: '#000000',
-              borderWidth: 2,
-              borderRadius: customBorderRadius,
-            },
-            cleanTopLayerStyles,
-          ]}
-        >
-          <View style={[styles.content, cardPadding]}>{children}</View>
-        </View>
-      </View>
+      <Animated.View entering={FadeIn.duration(300)} style={[base, style]}>
+        {children}
+      </Animated.View>
     );
   }
 
-  // Flat card
-  return (
-    <View
-      style={[
-        styles.cardTop,
-        {
-          backgroundColor: '#FFFFFF',
-          borderColor: '#000000',
-          borderWidth: 2,
-          borderRadius: customBorderRadius,
-        },
-        containerStyles,
-        cleanTopLayerStyles,
-      ]}
-    >
-      <View style={[styles.content, cardPadding]}>{children}</View>
-    </View>
-  );
+  return <View style={[base, style]}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    position: 'relative',
-    alignSelf: 'stretch',
-  },
-  shadow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  cardTop: {
-    width: '100%',
-  },
-  content: {
-    padding: 16,
-    width: '100%',
-  },
-});
+export const cardStyles = StyleSheet.create({});

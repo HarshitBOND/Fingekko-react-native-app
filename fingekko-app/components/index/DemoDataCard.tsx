@@ -1,8 +1,10 @@
-import { Text, View, Pressable } from 'react-native';
-import { DEMO_CATEGORIES } from './constants';
-import { styles } from './styles';
-import Input from '../ui/Input';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { palette, radius, spacing } from '@/constants/design';
+import AppText from '../ui/AppText';
 import Button from '../ui/Button';
+import Card from '../ui/Card';
+import Input from '../ui/Input';
+import { DEMO_CATEGORIES } from './constants';
 
 type DemoDataCardProps = {
   useDummyData: boolean;
@@ -26,61 +28,87 @@ export default function DemoDataCard({
   onResetSample,
 }: DemoDataCardProps) {
   return (
-    <>
-      <View style={styles.demoCard}>
-        <View style={styles.demoCopy}>
-          <Text style={styles.demoTitle}>{useDummyData ? 'Demo data is on' : 'Demo data is off'}</Text>
-          <Text style={styles.demoSubTitle}>Add a dummy expense to watch the balance, ring, and weekly numbers update.</Text>
+    <Card variant="flat" padding={spacing.base} radius={radius.xl}>
+      <View style={styles.headRow}>
+        <View style={styles.copy}>
+          <View style={styles.titleRow}>
+            <View style={[styles.dot, { backgroundColor: useDummyData ? palette.success : palette.textTertiary }]} />
+            <AppText variant="label">{useDummyData ? 'Demo data is on' : 'Demo data is off'}</AppText>
+          </View>
+          <AppText variant="caption" color="textSecondary" style={styles.sub}>
+            Add a dummy expense to watch the balance, ring and weekly numbers update.
+          </AppText>
         </View>
         <Button
-          variant={useDummyData ? 'danger' : 'outline'}
+          variant={useDummyData ? 'outline' : 'secondary'}
           size="sm"
+          fullWidth={false}
           onPress={onToggleDemo}
-          style={{ width: 'auto', minWidth: 110 }}
         >
-          {useDummyData ? 'Disable demo' : 'Use demo data'}
+          {useDummyData ? 'Disable' : 'Enable'}
         </Button>
       </View>
 
       {useDummyData ? (
-        <View style={styles.demoControls}>
-          <View style={styles.demoInputRow}>
+        <View style={styles.controls}>
+          <View style={styles.inputRow}>
             <Input
-              placeholder="Amount"
+              placeholder="Amount (₹)"
               keyboardType="numeric"
               value={dummyAmount}
               onChangeText={onAmountChange}
-              containerStyle={{ flex: 1 }}
+              containerStyle={styles.input}
             />
-            <Button
-              variant="secondary"
-              size="md"
-              onPress={onAddExpense}
-              style={{ width: 'auto' }}
-            >
-              Add expense
+            <Button variant="primary" size="md" fullWidth={false} onPress={onAddExpense}>
+              Add
             </Button>
           </View>
 
-          <View style={styles.demoCategoryRow}>
+          <View style={styles.chipRow}>
             {DEMO_CATEGORIES.map((category) => {
               const selected = dummyCategory === category;
               return (
                 <Pressable
                   key={category}
                   onPress={() => onCategoryChange(category)}
-                  style={[styles.categoryChip, selected && styles.categoryChipActive]}
+                  style={[styles.chip, selected && styles.chipActive]}
                 >
-                  <Text style={[styles.categoryChipText, selected && styles.categoryChipTextActive]}>{category}</Text>
+                  <AppText variant="caption" color={selected ? 'primaryDeep' : 'textSecondary'}>
+                    {category}
+                  </AppText>
                 </Pressable>
               );
             })}
-            <Pressable onPress={onResetSample} style={styles.resetDemoButton}>
-              <Text style={styles.resetDemoText}>Reset sample</Text>
+            <Pressable onPress={onResetSample} style={styles.reset} hitSlop={6}>
+              <AppText variant="caption" color="textTertiary">
+                Reset
+              </AppText>
             </Pressable>
           </View>
         </View>
       ) : null}
-    </>
+    </Card>
   );
 }
+
+const styles = StyleSheet.create({
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  copy: { flex: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  sub: { marginTop: 4 },
+  controls: { marginTop: spacing.base, gap: spacing.md },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  input: { flex: 1 },
+  chipRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  chipActive: { backgroundColor: palette.primaryLight, borderColor: palette.primary },
+  reset: { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 8 },
+});

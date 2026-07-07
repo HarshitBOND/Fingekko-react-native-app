@@ -1,52 +1,61 @@
+/**
+ * Legacy color/scale export kept for backwards-compatibility with existing imports.
+ * All values now derive from the calm-premium design system in `constants/design.ts`.
+ */
+import { palette, radius, shadows, spacing } from './design';
+
 export const Colors = {
-  // Pr
-  primary: '#00FF66',        // Neo-brutalist Green
-  primaryDark: '#000000',    // Black
-  primaryLight: '#C3FFD8',   // Light green
+  // Brand
+  primary: palette.primary, // FinGekko green
+  primaryDark: palette.primaryDeep, // deep green accent
+  primaryLight: palette.primaryLight, // soft green tint
 
   // Background colors
-  background: '#FFF8E7',     // Neo-brutalist warm cream background
-  surface: '#FFFFFF',        // Cards, modals
-  surfaceDark: '#000000',    // Black surface
+  background: palette.bg, // app background
+  surface: palette.card, // cards, modals
+  surfaceDark: palette.ink, // dark surface
 
   // Text colors
-  textPrimary: '#000000',    // Main text
-  textSecondary: '#1E293B',  // Secondary text
-  textLight: '#FFFFFF',      // Text on dark backgrounds
+  textPrimary: palette.textPrimary,
+  textSecondary: palette.textSecondary,
+  textLight: palette.white, // text on dark backgrounds
 
   // Status colors
-  income: '#00FF66',         // Vibrant green for income
-  expense: '#FF3366',        // Vibrant coral/red for expense
-  savings: '#3399FF',        // Vibrant blue for savings
+  income: palette.success,
+  expense: palette.danger,
+  savings: palette.info,
 
   // UI colors
-  border: '#000000',         // Thick black borders
-  shadow: '#000000',         // Hard black shadow
-  tabBar: '#FFFFFF',         // White tab background
-  tabBarActive: '#000000',   // Black active tab text/icon
-  tabBarInactive: '#6B7280', // Gray inactive tab text/icon
+  border: palette.border,
+  shadow: palette.ink,
+  tabBar: palette.card,
+  tabBarActive: palette.primaryDeep,
+  tabBarInactive: palette.textTertiary,
 };
 
 // Typography sizes
 export const FontSizes = {
-  xs: 10,
-  sm: 12,
+  xs: 11,
+  sm: 13,
   md: 14,
   base: 16,
   lg: 18,
   xl: 22,
   xxl: 28,
-  xxxl: 36,
-  xxxxl: 48,
+  xxxl: 34,
+  xxxxl: 44,
 };
 
-// Spacing system (use multiples of 4)
+// Spacing system (multiples of 4) — re-exported from design tokens
 export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  base: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 32,
+  xs: spacing.xs,
+  sm: spacing.sm,
+  md: spacing.md,
+  base: spacing.base,
+  lg: spacing.lg,
+  xl: spacing.xl,
+  xxl: spacing.xxl,
 };
+
+// Convenience re-exports so screens can pull everything from one place if desired.
+export { palette, radius, shadows, spacing };

@@ -21,16 +21,32 @@ groupRoute.get("/", async (req: Request, res: Response) => {
     }
 
     const groups = await groupRepository.getGroupsByUser(userId);
+    const currentUser = await User.findOne({ clerkId: userId }).select("_id");
+    const currentUserDbId = currentUser?._id?.toString();
 
-    console.log("Fetched groups for user:", userId, groups);
-    const response = groups.map((group) => ({
-      id: group._id.toString(),
-      name: group.name,
-      members: group.members.map((m) => m.toString()),
-      createdBy: group.createdBy.toString(),
-      icon: group.icon,
-      balance: 0,
-    }));
+    const response = await Promise.all(
+      groups.map(async (group) => {
+        let netBalance = 0;
+        if (currentUserDbId) {
+          const { balances } = await computeGroupBalances(group._id.toString());
+          netBalance = balances.find((b) => b.userId === currentUserDbId)?.netBalance ?? 0;
+        }
+
+        const amountLabel = netBalance > 0.01 ? "You are owed" : netBalance < -0.01 ? "You owe" : "You are settled up";
+        const amountColor = netBalance > 0.01 ? "#148a46" : netBalance < -0.01 ? "#eb5a4f" : "#6b7280";
+
+        return {
+          id: group._id.toString(),
+          name: group.name,
+          members: group.members.map((m) => m.toString()),
+          createdBy: group.createdBy.toString(),
+          icon: group.icon,
+          amountLabel,
+          amount: `₹${Math.abs(netBalance).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`,
+          amountColor,
+        };
+      })
+    );
 
     res.json(response);
   } catch (error) {

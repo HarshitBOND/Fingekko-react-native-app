@@ -5,15 +5,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../../components/ui/Icon';
-import { Colors } from '../../constants/Colors';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import Card from '../../components/ui/Card';
+import AppText from '../../components/ui/AppText';
+import Navbar from '../../components/Navbar';
+import PressableScale from '../../components/ui/PressableScale';
+import { palette, spacing, layout, radius, shadows, fontFamily } from '../../constants/design';
 
 // ─── UTILITIES & HELPERS ──────────────────────────────────────────
 
@@ -209,14 +211,14 @@ const Avatar = React.memo(({ name }: { name: string }) => {
   const initials = useMemo(() => getInitials(name), [name]);
   return (
     <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{initials}</Text>
+      <AppText variant="label" color="primaryDeep" weight="extrabold">{initials}</AppText>
     </View>
   );
 });
 Avatar.displayName = 'Avatar';
 
 const EmptyState = React.memo(({ text }: { text: string }) => (
-  <Text style={styles.emptyText}>{text}</Text>
+  <AppText variant="bodySm" color="textSecondary" align="center" style={styles.emptyText}>{text}</AppText>
 ));
 EmptyState.displayName = 'EmptyState';
 
@@ -239,47 +241,47 @@ const FriendCard = React.memo(({
   }, [item.status, item.direction]);
 
   return (
-    <View style={styles.cardRow}>
+    <Card variant="flat" padding={14} style={styles.cardRow}>
       <Avatar name={item.friend.name} />
 
       <View style={styles.cardBody}>
-        <Text style={styles.name}>{item.friend.name}</Text>
-        <Text style={styles.email}>{item.friend.email}</Text>
-        <Text style={styles.meta}>{statusLabel}</Text>
+        <AppText variant="bodySm" color="textPrimary" weight="bold">{item.friend.name}</AppText>
+        <AppText variant="caption" color="textSecondary">{item.friend.email}</AppText>
+        <AppText variant="micro" color="primaryDeep" weight="semibold" style={styles.meta}>{statusLabel}</AppText>
       </View>
 
       <View style={styles.cardActions}>
         {item.status === 'pending' && item.direction === 'incoming' ? (
           <View style={styles.actionRow}>
-            <Pressable 
+            <PressableScale 
               style={[styles.acceptButton, disabled && styles.buttonDisabled]} 
               onPress={() => onAccept?.(item.id)}
               disabled={disabled}
               accessibilityLabel="Accept friend request"
             >
-              <Icon name="Check" size={16} color="#000000" />
-            </Pressable>
-            <Pressable 
+              <Icon name="Check" size={14} color={palette.success} />
+            </PressableScale>
+            <PressableScale 
               style={[styles.rejectButton, disabled && styles.buttonDisabled]} 
               onPress={() => onDecline?.(item.id)}
               disabled={disabled}
               accessibilityLabel="Decline friend request"
             >
-              <Icon name="X" size={16} color="#000000" />
-            </Pressable>
+              <Icon name="X" size={14} color={palette.danger} />
+            </PressableScale>
           </View>
         ) : (
-          <Pressable 
+          <PressableScale 
             style={[styles.secondaryButton, disabled && styles.buttonDisabled]} 
             onPress={() => onRemove?.(item.id)}
             disabled={disabled}
             accessibilityLabel="Remove friend"
           >
-            <Text style={styles.secondaryButtonText}>Remove</Text>
-          </Pressable>
+            <AppText variant="micro" color="danger" weight="bold">Remove</AppText>
+          </PressableScale>
         )}
       </View>
-    </View>
+    </Card>
   );
 });
 FriendCard.displayName = 'FriendCard';
@@ -298,21 +300,21 @@ const SearchResultCard = React.memo(({
   const isPendingOutgoing = relationship?.status === 'pending' && relationship.direction === 'outgoing';
 
   return (
-    <View style={styles.cardRow}>
+    <Card variant="flat" padding={12} style={styles.searchResultRow}>
       <Avatar name={result.user.name} />
 
       <View style={styles.cardBody}>
-        <Text style={styles.name}>{result.user.name}</Text>
-        <Text style={styles.email}>{result.user.email}</Text>
+        <AppText variant="bodySm" color="textPrimary" weight="bold">{result.user.name}</AppText>
+        <AppText variant="caption" color="textSecondary">{result.user.email}</AppText>
       </View>
 
       {isAccepted ? (
         <View style={styles.acceptedPill}>
-          <Icon name="Check" size={14} color="#000000" />
-          <Text style={styles.acceptedPillText}>Friends</Text>
+          <Icon name="Check" size={12} color={palette.success} />
+          <AppText variant="micro" color="success" weight="bold">Friends</AppText>
         </View>
       ) : (
-        <Pressable
+        <PressableScale
           style={[
             styles.primaryButton,
             isPendingOutgoing && styles.pendingOutgoingButton,
@@ -323,17 +325,17 @@ const SearchResultCard = React.memo(({
           accessibilityLabel={isPendingOutgoing ? "Request already sent" : "Add Friend"}
         >
           {isPendingOutgoing ? (
-            <Icon name="Handshake" size={16} color="#000000" />
+            <Icon name="Handshake" size={14} color={palette.textSecondary} />
           ) : (
-            <Icon name="UserPlus" size={16} color="#000000" />
+            <Icon name="UserPlus" size={14} color={palette.primaryDeep} />
           )}
 
-          <Text style={styles.primaryButtonText}>
+          <AppText variant="micro" color={isPendingOutgoing ? "textSecondary" : "primaryDeep"} weight="bold">
             {isPendingOutgoing ? 'Request sent' : 'Add Friend'}
-          </Text>
-        </Pressable>
+          </AppText>
+        </PressableScale>
       )}
-    </View>
+    </Card>
   );
 });
 SearchResultCard.displayName = 'SearchResultCard';
@@ -346,14 +348,14 @@ const SearchBar = React.memo(({
   onChange: (text: string) => void;
 }) => (
   <View style={styles.searchRow}>
-    <Icon name="Search" size={18} color="#000000" />
+    <Icon name="Search" size={18} color={palette.textSecondary} />
     <TextInput
       value={value}
       onChangeText={onChange}
       autoCapitalize="none"
       placeholder="Search people..."
       style={styles.searchInput}
-      placeholderTextColor="#555555"
+      placeholderTextColor={palette.textTertiary}
       accessibilityLabel="Search people input"
     />
   </View>
@@ -372,11 +374,15 @@ const FriendSection = React.memo(({
   renderItem: (item: any) => React.ReactNode;
 }) => (
   <View style={styles.sectionBlock}>
-    <Text style={styles.sectionTitle}>{title}</Text>
+    <AppText variant="title" color="textPrimary" weight="bold" style={styles.sectionTitle}>
+      {title}
+    </AppText>
     {data.length === 0 ? (
       <EmptyState text={emptyText} />
     ) : (
-      data.map(renderItem)
+      <View style={styles.sectionList}>
+        {data.map(renderItem)}
+      </View>
     )}
   </View>
 ));
@@ -425,77 +431,86 @@ export default function FriendsScreen() {
   ), [removeFriend, loading]);
 
   return (
-    <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={styles.badge}>
-            <Icon name="Users" size={14} color="#000000" />
-            <Text style={styles.badgeText}>Community</Text>
+    <ScreenContainer
+      contentStyle={{ gap: spacing.lg }}
+      header={
+        <View style={{ paddingHorizontal: layout.gutter }}>
+          <Navbar />
+        </View>
+      }
+    >
+      <Card variant="elevated" padding={20}>
+        <View style={styles.badge}>
+          <Icon name="Users" size={14} color={palette.primaryDeep} />
+          <AppText variant="micro" color="primaryDeep" weight="bold">Community</AppText>
+        </View>
+        <AppText variant="h1" color="textPrimary" style={styles.title}>
+          Friends
+        </AppText>
+        <AppText variant="caption" color="textSecondary" style={styles.subtitle}>
+          Connect with friends, manage shared expenses, and settle up with ease.
+        </AppText>
+      </Card>
+
+      <Card variant="elevated" padding={20} style={styles.searchCard}>
+        <AppText variant="title" color="textPrimary" weight="bold">
+          Search Friends
+        </AppText>
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
+        {searchLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={palette.primaryDeep} />
           </View>
-          <Text style={styles.title}>Friends</Text>
-          <Text style={styles.subtitle}>
-            Connect with friends, manage shared expenses, and settle up with ease.
-          </Text>
-        </View>
+        )}
 
-        <View style={styles.searchCard}>
-          <Text style={styles.sectionTitle}>Search Friends</Text>
-          <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        {!searchLoading && searchQuery.trim() !== '' && searchResults.length === 0 && (
+          <EmptyState text="No results found." />
+        )}
 
-          {searchLoading && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#000000" />
+        {searchResults.length > 0 && (
+          <View style={styles.resultsContainer}>
+            <View style={styles.resultsList}>
+              {searchResults.map((result) => (
+                <SearchResultCard
+                  key={result.user.id}
+                  result={result}
+                  onAdd={sendRequest}
+                  disabled={requestLoading[result.user.email]}
+                />
+              ))}
             </View>
-          )}
+          </View>
+        )}
 
-          {!searchLoading && searchQuery.trim() !== '' && searchResults.length === 0 && (
-            <EmptyState text="No results found." />
-          )}
+        {message ? (
+          <AppText variant="caption" color="primaryDeep" weight="semibold" style={styles.message}>
+            {message}
+          </AppText>
+        ) : null}
+      </Card>
 
-          {searchResults.length > 0 && (
-            <View style={styles.resultsContainer}>
-              <ScrollView
-                style={styles.resultsScrollView}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-              >
-                {searchResults.map((result) => (
-                  <SearchResultCard
-                    key={result.user.id}
-                    result={result}
-                    onAdd={sendRequest}
-                    disabled={requestLoading[result.user.email]}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
+      <FriendSection
+        title="Incoming requests"
+        data={friends.incomingRequests}
+        emptyText="No pending requests."
+        renderItem={renderFriendItem}
+      />
 
-          {message ? <Text style={styles.message}>{message}</Text> : null}
-        </View>
+      <FriendSection
+        title="Outgoing requests"
+        data={friends.outgoingRequests}
+        emptyText="No requests sent yet."
+        renderItem={renderOutgoingItem}
+      />
 
-        <FriendSection
-          title="Incoming requests"
-          data={friends.incomingRequests}
-          emptyText="No pending requests."
-          renderItem={renderFriendItem}
-        />
-
-        <FriendSection
-          title="Outgoing requests"
-          data={friends.outgoingRequests}
-          emptyText="No requests sent yet."
-          renderItem={renderOutgoingItem}
-        />
-
-        <FriendSection
-          title="Your friends"
-          data={friends.friends}
-          emptyText="No friends yet. Search by email to add people."
-          renderItem={renderOutgoingItem}
-        />
-      </ScrollView>
-    </SafeAreaView>
+      <FriendSection
+        title="Your friends"
+        data={friends.friends}
+        emptyText="No friends yet. Search by email to add people."
+        renderItem={renderOutgoingItem}
+      />
+    </ScreenContainer>
   );
 }
 
@@ -503,290 +518,160 @@ export default function FriendsScreen() {
 
 const styles = StyleSheet.create({
   resultsContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#000000',
+    backgroundColor: palette.bg,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    marginTop: spacing.xs,
   },
-  resultsScrollView: {
-    maxHeight: 300,
+  resultsList: {
+    gap: spacing.xs,
+    padding: spacing.xs,
   },
   loadingContainer: {
     marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  page: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 16,
-  },
-  heroCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 18,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 4,
+  searchCard: {
+    gap: spacing.sm,
   },
   badge: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFE600',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
+    gap: 4,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  badgeText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '800',
-  },
   title: {
-    marginTop: 12,
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#000000',
+    marginTop: spacing.sm,
   },
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#000000',
-    fontWeight: '600',
-  },
-  searchCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 3,
-    borderColor: '#000000',
-    gap: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    marginTop: 4,
   },
   sectionBlock: {
-    gap: 10,
+    gap: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#000000',
+    marginBottom: spacing.xs,
+  },
+  sectionList: {
+    gap: spacing.sm,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minHeight: 50,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#000000',
-    backgroundColor: '#ffffff',
+    gap: spacing.sm,
+    height: 48,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.bg,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#000000',
-    fontWeight: '700',
-  },
-  searchButton: {
-    minHeight: 48,
-    borderRadius: 8,
-    backgroundColor: '#00FF66',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  searchButtonText: {
-    color: '#000000',
-    fontSize: 14,
-    fontWeight: '900',
+    color: palette.textPrimary,
+    fontFamily: fontFamily.semibold,
   },
   resultCard: {
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#FFF3D4',
-    borderWidth: 3,
-    borderColor: '#000000',
-    gap: 10,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: palette.bgElevated,
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: spacing.sm,
   },
   acceptedPill: {
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: palette.primaryLight,
+  },
+  primaryButton: {
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#C3FFD8',
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
-  acceptedPillText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#00FF66',
-    borderRadius: 8,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  primaryButtonText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '800',
+    paddingVertical: 8,
+    ...shadows.xs,
   },
   pendingOutgoingButton: {
-    backgroundColor: '#C3FFD8',
+    backgroundColor: palette.bg,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   message: {
-    fontSize: 13,
-    color: '#000000',
-    fontWeight: '700',
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
   emptyText: {
-    fontSize: 17,
-    color: '#333333',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 8,
-    fontWeight: '700',
+    paddingVertical: spacing.md,
   },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#000000',
-    padding: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    gap: spacing.sm,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: palette.card,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#C3FFD8',
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
-  avatarText: {
-    color: '#000000',
-    fontWeight: '800',
+    backgroundColor: palette.primaryLight,
   },
   cardBody: {
     flex: 1,
     gap: 2,
   },
-  name: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#000000',
-  },
-  email: {
-    fontSize: 12,
-    color: '#333333',
-    fontWeight: '600',
-  },
   meta: {
-    fontSize: 11,
-    color: '#333333',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginTop: 2,
   },
   cardActions: {
-    gap: 8,
+    justifyContent: 'center',
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.xs,
   },
   acceptButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00FF66',
-    borderWidth: 2,
-    borderColor: '#000000',
+    backgroundColor: palette.successLight,
   },
   rejectButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FF3366',
-    borderWidth: 2,
-    borderColor: '#000000',
+    backgroundColor: palette.dangerLight,
   },
   secondaryButton: {
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    backgroundColor: palette.dangerLight,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  secondaryButtonText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '800',
+    paddingVertical: 6,
   },
   buttonDisabled: {
     opacity: 0.5,

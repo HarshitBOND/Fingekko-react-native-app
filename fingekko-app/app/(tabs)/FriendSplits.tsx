@@ -5,16 +5,16 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import AppText from '../../components/ui/AppText';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 type ParticipantShare = {
   userId: {
@@ -236,130 +236,171 @@ export default function FriendSplitsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.page} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Icon name="ChevronLeft" size={20} color="#000000" />
-        </Pressable>
-        <Text style={styles.headerTitle}>{friendName || 'Friend'}</Text>
-        <View style={styles.headerButton} />
-      </View>
+    <ScreenContainer
+      header={
+        <View style={styles.header}>
+          <Pressable style={styles.headerButton} onPress={() => router.back()}>
+            <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
+          </Pressable>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            {friendName || 'Friend'}
+          </AppText>
+          <View style={styles.headerButton} />
+        </View>
+      }
+    >
+      {/* Balance Card */}
+      <Card
+        variant="elevated"
+        padding={20}
+        style={{
+          ...styles.balanceCard,
+          backgroundColor: totalBalance > 0 ? palette.successLight : totalBalance < 0 ? palette.dangerLight : palette.card
+        }}
+      >
+        <AppText variant="caption" color="textSecondary" weight="bold">
+          Overall Balance
+        </AppText>
+        <AppText
+          variant="title"
+          weight="bold"
+          style={{
+            color: totalBalance > 0 ? palette.success : totalBalance < 0 ? palette.danger : palette.textSecondary
+          }}
+        >
+          {totalBalance > 0 ? `Owes you ₹${totalBalance.toFixed(2)}` : totalBalance < 0 ? `You owe ₹${Math.abs(totalBalance).toFixed(2)}` : 'Settle Up'}
+        </AppText>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        {/* Balance Card */}
-        <Card variant="tactile" style={{ ...styles.balanceCard, backgroundColor: totalBalance > 0 ? '#eef6f0' : totalBalance < 0 ? '#fdf2f2' : '#ffffff' }}>
-          <Text style={styles.balanceLabel}>Overall Balance</Text>
-          <Text style={[styles.balanceValue, { color: totalBalance > 0 ? '#148a46' : totalBalance < 0 ? '#eb5a4f' : '#6b7280' }]}>
-            {totalBalance > 0 ? `Owes you ₹${totalBalance.toFixed(2)}` : totalBalance < 0 ? `You owe ₹${Math.abs(totalBalance).toFixed(2)}` : 'Settle Up'}
-          </Text>
-
-          {totalBalance !== 0 && (
-            <Button
-              variant={totalBalance > 0 ? 'success' : 'danger'}
-              size="md"
-              style={styles.settleBtn}
-              onPress={handleSettleUp}
-              disabled={settling}
-            >
-              {settling ? <ActivityIndicator color="#000" /> : 'Settle Up Balance'}
-            </Button>
-          )}
-        </Card>
-
-        <Text style={styles.sectionHeader}>Split Details</Text>
-
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#148a46" />
-          </View>
-        ) : expenses.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No personal splits history with this friend.</Text>
-          </View>
-        ) : (
-          expenses.map((item) => {
-            const creatorId = item.createdBy?.id || item.createdBy?.toString() || '';
-            const userPaid = creatorId === dbUserId;
-            
-            // Get friend participant share
-            const friendPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-            const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-            
-            const isSettled = userPaid ? friendPart?.settled : userPart?.settled;
-            const splitAmount = userPaid ? friendPart?.amount : userPart?.amount;
-
-            return (
-              <Card key={item.id} variant="tactile" style={styles.expenseCard}>
-                <View style={styles.row}>
-                  <View style={styles.iconWrap}>
-                    <Text style={styles.emoji}>{getCategoryEmoji(item.category)}</Text>
-                  </View>
-                  <View style={styles.body}>
-                    <Text style={styles.title}>{item.description}</Text>
-                    <Text style={styles.meta}>
-                      Paid by {userPaid ? 'You' : friendName} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
-                    </Text>
-                  </View>
-                  <View style={styles.right}>
-                    <Text style={styles.shareLabel}>{userPaid ? 'Friend owes' : 'You owe'}</Text>
-                    <Text style={[styles.shareValue, { color: userPaid ? '#148a46' : '#eb5a4f' }]}>
-                      ₹{splitAmount?.toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Additional split summary details */}
-                <View style={styles.splitsDetailRow}>
-                  <Text style={styles.detailLabel}>
-                    Total Expense: <Text style={styles.detailValue}>₹{item.amount?.toFixed(2)}</Text>
-                  </Text>
-                  <View style={styles.tagBadge}>
-                    <Text style={styles.tagBadgeText}>{item.category || 'Others'}</Text>
-                  </View>
-                </View>
-
-                {/* Notes section (if provided) */}
-                {!!item.notes && item.notes.trim() !== '' && (
-                  <View style={styles.notesContainer}>
-                    <Text style={styles.notesText}>📝 {item.notes.trim()}</Text>
-                  </View>
-                )}
-
-                <View style={styles.cardFooter}>
-                  <View style={[styles.badge, { backgroundColor: isSettled ? '#C3FFD8' : '#FFF2C2' }]}>
-                    <Text style={styles.badgeText}>{isSettled ? 'Settled' : 'Unsettled'}</Text>
-                  </View>
-                  {userPaid && (
-                    <Pressable
-                      style={styles.deleteBtn}
-                      onPress={() => handleDeleteExpense(item.id)}
-                    >
-                      <Icon name="Trash2" size={16} color="#eb5a4f" clickable={true} />
-                    </Pressable>
-                  )}
-                </View>
-              </Card>
-            );
-          })
+        {totalBalance !== 0 && (
+          <Button
+            variant={totalBalance > 0 ? 'success' : 'danger'}
+            size="md"
+            style={styles.settleBtn}
+            onPress={handleSettleUp}
+            disabled={settling}
+          >
+            {settling ? <ActivityIndicator color="#fff" /> : 'Settle Up Balance'}
+          </Button>
         )}
-      </ScrollView>
-    </SafeAreaView>
+      </Card>
+
+      <AppText variant="title" color="textPrimary" weight="bold" style={styles.sectionHeader}>
+        Split Details
+      </AppText>
+
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={palette.primaryDeep} />
+        </View>
+      ) : expenses.length === 0 ? (
+        <View style={styles.emptyState}>
+          <AppText variant="caption" color="textSecondary">
+            No personal splits history with this friend.
+          </AppText>
+        </View>
+      ) : (
+        expenses.map((item) => {
+          const creatorId = item.createdBy?.id || item.createdBy?.toString() || '';
+          const userPaid = creatorId === dbUserId;
+          
+          // Get friend participant share
+          const friendPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
+          const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
+          
+          const isSettled = userPaid ? friendPart?.settled : userPart?.settled;
+          const splitAmount = userPaid ? friendPart?.amount : userPart?.amount;
+
+          return (
+            <Card key={item.id} variant="elevated" style={styles.expenseCard} padding={16}>
+              <View style={styles.row}>
+                <View style={styles.iconWrap}>
+                  <AppText style={styles.emoji}>{getCategoryEmoji(item.category)}</AppText>
+                </View>
+                <View style={styles.body}>
+                  <AppText variant="bodySm" color="textPrimary" weight="bold">
+                    {item.description}
+                  </AppText>
+                  <AppText variant="micro" color="textSecondary">
+                    Paid by {userPaid ? 'You' : friendName} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
+                  </AppText>
+                </View>
+                <View style={styles.right}>
+                  <AppText variant="micro" color="textSecondary" weight="bold">
+                    {userPaid ? 'Friend owes' : 'You owe'}
+                  </AppText>
+                  <AppText
+                    variant="bodySm"
+                    weight="bold"
+                    style={{ color: userPaid ? palette.success : palette.danger }}
+                  >
+                    ₹{splitAmount?.toFixed(2)}
+                  </AppText>
+                </View>
+              </View>
+
+              {/* Additional split summary details */}
+              <View style={styles.splitsDetailRow}>
+                <AppText variant="caption" color="textSecondary">
+                  Total Expense: <AppText variant="caption" color="textPrimary" weight="bold">₹{item.amount?.toFixed(2)}</AppText>
+                </AppText>
+                <View style={styles.tagBadge}>
+                  <AppText variant="micro" color="textSecondary" weight="bold" style={styles.tagBadgeText}>
+                    {item.category || 'Others'}
+                  </AppText>
+                </View>
+              </View>
+
+              {/* Notes section (if provided) */}
+              {!!item.notes && item.notes.trim() !== '' && (
+                <View style={styles.notesContainer}>
+                  <AppText variant="caption" style={styles.notesText}>
+                    📝 {item.notes.trim()}
+                  </AppText>
+                </View>
+              )}
+
+              <View style={styles.cardFooter}>
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: isSettled ? palette.successLight : palette.warningLight }
+                  ]}
+                >
+                  <AppText
+                    variant="micro"
+                    weight="bold"
+                    style={{ color: isSettled ? palette.success : palette.warning }}
+                  >
+                    {isSettled ? 'Settled' : 'Unsettled'}
+                  </AppText>
+                </View>
+                {userPaid && (
+                  <Pressable
+                    style={styles.deleteBtn}
+                    onPress={() => handleDeleteExpense(item.id)}
+                  >
+                    <Icon name="Trash2" size={16} color={palette.danger} />
+                  </Pressable>
+                )}
+              </View>
+            </Card>
+          );
+        })
+      )}
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#FFF8E7',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: '#000000',
+    paddingHorizontal: layout.gutter,
+    paddingVertical: spacing.md,
+    backgroundColor: palette.card,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
   headerButton: {
     width: 40,
@@ -367,39 +408,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#000000',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
-    gap: 16,
-  },
   balanceCard: {
-    padding: 20,
     alignItems: 'center',
-    gap: 10,
-  },
-  balanceLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#000000',
-  },
-  balanceValue: {
-    fontSize: 24,
-    fontWeight: '900',
+    gap: 8,
   },
   settleBtn: {
     width: '100%',
     marginTop: 8,
   },
   sectionHeader: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#000000',
     marginTop: 8,
   },
   centerContainer: {
@@ -409,11 +426,6 @@ const styles = StyleSheet.create({
   emptyState: {
     paddingVertical: 40,
     alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#6b7280',
-    fontWeight: '600',
   },
   expenseCard: {
     gap: 12,
@@ -426,10 +438,8 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
-    backgroundColor: '#ffffff',
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -440,109 +450,62 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  title: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#000000',
-  },
-  meta: {
-    fontSize: 11,
-    color: '#6b7280',
-    fontWeight: '600',
-  },
   right: {
     alignItems: 'flex-end',
     gap: 2,
   },
-  shareLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    fontWeight: '800',
-  },
-  shareValue: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    borderTopWidth: 1.5,
-    borderTopColor: '#e5e7eb',
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
     paddingTop: 10,
+    alignItems: 'center',
   },
   badge: {
-    borderRadius: 6,
+    borderRadius: radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderWidth: 1.5,
-    borderColor: '#000000',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#000000',
   },
   deleteBtn: {
     marginLeft: 'auto',
     width: 32,
     height: 32,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
-    backgroundColor: '#ffffff',
+    borderRadius: radius.pill,
+    backgroundColor: palette.bg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 1.5, height: 1.5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
+    ...shadows.xs,
   },
   splitsDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
-    borderTopWidth: 1.5,
-    borderTopColor: '#e5e7eb',
-    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+    marginTop: 6,
     marginBottom: 4,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#4b5563',
-    fontWeight: '700',
-  },
-  detailValue: {
-    fontWeight: '900',
-    color: '#000000',
   },
   tagBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#000000',
+    borderRadius: radius.pill,
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   tagBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#000000',
     textTransform: 'uppercase',
   },
   notesContainer: {
     padding: 8,
-    backgroundColor: '#fffbeb',
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#000000',
+    backgroundColor: palette.warningLight,
+    borderRadius: radius.md,
     marginTop: 6,
     marginBottom: 8,
   },
   notesText: {
-    fontSize: 12,
-    color: '#b45309',
-    fontWeight: '700',
+    color: palette.warning,
   },
 });

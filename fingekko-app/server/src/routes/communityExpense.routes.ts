@@ -98,10 +98,32 @@ function serializeExpense(expense: any, currentUserId?: string) {
     participants,
     yourAmountPaid,
     yourAmountOwed,
-    netBalance: roundTwo(yourAmountPaid - yourAmountOwed),
+    netBalance: currentUserId ? computeNetBalanceForUser(expense, currentUserId) : roundTwo(yourAmountPaid - yourAmountOwed),
     createdAt: expense.createdAt?.toISOString?.() || new Date(expense.createdAt).toISOString(),
     updatedAt: expense.updatedAt?.toISOString?.() || new Date(expense.updatedAt).toISOString(),
   };
+}
+
+// Net balance for the current user on this single expense, accounting for which
+// participant shares have already been settled (so it stays in sync with Settle Up).
+function computeNetBalanceForUser(expense: any, currentUserId: string) {
+  const paidByList = expense.paidBy ?? [];
+  const participants = expense.participants ?? [];
+  const isPayer = paidByList.some((p: any) => toId(p.userId) === currentUserId);
+
+  if (isPayer) {
+    const owedToYou = participants
+      .filter((p: any) => toId(p.userId) !== currentUserId && !p.settled)
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+    return roundTwo(owedToYou);
+  }
+
+  const myShare = participants.find((p: any) => toId(p.userId) === currentUserId);
+  if (myShare && !myShare.settled) {
+    return roundTwo(-myShare.amount);
+  }
+
+  return 0;
 }
 
 function roundTwo(value: number) {
@@ -137,7 +159,7 @@ router.get('/:expenseId', async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    return res.json({ expense: serializeExpense(expense) });
+    return res.json({ expense: serializeExpense(expense, currentUserId) });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to fetch expense' });
@@ -267,7 +289,7 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:expenseId/settle', async (req: Request, res: Response) => {
+async function handleSettle(req: Request, res: Response) {
   try {
     const currentUserId = getCurrentUserId(req);
     const expense = await communityExpenseRepository.findById(String(req.params.expenseId));
@@ -276,20 +298,37 @@ router.patch('/:expenseId/settle', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
+    const visible =
+      toId(expense.createdBy) === currentUserId ||
+      paidByIncludes(expense, currentUserId) ||
+      (expense.participants ?? []).some((participant: any) => toId(participant.userId) === currentUserId);
+
+    if (!visible) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Which participant's share is being settled — defaults to the caller's own
+    // share, but the client passes the other side's userId when the caller is
+    // the payer settling what a friend owes them.
+    const targetUserId = String(req.body?.userId || currentUserId);
+
     const updatedParticipants = (expense.participants ?? []).map((participant: any) =>
-      participant.userId.toString() === currentUserId ? { ...participant.toObject?.(), settled: true } : participant
+      toId(participant.userId) === targetUserId ? { ...participant.toObject?.(), settled: true } : participant
     );
 
     const updated = await communityExpenseRepository.updateExpense(String(req.params.expenseId), {
       participants: updatedParticipants,
     });
 
-    return res.json({ expense: serializeExpense(updated) });
+    return res.json({ expense: serializeExpense(updated, currentUserId) });
   } catch (error) {
     console.error(error);
     return res.status(400).json({ message: 'Failed to settle expense' });
   }
-});
+}
+
+router.post('/:expenseId/settle', handleSettle);
+router.patch('/:expenseId/settle', handleSettle);
 
 router.delete('/:expenseId', async (req: Request, res: Response) => {
   try {

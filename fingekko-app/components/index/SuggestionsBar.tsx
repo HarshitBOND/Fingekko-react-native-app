@@ -1,9 +1,9 @@
-import { FontSizes } from '@/constants/Colors';
-import Icon from '../ui/Icon';
+import { StyleSheet, View } from 'react-native';
+import { gradients, palette, radius, shadows, spacing } from '@/constants/design';
+import { LinearGradient } from 'expo-linear-gradient';
+import AppText from '../ui/AppText';
 import Button from '../ui/Button';
-import { Text, View } from 'react-native';
-import { Theme } from './constants';
-import { styles } from './styles';
+import IconBadge from '../ui/IconBadge';
 
 type SuggestionsBarProps = {
   onViewInsights: () => void;
@@ -11,26 +11,38 @@ type SuggestionsBarProps = {
 
 export default function SuggestionsBar({ onViewInsights }: SuggestionsBarProps) {
   return (
-    <View style={styles.suggestionsBar}>
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
-        <View style={styles.suggIconWrap}><Icon name="TrendingUp" color={Theme.primaryDark} size={20} /></View>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={{ fontSize: FontSizes.base, color: Theme.textMain, fontWeight: '800' }}>Better choice?</Text>
-          <Text style={{ fontSize: FontSizes.sm, color: Theme.textMuted, marginTop: 2 }}>Cook at home more often to save ₹850!</Text>
-          <Text style={{ fontSize: FontSizes.sm, color: Theme.textMuted, marginTop: 1 }}>Move 2 days closer to Goa Trip</Text>
+    <View style={styles.card}>
+      <LinearGradient
+        colors={gradients.mist}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.row}>
+        <IconBadge name="TrendingUp" size={46} background={palette.primary} color={palette.white} />
+        <View style={styles.text}>
+          <AppText variant="title">A better choice?</AppText>
+          <AppText variant="caption" color="textSecondary" style={styles.line}>
+            Cook at home more often to save ₹850 — that&apos;s 2 days closer to your Goa trip.
+          </AppText>
         </View>
       </View>
-      <Button
-        variant="primary"
-        size="sm"
-        onPress={onViewInsights}
-        style={{ width: 'auto' }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text style={{ color: '#000000', fontWeight: '800', fontSize: FontSizes.xs }}>See Impact</Text>
-          <Icon name="ChevronRight" size={14} color="#000000" />
-        </View>
+      <Button variant="primary" size="md" onPress={onViewInsights} style={styles.cta}>
+        See the impact
       </Button>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  text: { flex: 1, gap: 4 },
+  line: { lineHeight: 18 },
+  cta: { marginTop: spacing.base },
+});

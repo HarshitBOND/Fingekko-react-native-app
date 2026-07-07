@@ -6,17 +6,17 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import AppText from '../../components/ui/AppText';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 type NotificationItem = {
   id: string;
@@ -158,147 +158,158 @@ export default function NotificationsScreen() {
   const groupedNotifications = groupNotifications(notifications);
 
   return (
-    <SafeAreaView style={styles.page} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Icon name="ChevronLeft" size={20} color="#000000" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <Pressable style={styles.headerButton} onPress={fetchAllNotifications}>
-          <Icon name="RefreshCw" size={18} color="#000000" />
-        </Pressable>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#148a46" />
+    <ScreenContainer
+      header={
+        <View style={styles.header}>
+          <Pressable style={styles.headerButton} onPress={() => router.back()}>
+            <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
+          </Pressable>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Notifications
+          </AppText>
+          <Pressable style={styles.headerButton} onPress={fetchAllNotifications}>
+            <Icon name="RefreshCw" size={18} color={palette.textPrimary} />
+          </Pressable>
+        </View>
+      }
+    >
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={palette.primaryDeep} />
+        </View>
+      ) : notifications.length === 0 ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconWrap}>
+            <Icon name="BellOff" size={32} color={palette.textSecondary} />
           </View>
-        ) : notifications.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Icon name="BellOff" size={32} color="#000000" />
-            </View>
-            <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptyText}>No new notifications or pending splits.</Text>
-          </View>
-        ) : (
-          Object.entries(groupedNotifications).map(([groupTitle, items]) => {
-            if (items.length === 0) return null;
-            return (
-              <View key={groupTitle} style={styles.groupContainer}>
-                <Text style={styles.groupHeaderTitle}>{groupTitle}</Text>
-                <View style={styles.groupList}>
-                  {items.map((item) => {
-                    const isFriendReq = item.type === 'friend_request';
-                    
-                    if (isFriendReq) {
-                      return (
-                        <Card key={item.id} variant="tactile" style={styles.notiCard}>
-                          <View style={styles.friendReqRow}>
-                            <View style={[styles.iconWrap, { backgroundColor: '#C3FFD8' }]}>
-                              <Icon name="UserPlus" size={18} color="#000000" />
-                            </View>
-                            <View style={styles.friendReqBody}>
-                              <Text style={styles.friendReqText} numberOfLines={2}>
-                                <Text style={styles.boldText}>
-                                  {item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'}
-                                </Text>
-                                {' sent you a friend request.'}
-                              </Text>
-                            </View>
-                            <View style={styles.friendReqActions}>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                style={styles.confirmBtn}
-                                textStyle={styles.confirmBtnText}
-                                onPress={() => handleAcceptFriend(item.id)}
-                                disabled={actionLoading[item.id]}
-                              >
-                                {actionLoading[item.id] ? (
-                                  <ActivityIndicator size="small" color="#000000" />
-                                ) : (
-                                  'Confirm'
-                                )}
-                              </Button>
-                              <Pressable
-                                style={styles.threeDotBtn}
-                                onPress={() =>
-                                  handleShowDeclineMenu(
-                                    item.id,
-                                    item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'
-                                  )
-                                }
-                                hitSlop={10}
-                              >
-                                <Icon name="MoreVertical" size={18} color="#000000" />
-                              </Pressable>
-                            </View>
-                          </View>
-                        </Card>
-                      );
-                    }
-                    
+          <AppText variant="title" color="textPrimary" weight="bold">
+            All caught up!
+          </AppText>
+          <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
+            No new notifications or pending splits.
+          </AppText>
+        </View>
+      ) : (
+        Object.entries(groupedNotifications).map(([groupTitle, items]) => {
+          if (items.length === 0) return null;
+          return (
+            <View key={groupTitle} style={styles.groupContainer}>
+              <AppText variant="caption" color="textSecondary" weight="bold" style={styles.groupHeaderTitle}>
+                {groupTitle}
+              </AppText>
+              <View style={styles.groupList}>
+                {items.map((item) => {
+                  const isFriendReq = item.type === 'friend_request';
+                  
+                  if (isFriendReq) {
                     return (
-                      <Card key={item.id} variant="tactile" style={styles.notiCard}>
-                        <View style={styles.notiHeader}>
-                          <View style={[styles.iconWrap, { backgroundColor: '#FFF2C2' }]}>
-                            <Icon name="DollarSign" size={18} color="#000000" />
+                      <Card key={item.id} variant="elevated" style={styles.notiCard} padding={14}>
+                        <View style={styles.friendReqRow}>
+                          <View style={[styles.iconWrap, { backgroundColor: palette.primaryLight }]}>
+                            <Icon name="UserPlus" size={18} color={palette.primaryDeep} />
                           </View>
-                          <View style={styles.notiBody}>
-                            <Text style={styles.notiTitle}>{item.title}</Text>
-                            <Text style={styles.notiSubtitle}>{item.subtitle}</Text>
+                          <View style={styles.friendReqBody}>
+                            <AppText variant="bodySm" color="textPrimary" numberOfLines={2}>
+                              <AppText variant="bodySm" color="textPrimary" weight="bold">
+                                {item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'}
+                              </AppText>
+                              {' sent you a friend request.'}
+                            </AppText>
                           </View>
-                          <Text style={styles.notiDate}>{item.dateLabel}</Text>
-                        </View>
-
-                        <View style={styles.actionRow}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            style={styles.actionBtn}
-                            onPress={() => {
-                              const groupId = item.rawData.groupId;
-                              if (groupId) {
-                                router.push({
-                                  pathname: '/(tabs)/group/[groupId]',
-                                  params: { groupId },
-                                });
-                              } else {
-                                router.push('/(tabs)/NonGroupExpenses');
+                          <View style={styles.friendReqActions}>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              style={styles.confirmBtn}
+                              textStyle={styles.confirmBtnText}
+                              onPress={() => handleAcceptFriend(item.id)}
+                              disabled={actionLoading[item.id]}
+                            >
+                              {actionLoading[item.id] ? (
+                                <ActivityIndicator size="small" color={palette.white} />
+                              ) : (
+                                'Confirm'
+                              )}
+                            </Button>
+                            <Pressable
+                              style={styles.threeDotBtn}
+                              onPress={() =>
+                                handleShowDeclineMenu(
+                                  item.id,
+                                  item.rawData?.senderId?.name || item.rawData?.senderId?.email || 'Someone'
+                                )
                               }
-                            }}
-                          >
-                            View details
-                          </Button>
+                              hitSlop={10}
+                            >
+                              <Icon name="MoreVertical" size={18} color={palette.textSecondary} />
+                            </Pressable>
+                          </View>
                         </View>
                       </Card>
                     );
-                  })}
-                </View>
+                  }
+                  
+                  return (
+                    <Card key={item.id} variant="elevated" style={styles.notiCard} padding={14}>
+                      <View style={styles.notiHeader}>
+                        <View style={[styles.iconWrap, { backgroundColor: palette.warningLight }]}>
+                          <Icon name="DollarSign" size={18} color={palette.warning} />
+                        </View>
+                        <View style={styles.notiBody}>
+                          <AppText variant="bodySm" color="textPrimary" weight="bold">
+                            {item.title}
+                          </AppText>
+                          <AppText variant="caption" color="textSecondary">
+                            {item.subtitle}
+                          </AppText>
+                        </View>
+                        <AppText variant="micro" color="textTertiary">
+                          {item.dateLabel}
+                        </AppText>
+                      </View>
+
+                      <View style={styles.actionRow}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          style={styles.actionBtn}
+                          onPress={() => {
+                            const groupId = item.rawData.groupId;
+                            if (groupId) {
+                              router.push({
+                                pathname: '/(tabs)/group/[groupId]',
+                                params: { groupId },
+                              });
+                            } else {
+                              router.push('/(tabs)/NonGroupExpenses');
+                            }
+                          }}
+                        >
+                          View details
+                        </Button>
+                      </View>
+                    </Card>
+                  );
+                })}
               </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            </View>
+          );
+        })
+      )}
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#FFF8E7',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: '#000000',
+    paddingHorizontal: layout.gutter,
+    paddingVertical: spacing.md,
+    backgroundColor: palette.card,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
   headerButton: {
     width: 40,
@@ -306,32 +317,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#000000',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
-  },
   groupContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.base,
   },
   groupHeaderTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#000000',
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   groupList: {
-    gap: 12,
+    gap: 8,
   },
   notiCard: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   notiHeader: {
     flexDirection: 'row',
@@ -340,30 +338,13 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   notiBody: {
     flex: 1,
     gap: 2,
-  },
-  notiTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#000000',
-  },
-  notiSubtitle: {
-    fontSize: 12,
-    color: '#333333',
-    fontWeight: '600',
-  },
-  notiDate: {
-    fontSize: 11,
-    color: '#6b7280',
-    fontWeight: '800',
   },
   friendReqRow: {
     flexDirection: 'row',
@@ -375,15 +356,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 4,
   },
-  friendReqText: {
-    fontSize: 13,
-    color: '#000000',
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  boldText: {
-    fontWeight: '900',
-  },
   friendReqActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -392,10 +364,10 @@ const styles = StyleSheet.create({
   confirmBtn: {
     width: 'auto',
     minWidth: 80,
+    height: 34,
   },
   confirmBtnText: {
     fontSize: 12,
-    fontWeight: '800',
   },
   threeDotBtn: {
     padding: 8,
@@ -405,11 +377,11 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 14,
+    marginTop: 10,
   },
   actionBtn: {
     flex: 1,
-    height: 38,
+    height: 36,
   },
   centerContainer: {
     paddingVertical: 100,
@@ -425,23 +397,10 @@ const styles = StyleSheet.create({
   emptyIconWrap: {
     width: 64,
     height: 64,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#000000',
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#000000',
-    marginTop: 4,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#6b7280',
-    fontWeight: '600',
-    textAlign: 'center',
+    backgroundColor: palette.card,
+    ...shadows.xs,
   },
 });

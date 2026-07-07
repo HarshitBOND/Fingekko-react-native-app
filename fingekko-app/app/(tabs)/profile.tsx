@@ -2,10 +2,13 @@ import type { ApiUser, ProfileResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import Navbar from '../../components/Navbar';
-import { Colors, FontSizes, Spacing } from '../../constants/Colors';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import Card from '../../components/ui/Card';
+import AppText from '../../components/ui/AppText';
+import Button from '../../components/ui/Button';
+import { palette, spacing, layout, radius, shadows } from '../../constants/design';
 
 export default function ProfileScreen() {
   const { getToken, isSignedIn, signOut } = useAuth();
@@ -65,124 +68,81 @@ export default function ProfileScreen() {
     clerkUser?.primaryEmailAddress?.emailAddress || profile?.email || 'Email unavailable';
 
   return (
-    <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Navbar />
-
-        <View style={styles.headerCard}>
-          <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>Manage your account and session.</Text>
+    <ScreenContainer
+      contentStyle={{ gap: spacing.lg }}
+      header={
+        <View style={{ paddingHorizontal: layout.gutter }}>
+          <Navbar />
         </View>
+      }
+    >
+      <Card variant="elevated" padding={20}>
+        <AppText variant="h1" color="textPrimary">
+          Profile
+        </AppText>
+        <AppText variant="caption" color="textSecondary" style={styles.subtitle}>
+          Manage your account and session.
+        </AppText>
+      </Card>
 
-        <View style={styles.profileCard}>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Name</Text>
-            <Text style={styles.fieldValue}>{displayName}</Text>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <Text style={styles.fieldValue}>{emailAddress}</Text>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Monthly income</Text>
-            <Text style={styles.fieldValue}>
-              {profile?.currency ?? 'Rs. '}{profile?.monthlyIncome ?? 0}
-            </Text>
-          </View>
+      <Card variant="elevated" padding={20} style={styles.profileCard}>
+        <View style={styles.fieldRow}>
+          <AppText variant="micro" color="textSecondary" style={styles.fieldLabel}>
+            Name
+          </AppText>
+          <AppText variant="body" color="textPrimary" weight="bold">
+            {displayName}
+          </AppText>
         </View>
+        <View style={styles.fieldRow}>
+          <AppText variant="micro" color="textSecondary" style={styles.fieldLabel}>
+            Email
+          </AppText>
+          <AppText variant="body" color="textPrimary" weight="bold">
+            {emailAddress}
+          </AppText>
+        </View>
+        <View style={styles.fieldRow}>
+          <AppText variant="micro" color="textSecondary" style={styles.fieldLabel}>
+            Monthly income
+          </AppText>
+          <AppText variant="body" color="textPrimary" weight="bold">
+            {profile?.currency ?? 'Rs. '}{profile?.monthlyIncome ?? 0}
+          </AppText>
+        </View>
+      </Card>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <AppText variant="bodySm" color="danger" weight="bold" style={styles.errorText}>
+          {error}
+        </AppText>
+      ) : null}
 
-        <Pressable style={styles.signOutButton} onPress={() => signOut()}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+      <Button variant="danger" onPress={() => signOut()} style={styles.signOutButton}>
+        Sign out
+      </Button>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.base,
-  },
-  headerCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    padding: Spacing.md,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
-  },
-  title: {
-    fontSize: FontSizes.xl,
-    fontWeight: '900',
-    color: Colors.textPrimary,
-  },
   subtitle: {
     marginTop: 4,
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    fontWeight: '600',
   },
   profileCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    padding: Spacing.md,
-    gap: Spacing.base,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+    gap: spacing.base,
   },
   fieldRow: {
     gap: 4,
   },
   fieldLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  fieldValue: {
-    fontSize: FontSizes.md,
-    color: Colors.textPrimary,
-    fontWeight: '700',
-  },
   errorText: {
-    color: Colors.expense,
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
+    textAlign: 'center',
   },
   signOutButton: {
-    backgroundColor: '#FF3366',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  signOutText: {
-    color: '#000000',
-    fontSize: FontSizes.base,
-    fontWeight: '900',
+    marginTop: spacing.sm,
   },
 });

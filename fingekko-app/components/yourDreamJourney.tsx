@@ -1,106 +1,91 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { Colors, FontSizes } from '../constants/Colors';
+import React from 'react';
+import { Image, StyleSheet, View } from 'react-native';
+import { palette, spacing, radius, shadows, gradients } from '../constants/design';
+import AppText from './ui/AppText';
+import Card from './ui/Card';
 import ProgressBar from './ProgressBar';
 
 export default function YourDreamJourney() {
-    const Saved= 12450;
-    const goal = 35000;
-    const levelProgress = Saved / goal; 
+  const Saved = 12450;
+  const goal = 35000;
+  const levelProgress = Saved / goal;
 
   return (
-    
+    <Card variant="elevated" padding={20}>
+      <View style={styles.contentRow}>
+        <View style={styles.detailsCol}>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Your Dream Journey
+          </AppText>
+          <AppText variant="caption" color="textSecondary" weight="semibold" style={styles.description}>
+            Goa Trip 🌴
+          </AppText>
+          
+          <View style={styles.amountRow}>
+            <AppText variant="bodySm" color="textPrimary" weight="bold">
+              Rs. {Saved.toLocaleString()}{' '}
+              <AppText variant="caption" color="textTertiary" weight="semibold">
+                / Rs. {goal.toLocaleString()}
+              </AppText>
+            </AppText>
+            <AppText variant="caption" color="primaryDeep" weight="bold">
+              {Math.round(levelProgress * 100)}%
+            </AppText>
+          </View>
 
-    <View style={styles.container}>
-        <View style={{flex: 2, paddingRight: 12}}>
-            <Text style={styles.title}>Your Dream Journey</Text>
-            <Text style={styles.description}>
-                Goa Trip 🌴
-            </Text>
-                        <View style={styles.amountRow}>
-                                <Text
-                                    style={styles.savedAmount}
-                                    numberOfLines={1}
-                                    adjustsFontSizeToFit
-                                    minimumFontScale={0.7}
-                                >
-                                    Rs. {Saved.toLocaleString()}{' '}
-                                    <Text style={styles.goalAmount}>/ Rs. {goal.toLocaleString()}</Text>
-                                </Text>
-                                <Text style={styles.amountPercent}>{Math.round(levelProgress * 100)}%</Text>
-                        </View>
-            <ProgressBar
-                progress={levelProgress}
-                height={6}
-                radius={999}
-                trackColor="rgba(158, 207, 240, 0.18)"
-            />
-            <Text style={{fontSize: FontSizes.xs, color: Colors.textSecondary, paddingTop: 6}}>
-                💡 Save Rs. 1200 more this month to stay on track!
-            </Text>
+          <ProgressBar
+            progress={levelProgress}
+            height={6}
+            radius={radius.pill}
+            colors={gradients.brand}
+            trackColor={palette.primaryLight}
+          />
+          <AppText variant="micro" color="textSecondary" style={styles.tipText}>
+            💡 Save Rs. 1,200 more this month to stay on track!
+          </AppText>
         </View>
 
-        <View style={{flex: 1.3, marginLeft: 12, marginTop: 16}}>
-            <Image
+        <View style={styles.imageCol}>
+          <Image
             source={require('../assets/images/goa.jpg')}
-            style={{width: '100%', height: 80, borderRadius: 8}}
-        />
+            style={styles.goalImage}
+          />
         </View>
-        
-    </View>
+      </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        backgroundColor: '#ffffff',
-        borderRadius: 18,
-        padding: 18,
-        borderWidth: 2,
-        borderColor: '#000000',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#000000',
-    },
-    description: {
-        fontSize: 12,
-        color: '#000000',
-        fontWeight: '700',
-        marginTop: 4,
-    },
-    savedAmount: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#000000',
-    },
-    goalAmount: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#333333',
-    },
-    amountRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginVertical: 8,
-    },
-    amountValues: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexShrink: 1,
-        minWidth: 0,
-    },
-    amountPercent: {
-        fontSize: FontSizes.xs,
-        fontWeight: '800',
-        color: '#000000',
-        marginLeft: 8,
-    },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  detailsCol: {
+    flex: 2,
+  },
+  imageCol: {
+    flex: 1.2,
+    alignItems: 'flex-end',
+  },
+  description: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  goalImage: {
+    width: '100%',
+    height: 76,
+    borderRadius: radius.md,
+  },
+  tipText: {
+    marginTop: spacing.sm,
+  },
 });

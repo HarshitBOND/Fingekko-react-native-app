@@ -23,6 +23,7 @@ export type AuthResponse = {
 
 export type HomeStats = {
 	dayStreak: number;
+	bestStreak: number;
 	totalXp: number;
 	questsDone: number;
 	questsTarget: number;

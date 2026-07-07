@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet,
-  TextInput,
-  View,
-  Text,
-  TextInputProps,
-  ViewStyle,
-  TextStyle,
-  Animated,
-} from 'react-native';
-import { Colors, FontSizes } from '@/constants/Colors';
+import { StyleSheet, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from 'react-native';
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { fontFamily, palette, radius as R } from '@/constants/design';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -32,77 +29,41 @@ export default function Input({
   ...props
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
-  const focusAnim = React.useRef(new Animated.Value(0)).current;
+  const focus = useSharedValue(0);
 
-  React.useEffect(() => {
-    Animated.spring(focusAnim, {
-      toValue: isFocused ? 1 : 0,
-      useNativeDriver: true,
-      tension: 120,
-      friction: 10,
-    }).start();
-  }, [isFocused]);
-
-  const handleFocus = (e: any) => {
-    setIsFocused(true);
-    if (onFocus) onFocus(e);
+  const setFocus = (v: boolean) => {
+    focus.value = withTiming(v ? 1 : 0, { duration: 180 });
+    setIsFocused(v);
   };
 
-  const handleBlur = (e: any) => {
-    setIsFocused(false);
-    if (onBlur) onBlur(e);
-  };
-
-  // Shadow offsets and transformations
-  const shadowTranslateY = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -2], // moves up slightly when active
-  });
-
-  const shadowOpacity = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1], // shadow appears on focus
-  });
+  const animatedWrap = useAnimatedStyle(() => ({
+    borderColor: error
+      ? palette.danger
+      : interpolateColor(focus.value, [0, 1], [palette.border, palette.primary]),
+    shadowOpacity: focus.value * 0.18,
+  }));
 
   return (
     <View style={[styles.root, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label ? <Text style={[styles.label, isFocused && styles.labelFocused]}>{label}</Text> : null}
 
-      <View style={styles.inputWrapper}>
-        {/* Focus Shadow Layer */}
-        <Animated.View
-          style={[
-            styles.focusShadow,
-            {
-              opacity: shadowOpacity,
-            },
-          ]}
+      <Animated.View style={[styles.inputContainer, animatedWrap]}>
+        {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
+        <TextInput
+          style={[styles.textInput, inputStyle]}
+          placeholderTextColor={palette.textTertiary}
+          onFocus={(e) => {
+            setFocus(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocus(false);
+            onBlur?.(e);
+          }}
+          {...props}
         />
-
-        {/* Input Container Layer */}
-        <Animated.View
-          style={[
-            styles.inputContainer,
-            {
-              borderColor: isFocused ? '#000000' : '#CCCCCC',
-              borderWidth: 2,
-              transform: [{ translateY: shadowTranslateY }],
-            },
-          ]}
-        >
-          {icon && <View style={styles.leftIcon}>{icon}</View>}
-
-          <TextInput
-            style={[styles.textInput, inputStyle]}
-            placeholderTextColor="#9ca3af"
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            {...props}
-          />
-
-          {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
-        </Animated.View>
-      </View>
+        {rightIcon ? <View style={styles.rightIcon}>{rightIcon}</View> : null}
+      </Animated.View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
@@ -111,56 +72,53 @@ export default function Input({
 
 const styles = StyleSheet.create({
   root: {
-    gap: 6,
+    gap: 8,
     alignSelf: 'stretch',
   },
   label: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    fontWeight: '700',
+    fontFamily: fontFamily.semibold,
+    fontSize: 14,
+    color: palette.textSecondary,
+    marginLeft: 4,
   },
-  inputWrapper: {
-    position: 'relative',
-    height: 52,
-  },
-  focusShadow: {
-    position: 'absolute',
-    left: 3,
-    right: -3,
-    top: 3,
-    bottom: -3,
-    backgroundColor: '#000000',
-    borderRadius: 16,
+  labelFocused: {
+    color: palette.primaryDeep,
   },
   inputContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: palette.card,
+    borderRadius: R.lg,
+    borderWidth: 1.5,
+    borderColor: palette.border,
     paddingHorizontal: 16,
-    height: '100%',
+    height: 56,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    shadowOpacity: 0,
   },
   leftIcon: {
-    marginRight: 10,
+    marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   rightIcon: {
-    marginLeft: 10,
+    marginLeft: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   textInput: {
     flex: 1,
     height: '100%',
-    fontSize: FontSizes.base,
-    color: Colors.textPrimary,
-    fontWeight: '600',
+    fontFamily: fontFamily.medium,
+    fontSize: 16,
+    color: palette.textPrimary,
   },
   errorText: {
-    color: Colors.expense,
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
+    color: palette.danger,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    marginLeft: 4,
   },
 });

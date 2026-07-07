@@ -1,23 +1,24 @@
 import type { Transaction } from '@/constants/types';
-import Icon from '../ui/Icon';
 import { JSX, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { MONTH_NAMES, Theme, WEEK_DAY_LABELS } from './constants';
-import { styles } from './styles';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { palette, radius, shadows, spacing } from '@/constants/design';
+import AppText from '../ui/AppText';
+import Icon from '../ui/Icon';
+import { MONTH_NAMES, WEEK_DAY_LABELS } from './constants';
 
 type StreakCardProps = {
   visibleDayStreak?: number;
+  visibleBestStreak?: number;
   activeTransactions: Transaction[];
-  useDummyData: boolean;
 };
 
-export default function StreakCard({ visibleDayStreak, activeTransactions, useDummyData }: StreakCardProps) {
+export default function StreakCard({ visibleDayStreak, visibleBestStreak, activeTransactions }: StreakCardProps) {
   const now = useMemo(() => new Date(), []);
   const [calendarMonth, setCalendarMonth] = useState({ month: now.getMonth(), year: now.getFullYear() });
 
-  // Which days in the selected calendar month have a transaction
+  // Always derive the calendar/week dots from whichever transactions are
+  // active (demo or real) — there is no separate "fake" data path here.
   const completedDays = useMemo(() => {
-    if (!useDummyData) return [13, 14, 15, 16, 17, 18];
     const days = new Set<number>();
     activeTransactions.forEach((item) => {
       const date = new Date(item.date);
@@ -26,24 +27,19 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       }
     });
     return Array.from(days).sort((a, b) => a - b);
-  }, [activeTransactions, calendarMonth.month, calendarMonth.year, useDummyData]);
+  }, [activeTransactions, calendarMonth.month, calendarMonth.year]);
 
-  // Which of the last 7 days (Mon–Sun) have a transaction
   const weekChecked = useMemo(() => {
-    if (!useDummyData) return [true, true, true, true, true, false, false];
     return WEEK_DAY_LABELS.map((_, index) => {
       const date = new Date(now);
       date.setDate(now.getDate() - 6 + index);
-      return activeTransactions.some(
-        (item) => new Date(item.date).toDateString() === date.toDateString(),
-      );
+      return activeTransactions.some((item) => new Date(item.date).toDateString() === date.toDateString());
     });
-  }, [activeTransactions, now, useDummyData]);
+  }, [activeTransactions, now]);
 
-  // Calendar grid cells
   const renderCalendarDays = () => {
     const daysInMonth = new Date(calendarMonth.year, calendarMonth.month + 1, 0).getDate();
-    const firstDay    = new Date(calendarMonth.year, calendarMonth.month, 1).getDay();
+    const firstDay = new Date(calendarMonth.year, calendarMonth.month, 1).getDay();
     const startOffset = firstDay === 0 ? 6 : firstDay - 1;
     const cells: JSX.Element[] = [];
 
@@ -54,7 +50,9 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
       const done = completedDays.includes(d);
       cells.push(
         <View key={d} style={[styles.calDay, done && styles.calDayDone]}>
-          <Text style={[styles.calDayText, done && styles.calDayTextDone]}>{d}</Text>
+          <AppText variant="micro" style={{ color: done ? palette.white : palette.textOnDarkMuted }}>
+            {d}
+          </AppText>
         </View>,
       );
     }
@@ -62,97 +60,189 @@ export default function StreakCard({ visibleDayStreak, activeTransactions, useDu
   };
 
   return (
-    <View style={styles.streakCard}>
-
-      {/* header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Icon name="Flame" size={20} color={Theme.primary} />
-        <Text style={styles.streakHeaderText}>You&apos;re on a roll!</Text>
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <View style={styles.flameWrap}>
+          <Icon name="Flame" size={18} color={palette.warning} />
+        </View>
+        <AppText variant="title" color="onDark">
+          You&apos;re on a roll!
+        </AppText>
       </View>
 
-      {/* big number */}
-      <View style={styles.streakRow}>
-        <Text style={styles.streakNumber}>{visibleDayStreak ?? 12}</Text>
-        <Text style={styles.daysText}>Days</Text>
+      <View style={styles.numberRow}>
+        <AppText variant="display" color="onDark">
+          {visibleDayStreak ?? 0}
+        </AppText>
+        <AppText variant="h2" color="onDarkMuted" style={styles.daysWord}>
+          days
+        </AppText>
       </View>
-      <Text style={styles.onTrackLabel}>On track streak</Text>
+      <AppText variant="caption" color="onDarkMuted">
+        On-track streak
+      </AppText>
 
-      {/* week dot row */}
-      <View style={styles.weekDotsRow}>
+      <View style={styles.weekRow}>
         {WEEK_DAY_LABELS.map((lbl, i) => (
-          <View key={i} style={styles.weekDotCol}>
+          <View key={i} style={styles.weekCol}>
             <View style={[styles.weekDot, weekChecked[i] && styles.weekDotDone]}>
-              {weekChecked[i] ? <Icon name="Check" size={11} color="#fff" /> : null}
+              {weekChecked[i] ? <Icon name="Check" size={12} color={palette.white} /> : null}
             </View>
-            <Text style={styles.weekDayLbl}>{lbl}</Text>
+            <AppText variant="micro" color="onDarkMuted">
+              {lbl}
+            </AppText>
           </View>
         ))}
       </View>
 
-      {/* best streak row */}
-      <View style={styles.bestStreakRow}>
-        <View style={styles.bestStreakIconWrap}>
-          {/* TODO: replace with <Image source={require('../../assets/images/bestStreakIcon.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Icon name="Flame" size={18} color={Theme.primary} />
+      <View style={styles.infoRow}>
+        <View style={styles.infoChip}>
+          <View style={styles.infoIcon}>
+            <Icon name="Flame" size={16} color={palette.warning} />
+          </View>
+          <View>
+            <AppText variant="micro" color="onDarkMuted">
+              Best streak
+            </AppText>
+            <AppText variant="label" color="onDark">
+              {visibleBestStreak ?? visibleDayStreak ?? 0} days
+            </AppText>
+          </View>
         </View>
-        <View>
-          <Text style={styles.bestStreakTitle}>Best Streak</Text>
-          <Text style={styles.bestStreakVal}>{visibleDayStreak ?? 12} Days</Text>
+        <View style={styles.infoChip}>
+          <View style={styles.infoIcon}>
+            <Icon name="Star" size={16} color={palette.warning} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="micro" color="onDark">
+              Discipline today.
+            </AppText>
+            <AppText variant="micro" color="onDark">
+              Freedom tomorrow.
+            </AppText>
+          </View>
         </View>
       </View>
 
-      {/* gecko motivation row */}
-      <View style={styles.geckoMotivRow}>
-        <View style={styles.geckoAvatarWrap}>
-          {/* TODO: replace with <Image source={require('../../assets/images/geckoStreakAvatar.png')} style={{width:36,height:36,borderRadius:12}}/> */}
-          <Icon name="Star" size={18} color={Theme.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.geckoMotivLine}>Discipline today.</Text>
-          <Text style={styles.geckoMotivLine}>Freedom tomorrow.</Text>
-        </View>
-      </View>
-
-      {/* ── Streak Calendar ──────────────────────────────────────────────── */}
+      {/* Streak Calendar */}
       <View style={styles.calendarSection}>
         <View style={styles.calendarHeader}>
-          <Text style={styles.calendarTitle}>Streak Calendar</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <AppText variant="label" color="onDark">
+            Streak Calendar
+          </AppText>
+          <View style={styles.calNav}>
             <Pressable
-              onPress={() => setCalendarMonth((prev) => ({
-                month: prev.month === 0 ? 11 : prev.month - 1,
-                year:  prev.month === 0 ? prev.year - 1 : prev.year,
-              }))}
+              hitSlop={6}
+              onPress={() =>
+                setCalendarMonth((prev) => ({
+                  month: prev.month === 0 ? 11 : prev.month - 1,
+                  year: prev.month === 0 ? prev.year - 1 : prev.year,
+                }))
+              }
             >
-              <Icon name="ChevronLeft" size={18} color={Theme.whiteSoft} />
+              <Icon name="ChevronLeft" size={18} color={palette.textOnDarkMuted} />
             </Pressable>
             <Pressable
-              onPress={() => setCalendarMonth((prev) => ({
-                month: prev.month === 11 ? 0 : prev.month + 1,
-                year:  prev.month === 11 ? prev.year + 1 : prev.year,
-              }))}
+              hitSlop={6}
+              onPress={() =>
+                setCalendarMonth((prev) => ({
+                  month: prev.month === 11 ? 0 : prev.month + 1,
+                  year: prev.month === 11 ? prev.year + 1 : prev.year,
+                }))
+              }
             >
-              <Icon name="ChevronRight" size={18} color={Theme.whiteSoft} />
+              <Icon name="ChevronRight" size={18} color={palette.textOnDarkMuted} />
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.calendarMonthLabel}>
+        <AppText variant="caption" color="onDarkMuted" style={styles.monthLabel}>
           {MONTH_NAMES[calendarMonth.month]} {calendarMonth.year}
-        </Text>
+        </AppText>
 
-        {/* day-of-week headers */}
         <View style={styles.calWeekRow}>
           {WEEK_DAY_LABELS.map((d, i) => (
-            <Text key={i} style={styles.calWeekLbl}>{d}</Text>
+            <AppText key={i} variant="micro" color="onDarkMuted" style={styles.calWeekLbl}>
+              {d}
+            </AppText>
           ))}
         </View>
 
-        {/* calendar grid */}
-        <View style={styles.calGrid}>
-          {renderCalendarDays()}
-        </View>
+        <View style={styles.calGrid}>{renderCalendarDays()}</View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: palette.primaryDeep,
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.md,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  flameWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numberRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  daysWord: { paddingBottom: 5 },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs },
+  weekCol: { alignItems: 'center', gap: 6, flex: 1 },
+  weekDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  weekDotDone: { backgroundColor: palette.primary, borderColor: palette.primary },
+  infoRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
+  infoChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  infoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarSection: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.base,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.14)',
+  },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  calNav: { flexDirection: 'row', gap: spacing.md },
+  monthLabel: { marginTop: 6, marginBottom: spacing.md },
+  calWeekRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.sm },
+  calWeekLbl: { width: 30, textAlign: 'center' },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  calDay: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  calDayDone: { backgroundColor: palette.primary },
+});

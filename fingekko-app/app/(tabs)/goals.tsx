@@ -1,323 +1,446 @@
-import BageSection from '@/components/BageSection';
+import { useAuth } from '@clerk/clerk-expo';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import Navbar from '@/components/Navbar';
-import YourDreamJourney from '@/components/yourDreamJourney';
-import type { HomeResponse } from '@/types';
+import AppText from '@/components/ui/AppText';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import EmptyState from '@/components/ui/EmptyState';
+import Icon from '@/components/ui/Icon';
+import Input from '@/components/ui/Input';
+import ProgressRing from '@/components/ui/ProgressRing';
+import ScreenContainer from '@/components/ui/ScreenContainer';
+import { layout, palette, radius, spacing } from '@/constants/design';
+import type { ApiGoal, GoalsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { formatCurrency } from '@/utils/helpers';
 
-import { useAuth, useUser } from '@clerk/clerk-expo';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from '../../components/ui/Icon';
-import ProgressBar from '../../components/ProgressBar';
-import TodaysQuest from '../../components/TodaysQuest';
-import { Colors, FontSizes } from '../../constants/Colors';
+const EMOJI_OPTIONS = ['🎯', '✈️', '🏠', '🚗', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
 
-const getXpforLevel = (level: number) => {
-  const rawXp = 1000 * Math.pow(1.2, level - 1);
-  if (rawXp < 10000) {
-    return Math.round(rawXp / 100) * 100;
-  }
+function parseDeadline(deadline: string): Date | null {
+  const parsed = new Date(deadline);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
-  return Math.round(rawXp / 1000) * 1000;
-};
+function daysUntil(deadline: string): number | null {
+  const date = parseDeadline(deadline);
+  if (!date) return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((date.getTime() - startOfToday.getTime()) / 86400000);
+}
 
-const avatarSources = {
-  planner: require('../../assets/images/cardImagePlannergekko.png'),
-  monk: require('../../assets/images/cardImageMonkgekko.png'),
-  warrior: require('../../assets/images/cardImageWarriorgekko.png'),
-} as const;
-
-export default function TabIndex() {
+export default function GoalsScreen() {
   const { getToken, isSignedIn } = useAuth();
-  const { user: clerkUser } = useUser();
-  const [homeData, setHomeData] = useState<HomeResponse | null>(null);
-  const getTokenRef = useRef(getToken);
+  const [goals, setGoals] = useState<ApiGoal[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
+  const [createVisible, setCreateVisible] = useState(false);
+  const [title, setTitle] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0]);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    let isActive = true;
+  const [contributeGoal, setContributeGoal] = useState<ApiGoal | null>(null);
+  const [contributeAmount, setContributeAmount] = useState('');
+  const [contributing, setContributing] = useState(false);
 
-    const loadHome = async () => {
-      if (!isSignedIn) {
-        setHomeData(null);
-        return;
-      }
+  const fetchGoals = useCallback(async () => {
+    if (!isSignedIn) {
+      setGoals([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const response = await apiRequest<GoalsResponse>('/api/goals', {}, token);
+      setGoals(response?.goals ?? []);
+    } catch (error) {
+      console.warn('Failed to load goals:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken, isSignedIn]);
 
-      try {
-        const token = await getTokenRef.current();
-        if (!token) {
-          return;
-        }
-        const response = await apiRequest<HomeResponse>(
-          {method: 'get',
-          url: '/api/home',
-          token,}
-        );
-        if (isActive) {
-          setHomeData(response);
-        }
-      } catch (error) {
-        console.warn('Failed to load home data:', error);
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      fetchGoals();
+    }, [fetchGoals])
+  );
 
-    loadHome();
+  const resetCreateForm = () => {
+    setTitle('');
+    setTargetAmount('');
+    setDeadline('');
+    setEmoji(EMOJI_OPTIONS[0]);
+  };
 
-    return () => {
-      isActive = false;
-    };
-  }, [isSignedIn]);
+  const handleCreateGoal = async () => {
+    const amount = Number(targetAmount);
+    if (!title.trim()) {
+      Alert.alert('Missing title', 'Give your goal a name.');
+      return;
+    }
+    if (!amount || Number.isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid amount', 'Enter a target amount greater than 0.');
+      return;
+    }
+    if (!deadline.trim()) {
+      Alert.alert('Missing deadline', 'Enter a target date (YYYY-MM-DD).');
+      return;
+    }
 
-  const user = homeData?.user ?? null;
-  const displayName =
-    user?.name || clerkUser?.firstName || clerkUser?.username || 'FinGekko User';
-  const stats = homeData?.stats ?? null;
-  const resolvedAvatarKey = user?.avatarKey;
-  const avatarKey = resolvedAvatarKey && resolvedAvatarKey in avatarSources ? resolvedAvatarKey : 'planner';
-  const avatarSource = avatarSources[avatarKey as keyof typeof avatarSources];
-  const level = user?.level ?? 1;
-  const xp = user?.xp ?? 0;
-  const points = user?.points ?? 0;
-  const levelProgress = xp / getXpforLevel(level);
-  const currentDate = new Date();
-  const formattedDate = currentDate
-    .toLocaleDateString('en-US', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    .replace(' ', ' ')
-    .replace(/ (\d{4})$/, ', $1');
+    setSaving(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await apiRequest({
+        method: 'post',
+        url: '/api/goals',
+        token,
+        data: {
+          title: title.trim(),
+          targetAmount: amount,
+          deadline: deadline.trim(),
+          emoji,
+        },
+      });
+      setCreateVisible(false);
+      resetCreateForm();
+      await fetchGoals();
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to create goal.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteGoal = (goal: ApiGoal) => {
+    Alert.alert('Delete goal', `Delete "${goal.title}"? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const token = await getToken();
+            if (!token) return;
+            await apiRequest({ method: 'delete', url: `/api/goals/${goal.id}`, token });
+            await fetchGoals();
+          } catch (error: any) {
+            Alert.alert('Error', error?.message || 'Failed to delete goal.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const openContribute = (goal: ApiGoal) => {
+    setContributeGoal(goal);
+    setContributeAmount('');
+  };
+
+  const handleContribute = async () => {
+    if (!contributeGoal) return;
+    const amount = Number(contributeAmount);
+    if (!amount || Number.isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid amount', 'Enter an amount greater than 0.');
+      return;
+    }
+
+    setContributing(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const nextAmount = Math.min(contributeGoal.targetAmount, contributeGoal.currentAmount + amount);
+      await apiRequest({
+        method: 'put',
+        url: `/api/goals/${contributeGoal.id}`,
+        token,
+        data: { currentAmount: nextAmount },
+      });
+      setContributeGoal(null);
+      setContributeAmount('');
+      await fetchGoals();
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to update goal.');
+    } finally {
+      setContributing(false);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Navbar />
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text style={styles.greetingEyebrow}>Good morning, {displayName}! 👋</Text>
-            <Text style={styles.greetingTitle}>Small saves, big adventures.</Text>
-            <Text style={styles.greetingSubtitle}>{"You've got this!"}</Text>
-          </View>
-          <View style={styles.datePill}>
-            <Icon name="CalendarDays" size={12} color="#4b5563" />
-            <Text style={styles.dateText}>{formattedDate}</Text>
+    <ScreenContainer
+      header={
+        <View style={{ paddingHorizontal: layout.gutter }}>
+          <Navbar />
+        </View>
+      }
+    >
+      <View style={styles.headerRow}>
+        <View>
+          <AppText variant="title" color="textPrimary" weight="bold">
+            Your Goals
+          </AppText>
+          <AppText variant="caption" color="textSecondary">
+            Save toward what matters, one goal at a time.
+          </AppText>
+        </View>
+        <Button variant="primary" size="sm" fullWidth={false} onPress={() => setCreateVisible(true)}>
+          + New Goal
+        </Button>
+      </View>
+
+      {loading && goals.length === 0 ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={palette.primaryDeep} />
+        </View>
+      ) : goals.length === 0 ? (
+        <EmptyState
+          icon="Target"
+          title="No goals yet"
+          subtitle="Create your first savings goal to start tracking progress toward it."
+          actionLabel="Create a goal"
+          onAction={() => setCreateVisible(true)}
+        />
+      ) : (
+        goals.map((goal) => {
+          const progress = goal.targetAmount > 0 ? Math.min(1, goal.currentAmount / goal.targetAmount) : 0;
+          const pct = Math.round(progress * 100);
+          const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+          const daysLeft = daysUntil(goal.deadline);
+          const isComplete = goal.currentAmount >= goal.targetAmount && goal.targetAmount > 0;
+          const isOverdue = daysLeft !== null && daysLeft < 0 && !isComplete;
+
+          return (
+            <Card key={goal.id} variant="elevated" padding={16} style={styles.goalCard}>
+              <View style={styles.goalTopRow}>
+                <View style={styles.emojiBadge}>
+                  <AppText style={{ fontSize: 22 }}>{goal.emoji || '🎯'}</AppText>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodySm" color="textPrimary" weight="bold">
+                    {goal.title}
+                  </AppText>
+                  <AppText variant="micro" color={isOverdue ? 'danger' : 'textSecondary'}>
+                    {isComplete
+                      ? 'Goal reached! 🎉'
+                      : daysLeft === null
+                        ? 'No deadline set'
+                        : isOverdue
+                          ? `Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'}`
+                          : daysLeft === 0
+                            ? 'Due today'
+                            : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+                  </AppText>
+                </View>
+                <ProgressRing progress={progress} size={54} strokeWidth={6} color={isComplete ? palette.success : palette.primary}>
+                  <AppText variant="micro" color="textPrimary" weight="bold">
+                    {pct}%
+                  </AppText>
+                </ProgressRing>
+              </View>
+
+              <View style={styles.amountsRow}>
+                <AppText variant="bodySm" color="textPrimary" weight="bold">
+                  {formatCurrency(goal.currentAmount)}
+                </AppText>
+                <AppText variant="caption" color="textSecondary">
+                  {' '}of {formatCurrency(goal.targetAmount)}
+                </AppText>
+              </View>
+
+              {!isComplete && (
+                <AppText variant="micro" color="textSecondary">
+                  {formatCurrency(remaining)} to go
+                </AppText>
+              )}
+
+              <View style={styles.goalActions}>
+                <Pressable style={styles.addFundsBtn} onPress={() => openContribute(goal)}>
+                  <Icon name="Plus" size={14} color={palette.primaryDeep} />
+                  <AppText variant="micro" color="primaryDeep" weight="bold">
+                    Add funds
+                  </AppText>
+                </Pressable>
+                <Pressable style={styles.deleteBtn} onPress={() => handleDeleteGoal(goal)}>
+                  <Icon name="Trash" size={14} color={palette.danger} />
+                </Pressable>
+              </View>
+            </Card>
+          );
+        })
+      )}
+
+      {/* Create goal modal */}
+      <Modal visible={createVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.md }}>
+              New Goal
+            </AppText>
+
+            <Input label="Title" placeholder="e.g. Goa trip" value={title} onChangeText={setTitle} />
+            <Input
+              label="Target amount"
+              placeholder="e.g. 25000"
+              keyboardType="numeric"
+              value={targetAmount}
+              onChangeText={setTargetAmount}
+              containerStyle={{ marginTop: spacing.md }}
+            />
+            <Input
+              label="Deadline"
+              placeholder="YYYY-MM-DD"
+              value={deadline}
+              onChangeText={setDeadline}
+              containerStyle={{ marginTop: spacing.md }}
+            />
+
+            <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md, marginBottom: 6 }}>
+              Emoji
+            </AppText>
+            <View style={styles.emojiRow}>
+              {EMOJI_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setEmoji(option)}
+                  style={[styles.emojiOption, emoji === option && styles.emojiOptionActive]}
+                >
+                  <AppText style={{ fontSize: 20 }}>{option}</AppText>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.modalActions}>
+              <Button
+                variant="outline"
+                size="md"
+                onPress={() => {
+                  setCreateVisible(false);
+                  resetCreateForm();
+                }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" size="md" onPress={handleCreateGoal} disabled={saving} style={{ flex: 1 }}>
+                {saving ? <ActivityIndicator color="#fff" /> : 'Create'}
+              </Button>
+            </View>
           </View>
         </View>
-        <LinearGradient
-          colors={['#0b5f4b', '#073943']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gekkoCard}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.avatarWrap}>
-              <Image source={avatarSource} style={styles.avatarImage} />
-            </View>
+      </Modal>
 
-            <View style={styles.cardCenter}>
-              <View style={styles.titleRow}>
-                <Text style={styles.cardTitle}>{user?.userGekko ?? 'Planner Gekko'}</Text>
-                <Icon name="CircleAlert" size={16} color="#bcd9df" />
-              </View>
-
-              <View style={styles.levelRow}>
-                <Text style={styles.levelLabel}>
-                  Level <Text style={styles.levelValue}>{level}</Text>
-                </Text>
-                <Text style={styles.levelMeta}>
-                  {xp} / {getXpforLevel(level)} XP
-                </Text>
-              </View>
-
-              <View style={styles.progressWrap}>
-                <ProgressBar
-                  progress={levelProgress}
-                  height={6}
-                  radius={999}
-                  trackColor="rgba(255, 255, 255, 0.18)"
-                />
-              </View>
-
-              <View style={styles.helperText}>
-                <Text style={styles.helperLine}>{"\"You're doing great!\""}</Text>
-                <Text style={styles.helperLine}>{"\"Keep going and level up. 💚\""}</Text>
-              </View>
+      {/* Contribute modal */}
+      <Modal visible={!!contributeGoal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.sm }}>
+              Add funds
+            </AppText>
+            <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.md }}>
+              {contributeGoal?.title}
+            </AppText>
+            <Input
+              label="Amount"
+              placeholder="e.g. 1000"
+              keyboardType="numeric"
+              value={contributeAmount}
+              onChangeText={setContributeAmount}
+            />
+            <View style={styles.modalActions}>
+              <Button variant="outline" size="md" onPress={() => setContributeGoal(null)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="md" onPress={handleContribute} disabled={contributing} style={{ flex: 1 }}>
+                {contributing ? <ActivityIndicator color="#fff" /> : 'Add'}
+              </Button>
             </View>
           </View>
-        </LinearGradient>
-        <TodaysQuest />
-        <YourDreamJourney />
-        <BageSection />
-      </ScrollView>
-    </SafeAreaView>
+        </View>
+      </Modal>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-    gap: 16,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  greetingText: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  greetingEyebrow: {
-    fontSize: FontSizes.sm,
-    color: '#6b7280',
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  greetingTitle: {
-    fontSize: FontSizes.lg,
-    color: '#111827',
-    fontWeight: '800',
-  },
-  greetingSubtitle: {
-    fontSize: FontSizes.md,
-    color: '#22a05f',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  datePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 3,
-    borderColor: '#000000',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
-  },
-  dateText: {
-    fontSize: FontSizes.xs,
-    color: '#4b5563',
-    fontWeight: '600',
-  },
-  gekkoCard: {
-    borderRadius: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 3,
-    borderColor: '#000000',
-    shadowColor: '#000000',
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
-  },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatarWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: 64,
-    height: 96,
-  },
-  cardCenter: {
-    flex: 1,
-    gap: 6,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  cardTitle: {
-    color: Colors.textLight,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  levelRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.lg,
   },
-  levelLabel: {
-    color: Colors.textLight,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  levelValue: {
-    fontSize: FontSizes.lg,
-    fontWeight: '800',
-  },
-  levelMeta: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-  },
-  progressWrap: {
-    marginTop: 4,
-  },
-  helperText: {
-    marginTop: 4,
-  },
-  helperLine: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: FontSizes.xs,
-    fontWeight: '500',
-  },
-  pointsDivider: {
-    alignSelf: 'stretch',
-  },
-  pointsColumn: {
-    minWidth: 30,
+  centerBox: { paddingVertical: spacing.xxxl, alignItems: 'center' },
+  goalCard: { marginBottom: spacing.md, borderRadius: radius.lg },
+  goalTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  emojiBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: palette.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
   },
-  pointsRow: {
+  amountsRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.md },
+  goalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+  },
+  addFundsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: palette.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
   },
-  pointsBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(235,90,79,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f4c85a',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: palette.card,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+  },
+  emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  emojiOption: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.bg,
     borderWidth: 1,
-    borderColor: '#f0b842',
+    borderColor: palette.border,
   },
-  pointsBadgeText: {
-    color: '#6b3d00',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  pointsValue: {
-    color: Colors.textLight,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  pointsLabel: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-  },
+  emojiOptionActive: { borderColor: palette.primary, backgroundColor: palette.primaryLight },
+  modalActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
 });

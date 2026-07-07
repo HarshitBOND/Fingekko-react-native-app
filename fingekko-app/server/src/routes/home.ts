@@ -1,8 +1,8 @@
 import express , {Request, Response} from 'express';
 import authMiddleware from "../middleware/auth.js";
-import { createGoal, listGoals } from '../repositories/goalRepository.js';
 import {getQuestState, setQuestState } from '../repositories/questRepository.js';
 import { createTransaction, listTransactions } from '../repositories/transactionRepository.js';
+import { updateUserStats } from '../repositories/userRepository.js';
 
 
 const router = express.Router();
@@ -28,6 +28,7 @@ router.get('/home', authMiddleware, (req: Request, res: Response) => {
     },
     stats: {
       dayStreak: stats.dayStreak ?? 0,
+      bestStreak: stats.bestStreak ?? 0,
       totalXp: safeUser.xp ?? 0,
       questsDone: stats.questsDone ?? 0,
       questsTarget: stats.questsTarget ?? 4,
@@ -84,47 +85,6 @@ router.post('/transactions', authMiddleware, async (req: Request, res: Response,
   }
 });
 
-router.get('/goals', authMiddleware, async (req, res, next) => {
-  try {
-    const userId = req.user.id ?? req.user._id?.toString();
-    const goals = await listGoals(userId);
-    return res.json({ goals });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post('/goals', authMiddleware, async (req, res, next) => {
-  const { title, targetAmount, currentAmount, deadline, emoji } = req.body ?? {};
-
-  if (!title) {
-    return res.status(400).json({ error: 'Goal title is required.' });
-  }
-
-  if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
-    return res.status(400).json({ error: 'Target amount must be greater than 0.' });
-  }
-
-  if (!deadline) {
-    return res.status(400).json({ error: 'Deadline is required.' });
-  }
-
-  try {
-    const userId = req.user.id ?? req.user._id?.toString();
-    const goal = await createGoal(userId, {
-      title,
-      targetAmount,
-      currentAmount: Number.isFinite(currentAmount) ? currentAmount : 0,
-      deadline,
-      emoji: emoji || 'goal',
-    });
-
-    return res.status(201).json({ goal });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 router.get('/quests/state', authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user.id ?? req.user._id?.toString();
@@ -152,6 +112,46 @@ router.put('/quests/state', authMiddleware, async (req, res, next) => {
       date,
       difficultyByType: difficultyByType ?? {},
       quests,
+    });
+
+    // Keep User.stats (streak/XP dashboard numbers) in sync with real quest activity
+    // instead of leaving it frozen at its signup defaults.
+    const priorStats = req.user.stats ?? {};
+    const questsDone = quests.filter((q: any) => q?.status === 'completed').length;
+    const questsTarget = quests.length || priorStats.questsTarget || 4;
+
+    let previousDayQuestsDone = priorStats.previousDayQuestsDone ?? 0;
+    if (priorStats.currentDate && priorStats.currentDate !== date) {
+      previousDayQuestsDone = priorStats.questsDone ?? 0;
+    }
+
+    let dayStreak = priorStats.dayStreak ?? 0;
+    let lastCompletedDate = priorStats.lastCompletedDate ?? null;
+    const allCompletedToday = questsTarget > 0 && questsDone >= questsTarget;
+
+    if (allCompletedToday && lastCompletedDate !== date) {
+      const isConsecutiveDay = lastCompletedDate
+        ? Math.round((new Date(date).getTime() - new Date(lastCompletedDate).getTime()) / 86400000) === 1
+        : false;
+      dayStreak = isConsecutiveDay ? dayStreak + 1 : 1;
+      lastCompletedDate = date;
+    }
+
+    const bestStreak = Math.max(priorStats.bestStreak ?? 0, dayStreak);
+
+    const betterThanYesterday = previousDayQuestsDone > 0
+      ? Math.round(((questsDone - previousDayQuestsDone) / previousDayQuestsDone) * 100)
+      : (questsDone > 0 ? 100 : 0);
+
+    await updateUserStats(userId, {
+      currentDate: date,
+      questsDone,
+      questsTarget,
+      dayStreak,
+      bestStreak,
+      lastCompletedDate,
+      previousDayQuestsDone,
+      betterThanYesterday,
     });
 
     return res.json({ state });

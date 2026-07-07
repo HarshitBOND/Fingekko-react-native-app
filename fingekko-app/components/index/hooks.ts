@@ -1,5 +1,5 @@
 import type { Transaction } from '@/constants/types';
-import type { HomeResponse } from '@/types';
+import type { HomeResponse, TransactionsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { appendDummyExpense, createDummyProfile, createDummyTransactions, summarizeExpenses } from '@/utils/demo-finance';
 import { useAuth } from '@clerk/clerk-expo';
@@ -12,8 +12,10 @@ export const useHomeScreen = () => {
   const now = useMemo(() => new Date(), []);
   const { getToken, isSignedIn } = useAuth();
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
+  const [realTransactions, setRealTransactions] = useState<Transaction[]>([]);
   const getTokenRef = useRef(getToken);
-  const [useDummyData, setUseDummyData] = useState(true);
+  // Demo mode defaults off — real signed-in users should see their own data.
+  const [useDummyData, setUseDummyData] = useState(false);
   const [demoTransactions, setDemoTransactions] = useState<Transaction[]>(() => createDummyTransactions(now));
   const [dummyAmount, setDummyAmount] = useState('');
   const [dummyCategory, setDummyCategory] = useState('Shopping');
@@ -23,27 +25,34 @@ export const useHomeScreen = () => {
     getTokenRef.current = getToken;
   }, [getToken]);
 
+  const loadRealData = async () => {
+    if (!isSignedIn) {
+      setHomeData(null);
+      setRealTransactions([]);
+      return;
+    }
+
+    try {
+      const token = await getTokenRef.current();
+      if (!token) return;
+
+      const [homeResponse, transactionsResponse] = await Promise.all([
+        apiRequest<HomeResponse>('/api/home', {}, token),
+        apiRequest<TransactionsResponse>('/api/transactions', {}, token),
+      ]);
+
+      setHomeData(homeResponse);
+      setRealTransactions(transactionsResponse?.transactions ?? []);
+    } catch (error) {
+      console.warn('Failed to load home data:', error);
+    }
+  };
+
   useEffect(() => {
     let isActive = true;
-
-    const loadHome = async () => {
-      if (!isSignedIn) {
-        setHomeData(null);
-        return;
-      }
-
-      try {
-        const token = await getTokenRef.current();
-        if (!token) return;
-
-        const response = await apiRequest<HomeResponse>('/api/home', {}, token);
-        if (isActive) setHomeData(response);
-      } catch (error) {
-        console.warn('Failed to load home data:', error);
-      }
-    };
-
-    loadHome();
+    (async () => {
+      if (isActive) await loadRealData();
+    })();
     return () => {
       isActive = false;
     };
@@ -55,8 +64,8 @@ export const useHomeScreen = () => {
   );
 
   const activeTransactions = useMemo(
-    () => (useDummyData ? demoTransactions : []),
-    [useDummyData, demoTransactions],
+    () => (useDummyData ? demoTransactions : realTransactions),
+    [useDummyData, demoTransactions, realTransactions],
   );
 
   const spending = useMemo(
@@ -64,13 +73,13 @@ export const useHomeScreen = () => {
     [activeProfile, activeTransactions, demoProfile, now],
   );
 
-  const spendProgress = useDummyData ? spending.spendProgress : 0.43;
-  const remainingProgress = useDummyData ? spending.remainingProgress : 1 - spendProgress;
-  const balanceAmount = useDummyData ? spending.remainingBalance : 12450;
-  const monthlySpend = useDummyData ? spending.expensesThisMonth : 8560;
-  const monthlyBudget = useDummyData ? spending.monthlyBudget : 20000;
-  const daysLeftInMonth = useDummyData ? spending.daysLeftInMonth : 11;
-  const avgDailySpend = useDummyData ? spending.avgDailySpend : 1120;
+  const spendProgress = spending.spendProgress;
+  const remainingProgress = spending.remainingProgress;
+  const balanceAmount = spending.remainingBalance;
+  const monthlySpend = spending.expensesThisMonth;
+  const monthlyBudget = spending.monthlyBudget;
+  const daysLeftInMonth = spending.daysLeftInMonth;
+  const avgDailySpend = spending.avgDailySpend;
   const currentDateLabel = formatDateLabel(now);
   const visibleStats = useDummyData
     ? buildDemoStats({
@@ -109,7 +118,33 @@ export const useHomeScreen = () => {
     const amount = Number(dummyAmount);
     if (!amount || Number.isNaN(amount)) return false;
 
-    setDemoTransactions((current) => appendDummyExpense(current, amount, dummyCategory || 'Misc', new Date()));
+    if (useDummyData) {
+      setDemoTransactions((current) => appendDummyExpense(current, amount, dummyCategory || 'Misc', new Date()));
+      setDummyAmount('');
+      return true;
+    }
+
+    // Real mode: persist to the backend, then refresh from it.
+    void (async () => {
+      try {
+        const token = await getTokenRef.current();
+        if (!token) return;
+        await apiRequest({
+          method: 'post',
+          url: '/api/transactions',
+          token,
+          data: {
+            type: 'expense',
+            amount: Math.round(amount),
+            category: dummyCategory || 'Misc',
+            date: new Date().toISOString(),
+          },
+        });
+        await loadRealData();
+      } catch (error) {
+        console.warn('Failed to add expense:', error);
+      }
+    })();
     setDummyAmount('');
     return true;
   };

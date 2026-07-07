@@ -108,7 +108,13 @@ export default function InsightsScreen() {
     }, 0);
 
     const monthlyIncome = profile?.monthlyIncome ?? 0;
-    const weeklyBudget = monthlyIncome > 0 ? monthlyIncome / 4 : Math.max(weeklySpend * 1.2, 1);
+    // Without a set income, base the weekly budget on last month's real spend
+    // instead of inflating this week's own number (which always lands ~83% used).
+    const weeklyBudget = monthlyIncome > 0
+      ? monthlyIncome / 4
+      : expensesLastMonth > 0
+        ? expensesLastMonth / 4
+        : Math.max(weeklySpend, 1);
     const weeklyLeft = Math.max(0, weeklyBudget - weeklySpend);
     const weeklyProgress = weeklyBudget > 0 ? Math.min(1, weeklySpend / weeklyBudget) : 0;
 
@@ -120,7 +126,11 @@ export default function InsightsScreen() {
 
     const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
 
-    const categoryTotals = expenses.reduce((acc, item) => {
+    // Scoped to the current calendar month so it actually matches the "This Month" label.
+    const expensesForCategoryBreakdown = expenses.filter((item) => inRange(parse(item.date), startOfMonth, now));
+    const totalExpensesThisMonth = expensesForCategoryBreakdown.reduce((sum, item) => sum + item.amount, 0);
+
+    const categoryTotals = expensesForCategoryBreakdown.reduce((acc, item) => {
       acc[item.category] = (acc[item.category] ?? 0) + item.amount;
       return acc;
     }, {} as Record<string, number>);
@@ -130,16 +140,8 @@ export default function InsightsScreen() {
       .slice(0, 3)
       .map(([label, amount]) => ({ label, amount }));
 
-    const fallbackCategories = [
-      { label: 'Shopping', amount: 0 },
-      { label: 'Food', amount: 0 },
-      { label: 'Home', amount: 0 },
-    ];
-
-    const categories = [...topCategories, ...fallbackCategories].slice(0, 3);
-
-    const categoryRows = categories.map((item) => {
-      const share = totalExpenses > 0 ? Math.round((item.amount / totalExpenses) * 100) : 0;
+    const categoryRows = topCategories.map((item) => {
+      const share = totalExpensesThisMonth > 0 ? Math.round((item.amount / totalExpensesThisMonth) * 100) : 0;
       return {
         ...item,
         share,
@@ -147,6 +149,15 @@ export default function InsightsScreen() {
         barPercent: share,
       };
     });
+
+    // "Big" spends = this month's expenses notably above this month's own average,
+    // rather than a stat that doesn't actually measure anything.
+    const avgExpenseThisMonth = expensesForCategoryBreakdown.length > 0
+      ? totalExpensesThisMonth / expensesForCategoryBreakdown.length
+      : 0;
+    const biggestSpendsCount = avgExpenseThisMonth > 0
+      ? expensesForCategoryBreakdown.filter((item) => item.amount > avgExpenseThisMonth * 1.5).length
+      : 0;
 
     const weekendWindowStart = new Date(now);
     weekendWindowStart.setDate(now.getDate() - 27);
@@ -167,49 +178,6 @@ export default function InsightsScreen() {
     const weekendAvgPerDay = weekendDayKeys.size > 0 ? weekendSpend / weekendDayKeys.size : 0;
     const weekendEstimate = weekendAvgPerDay * 2;
 
-    // ── Chart data ────────────────────────────────────────
-    const buildCumulative = (expList: Transaction[], start: Date, end: Date) => {
-      const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-      const result: { value: number }[] = [];
-      let running = 0;
-      for (let d = 0; d < totalDays; d++) {
-        const dayStart = new Date(start);
-        dayStart.setDate(start.getDate() + d);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(dayStart);
-        dayEnd.setHours(23, 59, 59, 999);
-        expList.forEach((item) => {
-          const date = new Date(item.date);
-          if (date >= dayStart && date <= dayEnd) running += item.amount;
-        });
-        result.push({ value: running });
-      }
-      return result;
-    };
-
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const lastMonthLine = buildCumulative(expenses, lastMonthStart, lastMonthEnd);
-    const thisMonthLine = buildCumulative(expenses, thisMonthStart, now);
-
-    const daysLeftInMonth =
-      new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
-
-    const expectedLine: { value: number }[] = [
-      ...new Array(Math.max(0, thisMonthLine.length - 1)).fill({ value: 0 }),
-      ...Array.from({ length: daysLeftInMonth + 1 }, (_, i) => ({
-        value: Math.round(expensesThisMonth + avgThisMonth * i),
-      })),
-    ];
-
-    const chartData = {
-      lastMonth: lastMonthLine,
-      thisMonth: thisMonthLine,
-      expected: expectedLine,
-    };
-
     return {
       expensesThisMonth,
       expensesLastMonth,
@@ -222,7 +190,7 @@ export default function InsightsScreen() {
       weeklyLeft,
       weeklyProgress,
       categoryRows,
-      biggestSpendsCount: Math.min(3, expenses.length),
+      biggestSpendsCount,
       transactionCount: expenses.length,
       monthlyDelta,
       monthlyDeltaAbs,
@@ -231,7 +199,6 @@ export default function InsightsScreen() {
       totalExpenses,
       weekStart,
       weekendEstimate,
-      chartData,
     };
   }, [now, profile?.monthlyIncome, transactions]);
 
@@ -338,15 +305,47 @@ export default function InsightsScreen() {
 
   const viewingCurrent = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
 
-  const categoryPalette = [
-    { color: '#7FB3FF', bgColor: '#C3FFD8', iconName: 'ShoppingBag', iconColor: '#000000' },
-    { color: '#B89CFF', bgColor: '#FFE600', iconName: 'Utensils', iconColor: '#000000' },
-    { color: '#F2C078', bgColor: '#FFF8E7', iconName: 'Home', iconColor: '#000000' },
-  ];
+  // Scale the chart to whichever series is actually on screen, so browsing a
+  // historical month doesn't clip against the current/last month's totals.
+  const chartMaxValue = useMemo(() => {
+    const allValues = [
+      ...chartDisplay.data.map((d) => d.value),
+      ...(chartDisplay.data2?.map((d) => d.value) ?? []),
+      ...(chartDisplay.data3?.map((d) => d.value) ?? []),
+    ];
+    const max = allValues.length > 0 ? Math.max(...allValues) : 0;
+    return max > 0 ? max * 1.2 : 1;
+  }, [chartDisplay]);
 
-  const categoryDisplay = insights.categoryRows.map((row, index) => ({
+  // Keyed by category name (not row position) so a given category always gets
+  // the same icon/color, however it ranks against the user's other spending.
+  const CATEGORY_STYLES: Record<string, { color: string; bgColor: string; iconName: string; iconColor: string }> = {
+    shopping: { color: '#7FB3FF', bgColor: '#C3FFD8', iconName: 'ShoppingBag', iconColor: '#000000' },
+    food: { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Utensils', iconColor: '#000000' },
+    dining: { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Utensils', iconColor: '#000000' },
+    home: { color: '#F2C078', bgColor: '#FFF8E7', iconName: 'Home', iconColor: '#000000' },
+    travel: { color: '#6FCF97', bgColor: '#E6FAEF', iconName: 'Plane', iconColor: '#000000' },
+    transport: { color: '#6FCF97', bgColor: '#E6FAEF', iconName: 'Car', iconColor: '#000000' },
+    bills: { color: '#F2994A', bgColor: '#FFF1E5', iconName: 'Zap', iconColor: '#000000' },
+    utilities: { color: '#F2994A', bgColor: '#FFF1E5', iconName: 'Zap', iconColor: '#000000' },
+    entertainment: { color: '#EB5757', bgColor: '#FDE7E7', iconName: 'TrendingUp', iconColor: '#000000' },
+  };
+  const FALLBACK_PALETTE = [
+    { color: '#7FB3FF', bgColor: '#C3FFD8', iconName: 'ShoppingBag', iconColor: '#000000' },
+    { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Coins', iconColor: '#000000' },
+    { color: '#F2C078', bgColor: '#FFF8E7', iconName: 'CircleAlert', iconColor: '#000000' },
+  ];
+  const styleForCategory = (label: string) => {
+    const known = CATEGORY_STYLES[label.toLowerCase()];
+    if (known) return known;
+    let hash = 0;
+    for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+    return FALLBACK_PALETTE[hash % FALLBACK_PALETTE.length];
+  };
+
+  const categoryDisplay = insights.categoryRows.map((row) => ({
     ...row,
-    ...categoryPalette[index % categoryPalette.length],
+    ...styleForCategory(row.label),
   }));
 
   const rewardTarget = 3000;
@@ -478,21 +477,23 @@ export default function InsightsScreen() {
               <Text style={s.heading}>Insights</Text>
               <Text style={s.subHeading}>Understand. Improve. Level up. 🌿</Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              {!useDummyData ? (
-                <TouchableOpacity onPress={enableDummy} style={s.dummyBtn}>
-                  <Text style={s.dummyBtnText}>Use dummy data</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={disableDummy} style={[s.dummyBtn, s.dummyBtnActive]}>
-                  <Text style={[s.dummyBtnText, { color: '#fff' }]}>Disable dummy</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            {__DEV__ && (
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {!useDummyData ? (
+                  <TouchableOpacity onPress={enableDummy} style={s.dummyBtn}>
+                    <Text style={s.dummyBtnText}>Use dummy data</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={disableDummy} style={[s.dummyBtn, s.dummyBtnActive]}>
+                    <Text style={[s.dummyBtnText, { color: '#fff' }]}>Disable dummy</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         </View>
 
-        {useDummyData && (
+        {__DEV__ && useDummyData && (
           <View style={s.dummyControls}>
             <Text style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 6 }}>Quick test: add a dummy expense</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -623,7 +624,7 @@ export default function InsightsScreen() {
             adjustToWidth={false}
             showScrollIndicator
             scrollAnimation
-            maxValue={Math.max(insights.expensesLastMonth, insights.expensesThisMonth) * 1.2}
+            maxValue={chartMaxValue}
             yAxisLabelPrefix={currency}
             formatYLabel={(v) => {
               const n = Number(v);
@@ -879,4 +880,3 @@ export default function InsightsScreen() {
     </SafeAreaView>
   );
 }
-// Force reload comment.

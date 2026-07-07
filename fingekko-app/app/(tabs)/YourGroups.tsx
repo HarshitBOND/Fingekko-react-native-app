@@ -1,13 +1,16 @@
-import { useAuth, useUser, } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
 import { apiRequest } from '../../utils/api';
 import { showConfirm } from '@/utils/showConfirm';
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Icon from '../../components/ui/Icon';
+import ScreenContainer from '../../components/ui/ScreenContainer';
+import AppText from '../../components/ui/AppText';
+import Card from '../../components/ui/Card';
+import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
 const ICONS = {
     Plane: 'Plane',
@@ -161,141 +164,174 @@ export default function YourGroups() {
     };
 
     return (
-        <SafeAreaView style={styles.page} edges={['top']}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-                <View style={styles.heroSection}>
-                    <LinearGradient
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        colors={['rgba(20,138,70,0.18)', 'rgba(20,138,70,0.05)', 'transparent']}
-                        locations={[0, 0.35, 1]}
-                        style={[
-                            StyleSheet.absoluteFill,
-                            {
-                                width: 240,
-                                height: 240,
-                                top: -70,
-                                left: -70,
-                                borderRadius: 200,
-                            },
-                        ]}
-                    />
-
-                    <View style={styles.topBar}>
-                        <View style={styles.brandRow}>
-                            <View style={styles.logoCircle}>
-                                <Icon name="Users" size={18} color="#148a46" />
-                            </View>
-                            <Text style={styles.brandTitle}>Your Groups</Text>
-                        </View>
-                        <Pressable style={styles.menuButton} onPress={() => router.back()}>
-                            <Icon name="Menu" size={20} color="#1f2937" />
-                        </Pressable>
-                    </View>
-
-                    <View style={styles.heroCopy}>
-                        <Text style={styles.heroTitle}>All your groups</Text>
-                        <Text style={styles.heroSubtitle}>Keep every split in one place.</Text>
-                    </View>
+        <ScreenContainer
+            contentStyle={{ gap: spacing.lg }}
+            header={
+                <View style={styles.header}>
+                    <Pressable style={styles.headerButton} onPress={() => router.back()}>
+                        <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
+                    </Pressable>
+                    <AppText variant="title" color="textPrimary" weight="bold">
+                        Your Groups
+                    </AppText>
+                    <View style={{ width: 40 }} />
                 </View>
+            }
+        >
+            <View style={styles.heroSection}>
+                <LinearGradient
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    colors={['rgba(102, 204, 68, 0.16)', 'rgba(102, 204, 68, 0.04)', 'transparent']}
+                    locations={[0, 0.35, 1]}
+                    style={[
+                        StyleSheet.absoluteFill,
+                        {
+                            width: 240,
+                            height: 240,
+                            top: -70,
+                            left: -70,
+                            borderRadius: 200,
+                        },
+                    ]}
+                />
 
-                <View style={styles.card}>
-                    {groups.length === 0 ? (
-                        <View style={{ padding: 18 , justifyContent: 'center', alignItems: 'center'}}>
-                            <Text style={{ fontSize: 26, color: '#6b7280' }}>You are not part of any groups yet  . . . . .</Text>
-                            
-                        </View>
-                    ) : (
-                        groups.map((item, index) => (
-                            <Pressable
-                                key={item.id}
-                                style={[styles.groupRow, index !== groups.length - 1 && styles.divider]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: "/(tabs)/group/[groupId]",
-                                        params: {
-                                            groupId: item.id,
-                                        },
-                                    })
-                                }
-                            >
-                                <View style={styles.groupIconWrap}>
-                                    {(() => {
-                                        const iconName = ICONS[item.icon as keyof typeof ICONS] ?? 'Users';
-                                        return <Icon name={iconName} size={24} color="#148a46" />;
-                                    })()}
-                                </View>
-                                <View style={styles.groupTextWrap}>
-                                    <Text style={styles.groupName}>{item.name}</Text>
-                                    <Text style={styles.groupMembers}>
-                                        {item.members.length} {item.members.length === 1 ? 'member' : 'members'}
-                                    </Text>
-                                </View>
-                                <View style={styles.groupRight}>
-                                    <Text style={styles.groupStatusLabel}>{item.amountLabel}</Text>
-                                    <Text style={[styles.groupAmount, { color: item.amountColor }]}>{item.amount}</Text>
-                                </View>
-                                {item.createdBy === user?.id && (
-                                    <Pressable onPress={() => {
+                <View style={styles.heroCopy}>
+                    <AppText variant="display" color="textPrimary" weight="bold">
+                        All your groups
+                    </AppText>
+                    <AppText variant="caption" color="textSecondary">
+                        Keep every split in one place.
+                    </AppText>
+                </View>
+            </View>
+
+            <Card variant="elevated" padding={0} style={styles.groupsCard}>
+                {groups.length === 0 ? (
+                    <View style={{ padding: 24, justifyContent: 'center', alignItems: 'center' }}>
+                        <AppText variant="caption" color="textTertiary">
+                            You are not part of any groups yet.
+                        </AppText>
+                    </View>
+                ) : (
+                    groups.map((item, index) => (
+                        <Pressable
+                            key={item.id}
+                            style={[styles.groupRow, index !== groups.length - 1 && styles.divider]}
+                            onPress={() =>
+                                router.push({
+                                    pathname: "/(tabs)/group/[groupId]",
+                                    params: {
+                                        groupId: item.id,
+                                    },
+                                })
+                            }
+                        >
+                            <View style={styles.groupIconWrap}>
+                                {(() => {
+                                    const iconName = ICONS[item.icon as keyof typeof ICONS] ?? 'Users';
+                                    return <Icon name={iconName} size={20} color={palette.primaryDeep} />;
+                                })()}
+                            </View>
+                            <View style={styles.groupTextWrap}>
+                                <AppText variant="bodySm" color="textPrimary" weight="bold">
+                                    {item.name}
+                                </AppText>
+                                <AppText variant="micro" color="textSecondary">
+                                    {item.members.length} {item.members.length === 1 ? 'member' : 'members'}
+                                </AppText>
+                            </View>
+                            <View style={styles.groupRight}>
+                                <AppText variant="micro" color="textSecondary" weight="bold">
+                                    {item.amountLabel}
+                                </AppText>
+                                <AppText
+                                    variant="bodySm"
+                                    weight="bold"
+                                    style={{
+                                        color: item.amountColor === '#eb5a4f' ? palette.danger : (item.amountColor === '#148a46' ? palette.success : palette.textPrimary)
+                                    }}
+                                >
+                                    {item.amount}
+                                </AppText>
+                            </View>
+                            {item.createdBy === user?.id && (
+                                <Pressable
+                                    onPress={() => {
                                         setSelectedGroupId(item.id);
                                         setShowDeleteDialog(true);
-                                    }
-                                    } style={{ marginRight: 8 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(235,90,79,0.05)' }}>
-                                            <Icon name="Trash" size={16} color="#eb5a4f" />
-                                        </View>
-                                    </Pressable>
-                                )}
-                                <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 4, backgroundColor: 'rgba(20,138,70,0.05)' }}>
-                                    <Icon name="ChevronRight" size={16} color="#071407" style={styles.groupChevron} />
-                                </View>
-                            </Pressable>
-                        ))
-                    )}
-                </View>
+                                    }}
+                                    style={{ marginLeft: 8 }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 8, padding: 6, backgroundColor: 'rgba(235,90,79,0.08)' }}>
+                                        <Icon name="Trash" size={14} color={palette.danger} />
+                                    </View>
+                                </Pressable>
+                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 8, padding: 6, backgroundColor: palette.primaryLight, marginLeft: 8 }}>
+                                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} />
+                            </View>
+                        </Pressable>
+                    ))
+                )}
+            </Card>
 
-                <Pressable
-                    style={styles.insightsButton}
-                    onPress={() => router.push('/(tabs)/insights')}
+            <Pressable
+                style={styles.insightsButton}
+                onPress={() => router.push('/(tabs)/insights')}
+            >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Icon name="TrendingUp" size={20} color={palette.primaryDeep} />
+                    <AppText variant="bodySm" color="primaryDeep" weight="bold">
+                        View Full Insights
+                    </AppText>
+                </View>
+                <Icon name="ChevronRight" size={18} color={palette.primaryDeep} />
+            </Pressable>
+
+            <View style={styles.quickActionsGrid}>
+                {QUICK_ACTIONS.map((action) => {
+                    return (
+                        <Card
+                            key={action.id}
+                            variant="elevated"
+                            padding={16}
+                            style={styles.quickActionCard}
+                            onPress={() => router.push(action.href)}
+                        >
+                            <View style={styles.quickActionIconWrap}>
+                                <Icon name={action.icon} size={22} color={palette.primaryDeep} />
+                            </View>
+                            <AppText variant="bodySm" color="textPrimary" weight="bold" style={styles.quickActionTitle}>
+                                {action.title}
+                              </AppText>
+                            <AppText variant="micro" color="textSecondary" style={styles.quickActionSubtitle}>
+                                {action.subtitle}
+                            </AppText>
+                        </Card>
+                    );
+                })}
+            </View>
+
+            <View style={styles.footerBanner}>
+                <ImageBackground
+                    source={require('../../assets/images/bgadd.png')}
+                    style={styles.footerBannerBg}
+                    resizeMode="cover"
+                    imageStyle={styles.footerBannerBgImage}
                 >
-                    <Icon name="TrendingUp" size={20} color="#000000" />
-                    <Text style={styles.insightsButtonText}>View Full Insights</Text>
-                    <Icon name="ChevronRight" size={18} color="#000000" />
-                </Pressable>
+                    <View style={styles.footerBannerOverlay} />
+                    <View style={styles.footerBannerContent}>
+                        <AppText variant="title" color="textPrimary" weight="bold">
+                            Stay organized.
+                        </AppText>
+                        <AppText variant="title" color="textPrimary" weight="bold">
+                            Stay settled up.
+                        </AppText>
+                    </View>
+                </ImageBackground>
+            </View>
 
-                <View style={styles.quickActionsGrid}>
-                    {QUICK_ACTIONS.map((action) => {
-                        return (
-                            <Pressable
-                                key={action.id}
-                                style={styles.quickActionCard}
-                                onPress={() => router.push(action.href)}
-                            >
-                                <View style={styles.quickActionIconWrap}>
-                                    <Icon name={action.icon} size={22} color="#148a46" />
-                                </View>
-                                <Text style={styles.quickActionTitle}>{action.title}</Text>
-                                <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
-                            </Pressable>
-                        );
-                    })}
-                </View>
-
-                <View style={styles.footerBanner}>
-                    <ImageBackground
-                        source={require('../../assets/images/bgadd.png')}
-                        style={styles.footerBannerBg}
-                        resizeMode="cover"
-                        imageStyle={styles.footerBannerBgImage}
-                    >
-                        <View style={styles.footerBannerOverlay} />
-                        <View style={styles.footerBannerContent}>
-                            <Text style={styles.footerBannerTitle}>Stay organized.</Text>
-                            <Text style={styles.footerBannerTitle}>Stay settled up.</Text>
-                        </View>
-                    </ImageBackground>
-                </View>
-            </ScrollView>
             <ConfirmDialog
                 visible={showDeleteDialog}
                 title="Delete Group"
@@ -316,240 +352,119 @@ export default function YourGroups() {
                     setSelectedGroupId(null);
                 }}
             />
-        </SafeAreaView >
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    page: {
-        flex: 1,
-        backgroundColor: '#FFF8E7',
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: layout.gutter,
+        paddingVertical: spacing.md,
+        backgroundColor: palette.card,
+        borderBottomWidth: 1,
+        borderBottomColor: palette.divider,
     },
-    container: {
-        paddingHorizontal: 16,
-        paddingBottom: 40,
-        gap: 16,
-    },
-    quickActionSubtitle: {
-        fontSize: 12,
-        color: '#333333',
-        fontWeight: '600',
-        lineHeight: 16,
-    },
-    quickActionCard: {
-        width: '48%',
-        minHeight: 118,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
-        borderWidth: 3,
-        borderColor: '#000000',
-        padding: 16,
-        gap: 10,
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
-    },
-    quickActionIconWrap: {
-        width: 46,
-        height: 46,
-        borderRadius: 8,
+    headerButton: {
+        width: 40,
+        height: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#C3FFD8',
-        borderWidth: 2,
-        borderColor: '#000000',
     },
     heroSection: {
         width: '100%',
     },
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: 16,
-        paddingBottom: 8,
-    },
-    brandRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    quickActionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: 12,
-    },
-    quickActionTitle: {
-        fontSize: 14,
-        fontWeight: '900',
-        color: '#000000',
-        lineHeight: 18,
-    },
-    logoCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
-    brandTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#000000',
-    },
-    menuButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
     heroCopy: {
-        paddingTop: 24,
-        gap: 4,
+        paddingTop: spacing.sm,
+        gap: 2,
     },
-    heroTitle: {
-        fontSize: 32,
-        fontWeight: '900',
-        color: '#000000',
-        letterSpacing: -0.8,
-    },
-    heroSubtitle: {
-        fontSize: 13,
-        color: '#000000',
-        fontWeight: '600',
-    },
-    card: {
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        borderWidth: 3,
-        borderColor: '#000000',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
+    groupsCard: {
+        paddingHorizontal: spacing.base,
     },
     divider: {
-        borderBottomWidth: 2,
-        borderBottomColor: '#000000',
+        borderBottomWidth: 1,
+        borderBottomColor: palette.divider,
     },
     groupRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 15,
-        gap: 12,
+        paddingVertical: spacing.md,
+        gap: spacing.sm,
     },
     groupIconWrap: {
-        width: 42,
-        height: 42,
-        borderRadius: 8,
-        backgroundColor: '#C3FFD8',
+        width: 40,
+        height: 40,
+        borderRadius: radius.pill,
+        backgroundColor: palette.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
-    groupIconEmoji: {
-        fontSize: 18,
     },
     groupTextWrap: {
         flex: 1,
         gap: 2,
     },
-    groupName: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#000000',
-    },
-    groupMembers: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#333333',
-    },
     groupRight: {
         alignItems: 'flex-end',
         gap: 2,
     },
-    groupStatusLabel: {
-        fontSize: 11,
-        color: '#333333',
-        fontWeight: '700',
+    quickActionsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: spacing.sm,
     },
-    groupAmount: {
-        fontSize: 15,
-        fontWeight: '800',
-        letterSpacing: -0.2,
+    quickActionCard: {
+        width: '48%',
+        minHeight: 110,
+        gap: spacing.xs,
     },
-    groupChevron: {
-        marginLeft: 4,
+    quickActionIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: palette.primaryLight,
+    },
+    quickActionTitle: {
+        lineHeight: 18,
+        marginTop: 2,
+    },
+    quickActionSubtitle: {
+        lineHeight: 14,
     },
     footerBanner: {
-        borderRadius: 8,
-        borderWidth: 3,
-        borderColor: '#000000',
+        borderRadius: radius.xl,
         overflow: 'hidden',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
+        ...shadows.sm,
+        marginBottom: spacing.xxl,
     },
     footerBannerBg: {
-        minHeight: 130,
+        minHeight: 120,
         justifyContent: 'flex-end',
     },
     footerBannerBgImage: {
-        borderRadius: 5,
+        borderRadius: radius.xl,
     },
     footerBannerOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255, 222, 67, 0.45)',
-        borderRadius: 5,
+        backgroundColor: 'rgba(102, 204, 68, 0.12)',
+        borderRadius: radius.xl,
     },
     footerBannerContent: {
-        padding: 20,
-        paddingBottom: 18,
-    },
-    footerBannerTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#000000',
-        letterSpacing: -0.3,
-        lineHeight: 28,
+        padding: spacing.lg,
     },
     insightsButton: {
-        backgroundColor: '#FFE999',
-        borderRadius: 8,
-        borderWidth: 3,
-        borderColor: '#000000',
+        backgroundColor: palette.primaryLight,
+        borderRadius: radius.pill,
         paddingVertical: 14,
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
+        ...shadows.xs,
         marginTop: 8,
-    },
-    insightsButtonText: {
-        fontSize: 15,
-        fontWeight: '900',
-        color: '#000000',
-        flex: 1,
-        marginLeft: 10,
     },
 });
