@@ -120,8 +120,47 @@ export type TransactionsResponse = {
 	transactions: ApiTransaction[];
 };
 
+export type BadgeDefinition = {
+	id: string;
+	label: string;
+	description: string;
+	icon: string;
+};
+
+export type EarnedBadge = {
+	id: string;
+	earnedAt: string;
+};
+
+export type EarnedBadgeInfo = {
+	id: string;
+	label: string;
+	icon: string;
+};
+
+export type GoalStats = {
+	contributionStreak: number;
+	bestContributionStreak: number;
+};
+
+export type XpEventDto = {
+	id: string;
+	type: string;
+	amount: number;
+	description: string;
+	goalId: string | null;
+	createdAt: number;
+};
+
+export type XpEventsResponse = {
+	events: XpEventDto[];
+};
+
 export type GoalsResponse = {
 	goals: ApiGoal[];
+	goalStats: GoalStats;
+	badges: EarnedBadge[];
+	badgeCatalog: BadgeDefinition[];
 };
 
 export type QuestStateResponse = {

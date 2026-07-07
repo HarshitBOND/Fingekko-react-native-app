@@ -26,6 +26,26 @@ const userSchema = new mongoose.Schema(
       lastCompletedDate: { type: String, default: null },
       previousDayQuestsDone: { type: Number, default: 0 },
     },
+    // Separate from `stats` above (which is exclusively the Home daily-quest
+    // streak) — this tracks the Goals-page weekly contribution streak, a
+    // distinct cadence/concept that shouldn't collide with quest fields.
+    goalStats: {
+      contributionStreak: { type: Number, default: 0 },
+      bestContributionStreak: { type: Number, default: 0 },
+      lastContributionPeriod: { type: String, default: null },
+    },
+    badges: {
+      type: [
+        new mongoose.Schema(
+          {
+            id: { type: String, required: true },
+            earnedAt: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

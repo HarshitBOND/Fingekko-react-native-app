@@ -39,6 +39,10 @@ export async function apiRequest<T>(
 
     return response.data;
   } catch (error: any) {
-    throw new Error(`API request failed: ${error.message}`);
+    // Surface the backend's actual validation/error message (e.g. "Target amount
+    // must be greater than 0.") instead of axios's generic "Request failed with
+    // status code 400", which is all callers used to ever see.
+    const backendMessage = error?.response?.data?.message ?? error?.response?.data?.error;
+    throw new Error(backendMessage || error.message || 'API request failed.');
   }
 }

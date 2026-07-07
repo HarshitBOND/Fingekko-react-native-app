@@ -10,6 +10,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { palette, radius, shadows, spacing } from '@/constants/design';
+import type { EarnedBadgeInfo } from '@/types';
+import { MILESTONE_LABELS } from '@/utils/gamification';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import AppText from '../ui/AppText';
 import Button from '../ui/Button';
@@ -88,6 +90,10 @@ export type GoalRewardInfo = {
   leveledUp: boolean;
   newLevel?: number;
   goalTitle?: string;
+  milestonesHit?: number[];
+  badgesEarned?: EarnedBadgeInfo[];
+  contributionStreak?: number;
+  streakIncreased?: boolean;
 };
 
 type GoalRewardModalProps = {
@@ -117,6 +123,25 @@ export default function GoalRewardModal({ reward, onDismiss }: GoalRewardModalPr
     opacity: opacity.value,
   }));
 
+  const milestonesHit = reward?.milestonesHit ?? [];
+  const highestMilestone = milestonesHit.length ? Math.max(...milestonesHit) : null;
+  const heroEmoji = reward?.justCompleted ? '🏆' : highestMilestone ? '🎖️' : '⭐';
+  const heroTitle = reward?.justCompleted
+    ? 'Goal Achieved!'
+    : highestMilestone
+      ? `${MILESTONE_LABELS[highestMilestone] ?? `${Math.round(highestMilestone * 100)}%`} there!`
+      : 'Nice progress!';
+  // If a big jump completed the goal, still surface any milestones it passed
+  // through along the way rather than hiding them behind the trophy state.
+  const passedAlongTheWay = reward?.justCompleted && milestonesHit.length
+    ? milestonesHit
+        .slice()
+        .sort((a, b) => a - b)
+        .map((m) => MILESTONE_LABELS[m] ?? `${Math.round(m * 100)}%`)
+        .join(', ')
+    : null;
+  const badgesEarned = reward?.badgesEarned ?? [];
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <Pressable style={styles.overlay} onPress={onDismiss}>
@@ -129,16 +154,22 @@ export default function GoalRewardModal({ reward, onDismiss }: GoalRewardModalPr
             </View>
 
             <View style={[styles.iconCircle, reward?.justCompleted && styles.iconCircleGold]}>
-              <AppText style={{ fontSize: 34 }}>{reward?.justCompleted ? '🏆' : '⭐'}</AppText>
+              <AppText style={{ fontSize: 34 }}>{heroEmoji}</AppText>
             </View>
 
             <AppText variant="title" color="textPrimary" weight="bold" align="center" style={{ marginTop: spacing.md }}>
-              {reward?.justCompleted ? 'Goal Achieved!' : 'Nice progress!'}
+              {heroTitle}
             </AppText>
 
             {!!reward?.goalTitle && (
               <AppText variant="caption" color="textSecondary" align="center" style={{ marginTop: 2 }}>
                 {reward.goalTitle}
+              </AppText>
+            )}
+
+            {!!passedAlongTheWay && (
+              <AppText variant="micro" color="textSecondary" align="center" style={{ marginTop: 4 }}>
+                Passed {passedAlongTheWay} along the way
               </AppText>
             )}
 
@@ -157,6 +188,33 @@ export default function GoalRewardModal({ reward, onDismiss }: GoalRewardModalPr
               <View style={styles.levelUpBanner}>
                 <AppText variant="bodySm" color="onDark" weight="bold" align="center">
                   🎉 Level Up! You&apos;re now Level {reward.newLevel}
+                </AppText>
+              </View>
+            )}
+
+            {!!badgesEarned.length && (
+              <View style={styles.badgesSection}>
+                <AppText variant="micro" color="textSecondary" weight="bold" align="center">
+                  {badgesEarned.length > 1 ? 'New badges unlocked!' : 'New badge unlocked!'}
+                </AppText>
+                <View style={styles.badgesRow}>
+                  {badgesEarned.map((badge) => (
+                    <View key={badge.id} style={styles.badgeChip}>
+                      <Icon name={badge.icon} size={16} color={palette.primaryDeep} />
+                      <AppText variant="micro" color="primaryDeep" weight="bold" style={{ marginLeft: 4 }}>
+                        {badge.label}
+                      </AppText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {!!reward?.streakIncreased && !!reward.contributionStreak && (
+              <View style={styles.streakRow}>
+                <Icon name="Flame" size={16} color={palette.warning} />
+                <AppText variant="caption" color="textPrimary" weight="bold" style={{ marginLeft: 6 }}>
+                  {reward.contributionStreak}-week streak!
                 </AppText>
               </View>
             )}
@@ -221,5 +279,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     width: '100%',
+  },
+  badgesSection: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+    width: '100%',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  badgeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  streakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
   },
 });

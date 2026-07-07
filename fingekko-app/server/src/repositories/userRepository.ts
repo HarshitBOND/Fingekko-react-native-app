@@ -137,6 +137,38 @@ async function awardXp(userId: string, xpDelta: number): Promise<AwardXpResult> 
 }
 
 
+type UpdateGoalStatsData = Partial<{
+  contributionStreak: number;
+  bestContributionStreak: number;
+  lastContributionPeriod: string | null;
+}>;
+
+// Separate from updateUserStats/UpdateUserStatsData above (quest-only) — this
+// updates the Goals-page weekly contribution streak, a distinct namespace.
+async function updateGoalStats(userId: string, stats: UpdateGoalStatsData) {
+  const $set = Object.fromEntries(
+    Object.entries(stats).map(([key, value]) => [`goalStats.${key}`, value])
+  );
+  return User.findByIdAndUpdate(userId, { $set }, { new: true }).lean();
+}
+
+type EarnedBadgeRecord = { id: string; earnedAt: Date };
+
+async function awardBadges(userId: string, badgeIds: string[]): Promise<EarnedBadgeRecord[]> {
+  if (!badgeIds.length) {
+    return [];
+  }
+
+  const earnedAt = new Date();
+  const entries = badgeIds.map((id) => ({ id, earnedAt }));
+
+  await User.findByIdAndUpdate(userId, {
+    $push: { badges: { $each: entries } },
+  });
+
+  return entries;
+}
+
 async function searchUsers(query: string) {
   return User.find({
     $or: [
@@ -153,6 +185,8 @@ export {
   updateByclerkId,
   updateById,
   updateUserStats,
+  updateGoalStats,
   awardXp,
+  awardBadges,
   searchUsers,
 };

@@ -20,3 +20,10 @@ export function getLevelProgress(xp: number): LevelProgress {
     progress: xpIntoLevel / XP_PER_LEVEL,
   };
 }
+
+// Keep in sync with server/src/routes/goal.routes.ts (MILESTONE_THRESHOLDS).
+export const MILESTONE_LABELS: Record<number, string> = {
+  0.25: '25%',
+  0.5: '50%',
+  0.75: '75%',
+};

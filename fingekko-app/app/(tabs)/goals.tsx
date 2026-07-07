@@ -12,8 +12,10 @@ import {
   View,
 } from 'react-native';
 import Navbar from '@/components/Navbar';
+import BadgesRow from '@/components/goals/BadgesRow';
 import GoalRewardModal, { type GoalRewardInfo } from '@/components/goals/GoalRewardModal';
 import XpBar from '@/components/goals/XpBar';
+import XpHistoryModal from '@/components/goals/XpHistoryModal';
 import AppText from '@/components/ui/AppText';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -23,7 +25,17 @@ import Input from '@/components/ui/Input';
 import ProgressRing from '@/components/ui/ProgressRing';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import { layout, palette, radius, spacing } from '@/constants/design';
-import type { ApiGoal, GoalsResponse, ProfileResponse } from '@/types';
+import type {
+  ApiGoal,
+  BadgeDefinition,
+  EarnedBadge,
+  EarnedBadgeInfo,
+  GoalsResponse,
+  GoalStats,
+  ProfileResponse,
+  XpEventDto,
+  XpEventsResponse,
+} from '@/types';
 import { apiRequest } from '@/utils/api';
 import { formatCurrency } from '@/utils/helpers';
 
@@ -34,6 +46,10 @@ type GoalActionResponse = {
   xp?: number;
   level?: number;
   leveledUp?: boolean;
+  milestonesHit?: number[];
+  badgesEarned?: EarnedBadgeInfo[];
+  goalStats?: GoalStats;
+  streakIncreased?: boolean;
 };
 
 const EMOJI_OPTIONS = ['🎯', '✈️', '🏠', '🚗', '💻', '🎓', '💍', '🏖️', '🩺', '🎁'];
@@ -45,7 +61,17 @@ const QUICK_DEADLINES = [
   { label: '1 year', months: 12 },
 ];
 
+// Parses a "YYYY-MM-DD" deadline as a *local* calendar date. Deliberately
+// avoids `new Date(string)` here — that parses date-only strings as UTC
+// midnight, which then renders as the previous day in any timezone ahead of
+// UTC (e.g. IST) once you read back getFullYear/getMonth/getDate.
 function parseDeadline(deadline: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(deadline);
+  if (match) {
+    const [, y, m, d] = match;
+    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
   const parsed = new Date(deadline);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -58,9 +84,12 @@ function daysUntil(deadline: string): number | null {
   return Math.round((date.getTime() - startOfToday.getTime()) / 86400000);
 }
 
+// Formats Y/M/D straight into "YYYY-MM-DD" with no Date/UTC round-trip, so
+// the date you picked is exactly the date that gets saved.
 function toIsoDate(year: number, month: number, day: number): string {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  return new Date(year, month, Math.min(day, daysInMonth)).toISOString().split('T')[0];
+  const clampedDay = Math.min(day, daysInMonth);
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
 }
 
 function addMonths(date: Date, months: number): Date {
@@ -105,6 +134,14 @@ export default function GoalsScreen() {
   const [userXp, setUserXp] = useState(0);
   const [reward, setReward] = useState<GoalRewardInfo | null>(null);
 
+  const [goalStats, setGoalStats] = useState<GoalStats>({ contributionStreak: 0, bestContributionStreak: 0 });
+  const [badges, setBadges] = useState<EarnedBadge[]>([]);
+  const [badgeCatalog, setBadgeCatalog] = useState<BadgeDefinition[]>([]);
+
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [xpEvents, setXpEvents] = useState<XpEventDto[]>([]);
+  const [xpEventsLoading, setXpEventsLoading] = useState(false);
+
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
       setGoals([]);
@@ -119,12 +156,30 @@ export default function GoalsScreen() {
       ]);
       setGoals(goalsResponse?.goals ?? []);
       setUserXp(profileResponse?.user?.xp ?? 0);
+      setGoalStats(goalsResponse?.goalStats ?? { contributionStreak: 0, bestContributionStreak: 0 });
+      setBadges(goalsResponse?.badges ?? []);
+      setBadgeCatalog(goalsResponse?.badgeCatalog ?? []);
       setLoadError('');
     } catch (error) {
       console.warn('Failed to load goals:', error);
       setLoadError('Could not load your goals. Check your connection and try again.');
     }
   }, [getToken, isSignedIn]);
+
+  const openHistory = async () => {
+    setHistoryVisible(true);
+    setXpEventsLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const response = await apiRequest<XpEventsResponse>('/api/goals/xp-events', {}, token);
+      setXpEvents(response?.events ?? []);
+    } catch (error) {
+      console.warn('Failed to load XP history:', error);
+    } finally {
+      setXpEventsLoading(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -243,6 +298,10 @@ export default function GoalsScreen() {
           leveledUp: !!response.leveledUp,
           newLevel: response.level,
           goalTitle: response.goal?.title,
+          milestonesHit: response.milestonesHit,
+          badgesEarned: response.badgesEarned,
+          contributionStreak: response.goalStats?.contributionStreak,
+          streakIncreased: response.streakIncreased,
         });
       }
     } catch (error: any) {
@@ -292,11 +351,13 @@ export default function GoalsScreen() {
       const token = await getToken();
       if (!token) return;
       const nextAmount = Math.min(contributeGoal.targetAmount, contributeGoal.currentAmount + amount);
+      const now = new Date();
+      const contributionDate = toIsoDate(now.getFullYear(), now.getMonth(), now.getDate());
       const response = await apiRequest<GoalActionResponse>({
         method: 'put',
         url: `/api/goals/${contributeGoal.id}`,
         token,
-        data: { currentAmount: nextAmount },
+        data: { currentAmount: nextAmount, contributionDate },
       });
       setContributeGoal(null);
       setContributeAmount('');
@@ -310,6 +371,10 @@ export default function GoalsScreen() {
           leveledUp: !!response.leveledUp,
           newLevel: response.level,
           goalTitle: response.goal?.title,
+          milestonesHit: response.milestonesHit,
+          badgesEarned: response.badgesEarned,
+          contributionStreak: response.goalStats?.contributionStreak,
+          streakIncreased: response.streakIncreased,
         });
       }
     } catch (error: any) {
@@ -348,7 +413,9 @@ export default function GoalsScreen() {
         </Button>
       </View>
 
-      <XpBar xp={userXp} />
+      <XpBar xp={userXp} contributionStreak={goalStats.contributionStreak} onPressHistory={openHistory} />
+
+      <BadgesRow earned={badges} catalog={badgeCatalog} />
 
       {loading && goals.length === 0 ? (
         <View style={styles.centerBox}>
@@ -637,6 +704,13 @@ export default function GoalsScreen() {
       </Modal>
 
       <GoalRewardModal reward={reward} onDismiss={() => setReward(null)} />
+
+      <XpHistoryModal
+        visible={historyVisible}
+        events={xpEvents}
+        loading={xpEventsLoading}
+        onClose={() => setHistoryVisible(false)}
+      />
     </ScreenContainer>
   );
 }

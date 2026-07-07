@@ -1,4 +1,3 @@
-import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
@@ -49,7 +48,6 @@ app.use(morgan('dev'));
 
 app.use('/webhooks/clerk', express.raw({ type: 'application/json' }), clerkWebhookRoutes);
 app.use(express.json({ limit: '1mb' }));
-app.use(clerkMiddleware());
 
 
 app.get('/health', (req: Request, res: Response) => {
