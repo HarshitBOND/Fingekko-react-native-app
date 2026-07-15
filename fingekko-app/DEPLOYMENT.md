@@ -50,7 +50,7 @@ There is **no `eas.json`** in the repo yet; EAS Build needs it. Run `eas build:c
     },
     "production": {
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" }   // AAB — required by Play
+      "android": { "buildType": "apk" }   // APK — direct download for website
     }
   },
   "submit": {
@@ -136,11 +136,8 @@ There is **no `eas.json`** in the repo yet; EAS Build needs it. Run `eas build:c
 ## 9. Build & submit
 
 ```bash
-# 1. Production AAB
+# 1. Production APK (for hosting on website)
 eas build --profile production --platform android
-
-# 2. Submit to Play (first time will ask for a Google service-account key)
-eas submit --profile production --platform android
 ```
 
 - [ ] First upload can go to an **Internal testing** track before Production.
@@ -160,12 +157,12 @@ eas submit --profile production --platform android
 
 | Item | Status |
 |------|--------|
-| `android.package` | 🔴 `com.anonymous.fingekkoapp` (placeholder — change) |
-| `eas.json` | 🔴 missing (create) |
-| `versionCode` | ⚠️ not set (add or `autoIncrement`) |
-| Production API URL | 🔴 verify `.env` / EAS env |
-| Production Clerk key | 🔴 use `pk_live_…` |
-| Privacy policy | 🔴 required |
-| Data safety form | 🔴 required |
+| `android.package` | ✅ `com.fingekko.app` (configured) |
+| `eas.json` | ✅ created (with `autoIncrement`) |
+| `versionCode` | ✅ configured via `autoIncrement` in `eas.json` |
+| Production API URL | ✅ set to `https://api.fingekko.com` in `.env` (verify EAS env) |
+| Production Clerk key | 🔴 use `pk_live_…` (pending user configuration) |
+| Privacy policy | 🔴 required (user to provide URL) |
+| Data safety form | 🔴 required (user to complete in Play Console) |
 | Icons / splash | ✅ configured |
 | TypeScript | ✅ passes |
