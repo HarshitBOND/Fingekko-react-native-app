@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -115,6 +115,7 @@ export default function GoalsScreen() {
   const [goals, setGoals] = useState<ApiGoal[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const hasLoadedOnce = useRef(false);
   const [loadError, setLoadError] = useState('');
 
   const [createVisible, setCreateVisible] = useState(false);
@@ -193,8 +194,13 @@ export default function GoalsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      fetchGoals().finally(() => setLoading(false));
+      if (!hasLoadedOnce.current) {
+        setLoading(true);
+      }
+      fetchGoals().finally(() => {
+        setLoading(false);
+        hasLoadedOnce.current = true;
+      });
     }, [fetchGoals])
   );
 
