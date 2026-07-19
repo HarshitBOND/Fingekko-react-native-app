@@ -4,6 +4,7 @@ import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { apiRequest } from '../utils/api';
+import { useSideMenu } from './navigation/SideMenu';
 import AppText from './ui/AppText';
 import Icon from './ui/Icon';
 import UserAvatar from './ui/UserAvatar';
@@ -14,6 +15,7 @@ export default function Navbar() {
   const { getToken } = useAuth();
   const [badgeCount, setBadgeCount] = useState(0);
   const navigation = useNavigation();
+  const { open } = useSideMenu();
 
   const fetchBadgeCount = async () => {
     try {
@@ -60,9 +62,12 @@ export default function Navbar() {
 
   return (
     <View style={styles.header}>
-      <View style={styles.logoWrap}>
+      {/* The logo is the menu affordance — the stacked lines make that readable
+          at a glance, which a bare logo never did. */}
+      <Pressable style={styles.menuButton} onPress={open} hitSlop={8} accessibilityLabel="Open menu">
+        <Icon name="Menu" size={20} color={palette.textPrimary} clickable={false} />
         <Image source={require('../assets/images/mainlogoNobg.png')} style={styles.logoImage} />
-      </View>
+      </Pressable>
 
       <View style={styles.headerActions}>
         <Pressable style={styles.bellButton} onPress={() => router.push('/(tabs)/Notifications')} hitSlop={6}>
@@ -88,13 +93,20 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 10,
   },
-  logoWrap: {
+  menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    height: 42,
+    paddingLeft: 10,
+    paddingRight: 6,
+    borderRadius: radius.pill,
+    backgroundColor: palette.card,
+    ...shadows.sm,
   },
   logoImage: {
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
     resizeMode: 'contain',
   },
   headerActions: {

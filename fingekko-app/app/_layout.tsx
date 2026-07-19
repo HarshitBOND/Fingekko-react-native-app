@@ -15,8 +15,8 @@ import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SideMenuProvider } from '../components/navigation/SideMenu';
 import LoadingScreen from '../components/ui/LoadingScreen';
-import UpdatePrompt from '../components/UpdatePrompt';
 import { palette } from '../constants/design';
 
 // Keep the native splash visible until fonts are ready.
@@ -64,16 +64,17 @@ export default function RootLayout() {
             <SafeAreaProvider>
                 <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
                     <StatusBar style="dark" />
-                    <UpdatePrompt />
                     <ClerkLoading>
                         <LoadingScreen />
                     </ClerkLoading>
 
                     <ClerkLoaded>
                         <SignedIn>
-                            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
-                                <Stack.Screen name="(tabs)" />
-                            </Stack>
+                            <SideMenuProvider>
+                                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
+                                    <Stack.Screen name="(tabs)" />
+                                </Stack>
+                            </SideMenuProvider>
                         </SignedIn>
 
                         <SignedOut>

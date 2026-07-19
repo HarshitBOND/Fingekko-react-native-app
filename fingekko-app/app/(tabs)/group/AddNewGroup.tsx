@@ -1,42 +1,35 @@
-import { useAuth, useUser } from '@clerk/clerk-expo';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import Icon from '../../../components/ui/Icon';
-import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@clerk/clerk-expo';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    ImageBackground,
+    BackHandler,
     Modal,
     Pressable,
     ScrollView,
     StyleSheet,
-    Text,
     TextInput,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppText from '../../../components/ui/AppText';
+import Button from '../../../components/ui/Button';
+import Card from '../../../components/ui/Card';
+import Icon from '../../../components/ui/Icon';
+import Input from '../../../components/ui/Input';
+import LoadingScreen from '../../../components/ui/LoadingScreen';
+import ScreenContainer from '../../../components/ui/ScreenContainer';
+import { fontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
 import { apiRequest } from '../../../utils/api';
-import { useFocusEffect } from 'expo-router';
-import { BackHandler } from 'react-native';
-import { useCallback } from 'react';
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
 
 // Same icon set used on YourGroups so a group created here renders consistently there.
-const ICON_KEYS = [
-    'Plane',
-    'Home',
-    'Users',
-    'Car',
-    'Coins',
-    'Utensils',
-    'Briefcase',
-] as const;
+const ICON_KEYS = ['Plane', 'Home', 'Users', 'Car', 'Coins', 'Utensils', 'Briefcase'] as const;
 
 // ---- Types matching the backend exactly ----
 
 type FriendOfMine = {
     id: string;
-    clerkId: string ;
+    clerkId: string;
     name: string;
     email: string;
     avatarKey: string;
@@ -60,17 +53,18 @@ type SearchResult = {
     relationship: Friend | null;
 };
 
+const EMPTY_FRIENDS: Friend[] = [];
+const EMPTY_RESULTS: SearchResult[] = [];
+
 export default function AddNewGroup() {
     const router = useRouter();
-
     const { getToken } = useAuth();
-    const { user } = useUser();
 
     const [groupName, setGroupName] = useState('');
     const [selectedIcon, setSelectedIcon] = useState<string>('Users');
 
-    const [friends, setFriends] = useState<Friend[]>([]);
-    const [friendsLoading, setFriendsLoading] = useState(false);
+    const [friends, setFriends] = useState<Friend[]>(EMPTY_FRIENDS);
+    const [friendsLoading, setFriendsLoading] = useState(true);
 
     // Selected members are stored as plain user records (FriendOfMine), since that's
     // what the backend needs for group creation (actual user ids, not friendship ids).
@@ -78,107 +72,98 @@ export default function AddNewGroup() {
 
     const [membersModalVisible, setMembersModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+    const [searchResults, setSearchResults] = useState<SearchResult[]>(EMPTY_RESULTS);
     const [searchLoading, setSearchLoading] = useState(false);
     const [pendingRequestIds, setPendingRequestIds] = useState<string[]>([]);
 
     const [creating, setCreating] = useState(false);
+    const [formError, setFormError] = useState('');
+
+    const getTokenRef = useRef(getToken);
+    useEffect(() => {
+        getTokenRef.current = getToken;
+    }, [getToken]);
 
     const resetGroupCreation = () => {
         setSelectedMembers([]);
         setGroupName('');
         setSelectedIcon('Users');
         setSearchQuery('');
-        setSearchResults([]);
+        setSearchResults(EMPTY_RESULTS);
         setPendingRequestIds([]);
         setMembersModalVisible(false);
+        setFormError('');
     };
 
     async function handleSendFriendRequest(result: SearchResult) {
         if (pendingRequestIds.includes(result.user.id)) return;
 
         try {
-            const token = await getToken();
-            if (!token) {
-                console.error('No token available for API request.');
-                return;
-            }
-
+            const token = await getTokenRef.current();
+            if (!token) return;
             await apiRequest({
                 method: 'post',
                 url: '/api/friends/request',
                 token,
                 data: { email: result.user.email },
             });
-
             setPendingRequestIds((prev) => [...prev, result.user.id]);
         } catch (err) {
-            console.error('Friend request failed:', err);
+            console.warn('Friend request failed:', err);
         }
     }
 
-    // THE FIX: reset on focus AND on blur (cleanup). Resetting only on focus
-    // leaves a tiny window where the old selectedMembers/groupName can still
-    // render before the effect fires. Resetting on blur (when you leave the
-    // screen) guarantees it's already clean before you ever come back to it.
+    // Reset on focus AND on blur (cleanup). Resetting only on focus leaves a tiny
+    // window where the old selectedMembers/groupName can still render before the
+    // effect fires. Resetting on blur guarantees it's clean before you return.
     useFocusEffect(
         useCallback(() => {
-            // reset state every time this screen becomes focused
             resetGroupCreation();
 
-            // handle hardware back
             const onBackPress = () => {
                 router.replace('/(tabs)/YourGroups');
                 return true;
             };
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-            const subscription = BackHandler.addEventListener(
-                'hardwareBackPress',
-                onBackPress
-            );
-
-            // cleanup: also reset when this screen loses focus (navigating away)
             return () => {
                 subscription.remove();
                 resetGroupCreation();
             };
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [])
     );
 
-    const fetchFriends = async () => {
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return;
-        }
-        setFriendsLoading(true);
+    const fetchFriends = useCallback(async () => {
         try {
+            const token = await getTokenRef.current();
+            if (!token) return;
             const response = await apiRequest<FriendsResponse>({
                 method: 'get',
                 url: '/api/friends',
                 token,
             });
-            setFriends(response.friends);
+            setFriends(response?.friends ?? EMPTY_FRIENDS);
         } catch (error) {
-            console.error('Error fetching friends:', error);
+            console.warn('Error fetching friends:', error);
         } finally {
             setFriendsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchFriends();
-    }, []);
+    }, [fetchFriends]);
 
     // Debounced search across all users (not just friends) so people can be found and invited.
     useEffect(() => {
         if (!searchQuery.trim()) {
-            setSearchResults([]);
+            setSearchResults(EMPTY_RESULTS);
             return;
         }
 
         const handle = setTimeout(async () => {
-            const token = await getToken();
+            const token = await getTokenRef.current();
             if (!token) return;
             setSearchLoading(true);
             try {
@@ -187,9 +172,9 @@ export default function AddNewGroup() {
                     url: `/api/friends/search?q=${encodeURIComponent(searchQuery.trim())}`,
                     token,
                 });
-                setSearchResults(response);
+                setSearchResults(response ?? EMPTY_RESULTS);
             } catch (error) {
-                console.error('Error searching users:', error);
+                console.warn('Error searching users:', error);
             } finally {
                 setSearchLoading(false);
             }
@@ -203,9 +188,7 @@ export default function AddNewGroup() {
 
     const toggleMember = (member: FriendOfMine) => {
         setSelectedMembers((prev) =>
-            prev.some((m) => m.id === member.id)
-                ? prev.filter((m) => m.id !== member.id)
-                : [...prev, member]
+            prev.some((m) => m.id === member.id) ? prev.filter((m) => m.id !== member.id) : [...prev, member]
         );
     };
 
@@ -214,20 +197,18 @@ export default function AddNewGroup() {
     };
 
     const combinedSearchList = useMemo(() => {
-        // Hide search results that are already in the friends list to avoid duplicate rows.
+        // Hide search results already in the friends list to avoid duplicate rows.
         const friendIds = new Set(friends.map((f) => f.friend.id));
         return searchResults.filter((r) => !friendIds.has(r.user.id));
     }, [searchResults, friends]);
 
     const createGroup = async () => {
         if (!groupName.trim() || creating) return;
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return;
-        }
         setCreating(true);
+        setFormError('');
         try {
+            const token = await getTokenRef.current();
+            if (!token) return;
             await apiRequest({
                 method: 'post',
                 url: '/api/groups',
@@ -240,144 +221,117 @@ export default function AddNewGroup() {
             });
             resetGroupCreation();
             router.replace('/(tabs)/YourGroups');
-        } catch (error) {
-            console.error('Error creating group:', error);
+        } catch (error: any) {
+            setFormError(error?.message || 'Could not create the group. Please try again.');
         } finally {
             setCreating(false);
         }
     };
 
-
-
     return (
-        <SafeAreaView style={styles.page} edges={['top']}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-                <View style={styles.heroSection}>
-                    <LinearGradient
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        colors={['rgba(20,138,70,0.18)', 'rgba(20,138,70,0.05)', 'transparent']}
-                        locations={[0, 0.35, 1]}
-                        style={[
-                            StyleSheet.absoluteFill,
-                            {
-                                width: 240,
-                                height: 240,
-                                top: -70,
-                                left: -70,
-                                borderRadius: 200,
-                            },
-                        ]}
-                    />
-
-                    <View style={styles.topBar}>
-                        <View style={styles.brandRow}>
-                            <Pressable style={styles.logoCircle} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}>
-                                <Icon name="ChevronLeft" size={20} color="#148a46" />
-                            </Pressable>
-                            <Text style={styles.brandTitle}>New Group</Text>
-                        </View>
-                        <Pressable style={styles.menuButton} onPress={() => router.replace('/(tabs)/YourGroups')}>
-                            <Icon name="Menu" size={20} color="#1f2937" />
-                        </Pressable>
-                    </View>
-
-                    <View style={styles.heroCopy}>
-                        <Text style={styles.heroTitle}>Create a group</Text>
-                        <Text style={styles.heroSubtitle}>Split expenses effortlessly.</Text>
-                    </View>
-                </View>
-
-                <View style={styles.card}>
-                    <Text style={styles.fieldLabel}>Group Name</Text>
-                    <TextInput
-                        placeholder="e.g. Goa Trip"
-                        placeholderTextColor="#9ca3af"
-                        value={groupName}
-                        onChangeText={setGroupName}
-                        style={styles.textInput}
-                    />
-
-                    <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Group Icon</Text>
-                    <View style={styles.iconGrid}>
-                        {ICON_KEYS.map((key) => {
-                            const active = key === selectedIcon;
-                            return (
-                                <Pressable
-                                    key={key}
-                                    onPress={() => setSelectedIcon(key)}
-                                    style={[styles.iconOption, active && styles.iconOptionActive]}
-                                >
-                                    <Icon name={key} size={20} color="#000000" />
-                                </Pressable>
-                            );
-                        })}
-                    </View>
-                </View>
-
-                <View style={styles.card}>
-                    <View style={styles.membersHeaderRow}>
-                        <Text style={styles.fieldLabel}>Members</Text>
-                        <Text style={styles.membersCount}>{selectedMembers.length} selected</Text>
-                    </View>
-
-                    <Pressable style={styles.addMembersButton} onPress={() => setMembersModalVisible(true)}>
-                        <View style={styles.quickActionIconWrap}>
-                            <Icon name="Plus" size={18} color="#000000" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.addMembersTitle}>Add Members</Text>
-                            <Text style={styles.addMembersSubtitle}>Choose friends or search for others</Text>
-                        </View>
-                        <Icon name="ChevronRight" size={18} color="#000000" />
-                    </Pressable>
-
-                    {selectedMembers.length > 0 && (
-                        <View style={styles.chipsWrap}>
-                            {selectedMembers.map((member) => (
-                                <View key={member.id} style={styles.chip}>
-                                    <Text style={styles.chipText} numberOfLines={1}>
-                                        {member.name}
-                                    </Text>
-                                    <Pressable onPress={() => removeSelectedMember(member.id)}>
-                                        <Icon name="X" size={13} color="#000000" />
-                                    </Pressable>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-                </View>
-
-                <View style={{ paddingHorizontal: 16 }}>
+        <ScreenContainer
+            contentStyle={{ gap: spacing.lg }}
+            header={
+                <View style={styles.header}>
                     <Pressable
-                        style={[styles.createButton, !groupName.trim() && styles.createButtonDisabled]}
-                        onPress={createGroup}
-                        disabled={!groupName.trim() || creating}
+                        style={styles.headerButton}
+                        hitSlop={6}
+                        onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}
                     >
-                        {creating ? (
-                            <ActivityIndicator color="#000000" />
-                        ) : (
-                            <Text style={styles.createButtonText}>Create Group</Text>
-                        )}
+                        <Icon name="ChevronLeft" size={22} color={palette.textPrimary} clickable={false} />
                     </Pressable>
+                    <AppText variant="title" weight="bold">
+                        New group
+                    </AppText>
+                    <View style={{ width: 40 }} />
+                </View>
+            }
+        >
+            <View style={styles.intro}>
+                <AppText variant="h1">Create a group</AppText>
+                <AppText variant="caption" color="textSecondary">
+                    Split expenses effortlessly with the people you share costs with.
+                </AppText>
+            </View>
+
+            <Card variant="elevated">
+                <Input label="Group name" placeholder="e.g. Goa Trip" value={groupName} onChangeText={setGroupName} />
+
+                <AppText variant="caption" color="textSecondary" style={styles.fieldLabel}>
+                    Group icon
+                </AppText>
+                <View style={styles.iconGrid}>
+                    {ICON_KEYS.map((key) => {
+                        const active = key === selectedIcon;
+                        return (
+                            <Pressable
+                                key={key}
+                                onPress={() => setSelectedIcon(key)}
+                                style={[styles.iconOption, active && styles.iconOptionActive]}
+                            >
+                                <Icon
+                                    name={key}
+                                    size={20}
+                                    color={active ? palette.primaryDeep : palette.textSecondary}
+                                    clickable={false}
+                                />
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            </Card>
+
+            <Card variant="elevated">
+                <View style={styles.membersHeaderRow}>
+                    <AppText variant="label">Members</AppText>
+                    <AppText variant="micro" color="textTertiary">
+                        {selectedMembers.length} selected
+                    </AppText>
                 </View>
 
-                <View style={styles.footerBanner}>
-                    <ImageBackground
-                        source={require('../../../assets/images/bgadd.png')}
-                        style={styles.footerBannerBg}
-                        resizeMode="cover"
-                        imageStyle={styles.footerBannerBgImage}
-                    >
-                        <View style={styles.footerBannerOverlay} />
-                        <View style={styles.footerBannerContent}>
-                            <Text style={styles.footerBannerTitle}>Stay organized.</Text>
-                            <Text style={styles.footerBannerTitle}>Stay settled up.</Text>
-                        </View>
-                    </ImageBackground>
-                </View>
-            </ScrollView>
+                <Pressable
+                    style={({ pressed }) => [styles.addMembersButton, pressed && styles.pressed]}
+                    onPress={() => setMembersModalVisible(true)}
+                >
+                    <View style={styles.addMembersIcon}>
+                        <Icon name="Plus" size={18} color={palette.primaryDeep} clickable={false} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <AppText variant="label">Add members</AppText>
+                        <AppText variant="micro" color="textTertiary">
+                            Choose friends or search for others
+                        </AppText>
+                    </View>
+                    <Icon name="ChevronRight" size={16} color={palette.textTertiary} clickable={false} />
+                </Pressable>
 
+                {selectedMembers.length > 0 && (
+                    <View style={styles.chipsWrap}>
+                        {selectedMembers.map((member) => (
+                            <View key={member.id} style={styles.chip}>
+                                <AppText variant="micro" color="primaryDeep" numberOfLines={1} style={{ flexShrink: 1 }}>
+                                    {member.name}
+                                </AppText>
+                                <Pressable onPress={() => removeSelectedMember(member.id)} hitSlop={6}>
+                                    <Icon name="X" size={12} color={palette.primaryDeep} clickable={false} />
+                                </Pressable>
+                            </View>
+                        ))}
+                    </View>
+                )}
+            </Card>
+
+            {!!formError && (
+                <AppText variant="caption" color="danger">
+                    {formError}
+                </AppText>
+            )}
+
+            <Button variant="primary" size="lg" onPress={createGroup} disabled={!groupName.trim()} loading={creating}>
+                Create group
+            </Button>
+
+            {/* ─── Member picker ─── */}
             <Modal
                 visible={membersModalVisible}
                 animationType="slide"
@@ -386,56 +340,64 @@ export default function AddNewGroup() {
             >
                 <SafeAreaView style={styles.modalPage} edges={['top', 'bottom']}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Add Members</Text>
-                        <Pressable style={styles.modalCloseButton} onPress={() => setMembersModalVisible(false)}>
-                            <Icon name="X" size={20} color="#1f2937" />
+                        <AppText variant="title" weight="bold">
+                            Add members
+                        </AppText>
+                        <Pressable style={styles.modalCloseButton} onPress={() => setMembersModalVisible(false)} hitSlop={6}>
+                            <Icon name="X" size={18} color={palette.textPrimary} clickable={false} />
                         </Pressable>
                     </View>
 
                     <View style={styles.searchBar}>
-                        <Icon name="Search" size={16} color="#9ca3af" />
+                        <Icon name="Search" size={16} color={palette.textTertiary} clickable={false} />
                         <TextInput
                             placeholder="Search friends or find new people"
-                            placeholderTextColor="#9ca3af"
+                            placeholderTextColor={palette.textTertiary}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                             style={styles.searchInput}
                         />
-                        {searchLoading && <ActivityIndicator size="small" color="#148a46" />}
+                        {searchLoading && <ActivityIndicator size="small" color={palette.primaryDeep} />}
                     </View>
 
-                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: spacing.xl }}>
                         {!searchQuery.trim() && (
                             <>
-                                <Text style={styles.sectionLabel}>Your Friends</Text>
+                                <AppText variant="micro" color="textTertiary" style={styles.sectionLabel}>
+                                    YOUR FRIENDS
+                                </AppText>
                                 {friendsLoading ? (
-                                    <ActivityIndicator style={{ marginTop: 20 }} color="#148a46" />
+                                    <LoadingScreen inline label="Loading friends..." />
                                 ) : friends.length === 0 ? (
-
-                                    <Text style={styles.emptyText}>{"You don't have any friends added yet."}</Text>
-
+                                    <AppText variant="bodySm" color="textSecondary" align="center" style={styles.emptyText}>
+                                        You don&apos;t have any friends added yet.
+                                    </AppText>
                                 ) : (
                                     friends.map((friend) => {
                                         const selected = isSelected(friend.friend.id);
                                         return (
                                             <Pressable
                                                 key={friend.id}
-                                                style={styles.friendRow}
+                                                style={({ pressed }) => [styles.friendRow, pressed && styles.pressed]}
                                                 onPress={() => toggleMember(friend.friend)}
                                             >
                                                 <View style={styles.avatarCircle}>
-                                                    <Text style={styles.avatarInitial}>
+                                                    <AppText variant="label" color="primaryDeep">
                                                         {friend.friend.name.charAt(0).toUpperCase()}
-                                                    </Text>
+                                                    </AppText>
                                                 </View>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.friendName}>{friend.friend.name}</Text>
-                                                    {friend.friend.email && (
-                                                        <Text style={styles.friendUsername}>@{friend.friend.email}</Text>
+                                                    <AppText variant="label" numberOfLines={1}>
+                                                        {friend.friend.name}
+                                                    </AppText>
+                                                    {!!friend.friend.email && (
+                                                        <AppText variant="micro" color="textTertiary" numberOfLines={1}>
+                                                            {friend.friend.email}
+                                                        </AppText>
                                                     )}
                                                 </View>
                                                 <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                                                    {selected ? <Icon name="Check" size={14} color="#ffffff" /> : <Icon name="UserPlus" size={14} color="#148a46" />}
+                                                    {selected && <Icon name="Check" size={13} color={palette.white} clickable={false} />}
                                                 </View>
                                             </Pressable>
                                         );
@@ -446,9 +408,13 @@ export default function AddNewGroup() {
 
                         {searchQuery.trim() !== '' && (
                             <>
-                                <Text style={styles.sectionLabel}>Results</Text>
+                                <AppText variant="micro" color="textTertiary" style={styles.sectionLabel}>
+                                    RESULTS
+                                </AppText>
                                 {combinedSearchList.length === 0 && !searchLoading ? (
-                                    <Text style={styles.emptyText}>No matching people found.</Text>
+                                    <AppText variant="bodySm" color="textSecondary" align="center" style={styles.emptyText}>
+                                        No matching people found.
+                                    </AppText>
                                 ) : (
                                     combinedSearchList.map((result) => {
                                         const requested =
@@ -458,40 +424,47 @@ export default function AddNewGroup() {
                                         return (
                                             <View key={result.user.id} style={styles.friendRow}>
                                                 <View style={styles.avatarCircle}>
-                                                    <Text style={styles.avatarInitial}>
+                                                    <AppText variant="label" color="primaryDeep">
                                                         {result.user.name.charAt(0).toUpperCase()}
-                                                    </Text>
+                                                    </AppText>
                                                 </View>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.friendName}>{result.user.name}</Text>
-                                                    {result.user.email && (
-                                                        <Text style={styles.friendUsername}>@{result.user.email}</Text>
+                                                    <AppText variant="label" numberOfLines={1}>
+                                                        {result.user.name}
+                                                    </AppText>
+                                                    {!!result.user.email && (
+                                                        <AppText variant="micro" color="textTertiary" numberOfLines={1}>
+                                                            {result.user.email}
+                                                        </AppText>
                                                     )}
                                                 </View>
-                                                <View style ={{ flexDirection: 'row', alignItems: 'center', gap: 20 , justifyContent: 'flex-end', marginRight: 10 }}>
-                                                <Pressable
-                                                    
-                                                    onPress={() => handleSendFriendRequest(result)}
-                                                    disabled={requested}
-                                                >
-                                                    {requested ? (
-                                                        <Icon name="Handshake" size={18} color="#EAB308" />
-                                                    ) : (
-                                                        <Icon name="Handshake" size={18} color="#374151" />
-                                                    )}
 
-                                                </Pressable>
-                                                <Pressable
-                                                
-                                                    onPress={() => toggleMember(result.user)}
-                                                >
-                                                    {added ? (
-                                                        <Icon name="Check" size={18} color="#148a46" />
-                                                    ) : (
-                                                        <Icon name="UserPlus" size={18} color="#374151" />
-                                                    )}
-
-                                                </Pressable>
+                                                <View style={styles.resultActions}>
+                                                    <Pressable
+                                                        onPress={() => handleSendFriendRequest(result)}
+                                                        disabled={requested}
+                                                        hitSlop={6}
+                                                        style={[styles.resultAction, requested && styles.resultActionDone]}
+                                                    >
+                                                        <Icon
+                                                            name="Handshake"
+                                                            size={16}
+                                                            color={requested ? palette.warning : palette.textSecondary}
+                                                            clickable={false}
+                                                        />
+                                                    </Pressable>
+                                                    <Pressable
+                                                        onPress={() => toggleMember(result.user)}
+                                                        hitSlop={6}
+                                                        style={[styles.resultAction, added && styles.resultActionActive]}
+                                                    >
+                                                        <Icon
+                                                            name={added ? 'Check' : 'UserPlus'}
+                                                            size={16}
+                                                            color={added ? palette.white : palette.textSecondary}
+                                                            clickable={false}
+                                                        />
+                                                    </Pressable>
                                                 </View>
                                             </View>
                                         );
@@ -502,198 +475,76 @@ export default function AddNewGroup() {
                     </ScrollView>
 
                     <View style={styles.modalFooter}>
-                        <Pressable style={styles.doneButton} onPress={() => setMembersModalVisible(false)}>
-                            <Text style={styles.doneButtonText}>
-                                Done {selectedMembers.length > 0 ? `(${selectedMembers.length})` : ''}
-                            </Text>
-                        </Pressable>
+                        <Button variant="primary" size="md" onPress={() => setMembersModalVisible(false)}>
+                            {`Done${selectedMembers.length > 0 ? ` (${selectedMembers.length})` : ''}`}
+                        </Button>
                     </View>
                 </SafeAreaView>
             </Modal>
-        </SafeAreaView>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    page: {
-        flex: 1,
-        backgroundColor: '#FFF8E7',
-    },
-    container: {
-        paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28,
-        gap: 16,
-    },
-    heroSection: {
-        width: '100%',
-    },
-    topBar: {
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: 8,
+        paddingHorizontal: layout.gutter,
+        paddingVertical: spacing.md,
     },
-    brandRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    logoCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
-    brandTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#000000',
-    },
-    menuButton: {
+    headerButton: {
         width: 40,
         height: 40,
-        borderRadius: 8,
-        backgroundColor: '#ffffff',
+        borderRadius: radius.pill,
+        backgroundColor: palette.card,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#000000',
+        ...shadows.sm,
     },
-    heroCopy: {
-        paddingHorizontal: 20,
-        paddingTop: 24,
-        gap: 4,
-    },
-    heroTitle: {
-        fontSize: 32,
-        fontWeight: '900',
-        color: '#000000',
-        letterSpacing: -0.8,
-    },
-    heroSubtitle: {
-        fontSize: 13,
-        color: '#000000',
-        fontWeight: '600',
-    },
-    card: {
-        backgroundColor: '#ffffff',
-        borderRadius: 18,
-        padding: 18,
-        marginHorizontal: 16,
-        borderWidth: 2,
-        borderColor: '#000000',
-        shadowColor: '#000000',
-        shadowOffset: { width: 5, height: 5 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 3,
-    },
-    fieldLabel: {
-        fontSize: 11,
-        color: '#000000',
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        marginBottom: 8,
-    },
-    textInput: {
-        borderWidth: 2,
-        borderColor: '#000000',
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#000000',
-        backgroundColor: '#ffffff',
-        shadowColor: '#000000',
-        shadowOffset: { width: 3, height: 3 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-    },
-    iconGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    iconWrap: {
+    intro: { gap: 2 },
+    pressed: { opacity: 0.6 },
+    fieldLabel: { marginTop: spacing.base, marginBottom: spacing.sm },
+    iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    iconOption: {
         width: 46,
         height: 46,
-        borderRadius: 12,
+        borderRadius: radius.md,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#ffffff',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
-    iconWrapActive: {
-        backgroundColor: '#C3FFD8',
-    },
-    quickActionIconWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#C3FFD8',
-        borderWidth: 2,
-        borderColor: '#000000',
-    },
-    iconOption: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#ffffff',
-        borderWidth: 2,
-        borderColor: '#000000',
+        backgroundColor: palette.bg,
+        borderWidth: 1.5,
+        borderColor: palette.border,
     },
     iconOptionActive: {
-        backgroundColor: '#C3FFD8',
+        backgroundColor: palette.primaryLight,
+        borderColor: palette.primary,
     },
     membersHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    membersCount: {
-        fontSize: 12,
-        color: '#000000',
-        fontWeight: '800',
+        marginBottom: spacing.md,
     },
     addMembersButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.md,
-        borderRadius: radius.xl,
+        borderRadius: radius.lg,
         padding: spacing.md,
-        backgroundColor: palette.card,
-        ...shadows.sm,
+        backgroundColor: palette.bg,
+        borderWidth: 1,
+        borderColor: palette.border,
     },
-    addMembersTitle: {
-        fontSize: 14,
-        fontFamily: fontFamily.bold,
-        color: palette.textPrimary,
+    addMembersIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: palette.primaryLight,
     },
-    addMembersSubtitle: {
-        fontSize: 12,
-        color: palette.textSecondary,
-        fontFamily: fontFamily.semibold,
-        marginTop: 1,
-    },
-    chipsWrap: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginTop: 14,
-    },
+    chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
     chip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -702,83 +553,22 @@ const styles = StyleSheet.create({
         borderRadius: radius.pill,
         paddingVertical: 6,
         paddingHorizontal: 12,
-        maxWidth: 160,
-    },
-    chipText: {
-        fontSize: 12,
-        fontFamily: fontFamily.bold,
-        color: palette.primaryDeep,
-        flexShrink: 1,
-    },
-    createButton: {
-        backgroundColor: palette.primary,
-        borderRadius: radius.pill,
-        paddingVertical: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...shadows.primary,
-    },
-    createButtonDisabled: {
-        backgroundColor: palette.border,
-        opacity: 0.6,
-    },
-    createButtonText: {
-        color: palette.white,
-        fontSize: 15,
-        fontFamily: fontFamily.bold,
-    },
-    footerBanner: {
-        marginHorizontal: spacing.base,
-        borderRadius: radius.xl,
-        overflow: 'hidden',
-        ...shadows.sm,
-        elevation: 3,
-    },
-    footerBannerBg: {
-        minHeight: 130,
-        justifyContent: 'flex-end',
-    },
-    footerBannerBgImage: {
-        borderRadius: radius.xl,
-    },
-    footerBannerOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(102, 204, 68, 0.15)',
-        borderRadius: radius.xl,
-    },
-    footerBannerContent: {
-        padding: 20,
-        paddingBottom: 18,
-    },
-    footerBannerTitle: {
-        fontSize: 20,
-        fontFamily: fontFamily.bold,
-        color: palette.textPrimary,
-        letterSpacing: -0.3,
-        lineHeight: 28,
+        maxWidth: 170,
     },
 
-    // Modal styles
-    modalPage: {
-        flex: 1,
-        backgroundColor: palette.bg,
-    },
+    // Modal
+    modalPage: { flex: 1, backgroundColor: palette.bg },
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 12,
-        paddingBottom: 8,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontFamily: fontFamily.bold,
-        color: palette.textPrimary,
+        paddingHorizontal: layout.gutter,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.sm,
     },
     modalCloseButton: {
-        width: 32,
-        height: 32,
+        width: 34,
+        height: 34,
         borderRadius: radius.pill,
         backgroundColor: palette.card,
         alignItems: 'center',
@@ -788,14 +578,14 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginHorizontal: 20,
-        marginTop: 8,
-        marginBottom: 12,
+        gap: spacing.sm,
+        marginHorizontal: layout.gutter,
+        marginTop: spacing.sm,
+        marginBottom: spacing.md,
         borderRadius: radius.md,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: palette.bg,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
+        backgroundColor: palette.card,
         borderWidth: 1,
         borderColor: palette.border,
     },
@@ -803,32 +593,22 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         color: palette.textPrimary,
-        fontFamily: fontFamily.semibold,
+        fontFamily: fontFamily.medium,
+        padding: 0,
     },
     sectionLabel: {
-        fontSize: 11,
-        color: palette.textSecondary,
-        fontFamily: fontFamily.bold,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        marginHorizontal: 20,
-        marginTop: 8,
-        marginBottom: 6,
+        letterSpacing: 1,
+        marginHorizontal: layout.gutter,
+        marginTop: spacing.sm,
+        marginBottom: spacing.sm,
     },
-    emptyText: {
-        fontSize: 18,
-        color: palette.textSecondary,
-        textAlign: 'center',
-        marginHorizontal: 20,
-        marginTop: 20,
-        fontFamily: fontFamily.bold,
-    },
+    emptyText: { marginHorizontal: layout.gutter, marginTop: spacing.lg },
     friendRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
+        gap: spacing.md,
+        paddingHorizontal: layout.gutter,
+        paddingVertical: spacing.md,
     },
     avatarCircle: {
         width: 40,
@@ -837,22 +617,6 @@ const styles = StyleSheet.create({
         backgroundColor: palette.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    avatarInitial: {
-        fontSize: 15,
-        fontFamily: fontFamily.bold,
-        color: palette.primaryDeep,
-    },
-    friendName: {
-        fontSize: 14,
-        fontFamily: fontFamily.bold,
-        color: palette.textPrimary,
-    },
-    friendUsername: {
-        fontSize: 12,
-        color: palette.textSecondary,
-        fontFamily: fontFamily.semibold,
-        marginTop: 1,
     },
     checkbox: {
         width: 24,
@@ -863,49 +627,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    checkboxActive: {
-        backgroundColor: palette.success,
-        borderColor: palette.success,
-    },
-    addPersonButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: palette.primaryLight,
+    checkboxActive: { backgroundColor: palette.primary, borderColor: palette.primary },
+    resultActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    resultAction: {
+        width: 34,
+        height: 34,
         borderRadius: radius.pill,
-        paddingVertical: 7,
-        paddingHorizontal: 12,
-    },
-    addPersonButtonDisabled: {
         backgroundColor: palette.bg,
-        opacity: 0.6,
-    },
-    addPersonText: {
-        fontSize: 12,
-        fontFamily: fontFamily.bold,
-        color: palette.primaryDeep,
-    },
-    addPersonTextDisabled: {
-        color: palette.textTertiary,
-    },
-    modalFooter: {
-        paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 12,
-        borderTopWidth: 1,
-        borderTopColor: palette.divider,
-    },
-    doneButton: {
-        backgroundColor: palette.primary,
-        borderRadius: radius.pill,
-        paddingVertical: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.primary,
+        borderWidth: 1,
+        borderColor: palette.border,
     },
-    doneButtonText: {
-        color: palette.white,
-        fontSize: 15,
-        fontFamily: fontFamily.bold,
+    resultActionDone: { backgroundColor: palette.warningLight, borderColor: palette.warningLight },
+    resultActionActive: { backgroundColor: palette.primary, borderColor: palette.primary },
+    modalFooter: {
+        paddingHorizontal: layout.gutter,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: palette.divider,
     },
 });

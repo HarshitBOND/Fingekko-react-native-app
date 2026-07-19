@@ -1,5 +1,6 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
+import User from '../models/User.js';
 import friendRepository from '../repositories/friendRepository.js';
 import { findByEmail, searchUsers } from '../repositories/userRepository.js';
 
@@ -98,6 +99,38 @@ router.get('/search', async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to search users" });
+  }
+});
+
+// People you might know: recent users you have no relationship with yet.
+// Same response shape as /search so clients can reuse the same rendering.
+router.get('/discover', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = await getCurrentUserId(req);
+
+    const relationships = await friendRepository.listForUser(currentUserId);
+    const connectedIds = new Set<string>([currentUserId]);
+    relationships.forEach((friendship: any) => {
+      const requesterId = friendship.requester?._id?.toString?.() || friendship.requester?.toString?.();
+      const addresseeId = friendship.addressee?._id?.toString?.() || friendship.addressee?.toString?.();
+      if (requesterId) connectedIds.add(requesterId);
+      if (addresseeId) connectedIds.add(addresseeId);
+    });
+
+    const users = await User.find({ _id: { $nin: Array.from(connectedIds) } })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    const results = users.map((user: any) => ({
+      user: serializeUser(user),
+      relationship: null,
+    }));
+
+    return res.json(results);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Failed to load suggestions' });
   }
 });
 

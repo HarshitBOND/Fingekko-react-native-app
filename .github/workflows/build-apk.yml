@@ -1,0 +1,48 @@
+name: Build and Release APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # Allow running manually
+
+jobs:
+  build:
+    name: Build Android APK & Attach to Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'fingekko-app/package-lock.json'
+
+      - name: 📦 Install dependencies
+        working-directory: fingekko-app
+        run: npm ci
+
+      - name: 🚀 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🛠 Build APK via EAS
+        working-directory: fingekko-app
+        # This will trigger EAS cloud build, wait for completion, and download the APK to fingekko-app/fingekko.apk
+        run: eas build --platform android --profile production --non-interactive --output=./fingekko.apk
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+
+      - name: 📤 Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'release'
+        with:
+          files: fingekko-app/fingekko.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

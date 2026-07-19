@@ -5,7 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -131,6 +131,50 @@ function useFriends() {
     declineRequest,
     removeFriend,
   };
+}
+
+// "People you might know" — recent users you have no connection with yet,
+// served by /api/friends/discover. Powers the horizontal discover rail.
+function useDiscover() {
+  const { getToken, isSignedIn } = useAuth();
+  const [suggestions, setSuggestions] = useState<FriendSearchResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [requestedEmails, setRequestedEmails] = useState<Set<string>>(new Set());
+
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  const loadSuggestions = useCallback(async () => {
+    if (!isSignedIn) return;
+    try {
+      const token = await getTokenRef.current();
+      if (!token) return;
+      const response = await apiRequest<FriendSearchResponse[]>({
+        method: 'get',
+        url: '/api/friends/discover',
+        token,
+      });
+      setSuggestions(response ?? []);
+    } catch (error) {
+      console.warn('Error loading suggestions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [isSignedIn]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSuggestions();
+    }, [loadSuggestions])
+  );
+
+  const markRequested = useCallback((email: string) => {
+    setRequestedEmails((prev) => new Set(prev).add(email));
+  }, []);
+
+  return { suggestions, loading, requestedEmails, markRequested };
 }
 
 function useFriendSearch(onSuccess: () => Promise<void>) {
@@ -338,6 +382,51 @@ const SearchResultCard = React.memo(({
 });
 SearchResultCard.displayName = 'SearchResultCard';
 
+// Instagram-style "suggested for you" profile card — lives in the horizontal
+// discover rail, so it's taller than it is wide and swipes left/right.
+const DiscoverCard = React.memo(({
+  result,
+  requested,
+  onAdd,
+  disabled = false,
+}: {
+  result: FriendSearchResponse;
+  requested: boolean;
+  onAdd: (email: string) => void;
+  disabled?: boolean;
+}) => (
+  <View style={styles.discoverCard}>
+    <View style={styles.discoverAvatar}>
+      <AppText variant="h2" color="primaryDeep" weight="extrabold">
+        {getInitials(result.user.name)}
+      </AppText>
+    </View>
+    <AppText variant="label" align="center" numberOfLines={1} style={styles.discoverName}>
+      {result.user.name}
+    </AppText>
+    <AppText variant="micro" color="textTertiary" align="center" numberOfLines={1}>
+      {result.user.email}
+    </AppText>
+    <PressableScale
+      style={[styles.discoverAddButton, requested && styles.discoverRequestedButton, disabled && styles.buttonDisabled]}
+      onPress={() => onAdd(result.user.email)}
+      disabled={requested || disabled}
+      accessibilityLabel={requested ? 'Request sent' : `Add ${result.user.name} as friend`}
+    >
+      <Icon
+        name={requested ? 'Handshake' : 'UserPlus'}
+        size={13}
+        color={requested ? palette.textSecondary : palette.white}
+        clickable={false}
+      />
+      <AppText variant="micro" weight="bold" style={{ color: requested ? palette.textSecondary : palette.white }}>
+        {requested ? 'Requested' : 'Add friend'}
+      </AppText>
+    </PressableScale>
+  </View>
+));
+DiscoverCard.displayName = 'DiscoverCard';
+
 const SearchBar = React.memo(({
   value,
   onChange,
@@ -407,6 +496,13 @@ export default function FriendsScreen() {
     requestLoading,
     sendRequest,
   } = useFriendSearch(loadFriends);
+
+  const { suggestions, loading: discoverLoading, requestedEmails, markRequested } = useDiscover();
+
+  const handleDiscoverAdd = useCallback(async (email: string) => {
+    await sendRequest(email);
+    markRequested(email);
+  }, [sendRequest, markRequested]);
 
   const renderFriendItem = useCallback((item: FriendRelationship) => (
     <FriendCard
@@ -487,6 +583,44 @@ export default function FriendsScreen() {
           </AppText>
         ) : null}
       </Card>
+
+      {/* Discover rail — swipe through people on FinGekko you haven't met yet */}
+      {(discoverLoading || suggestions.length > 0) && (
+        <View style={styles.sectionBlock}>
+          <View style={styles.discoverHeader}>
+            <AppText variant="title" color="textPrimary" weight="bold">
+              People you might know
+            </AppText>
+            <AppText variant="micro" color="textTertiary">
+              Swipe to explore
+            </AppText>
+          </View>
+          {discoverLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={palette.primaryDeep} />
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.discoverRail}
+              decelerationRate="fast"
+              snapToInterval={152}
+              snapToAlignment="start"
+            >
+              {suggestions.map((result) => (
+                <DiscoverCard
+                  key={result.user.id}
+                  result={result}
+                  requested={requestedEmails.has(result.user.email)}
+                  onAdd={handleDiscoverAdd}
+                  disabled={requestLoading[result.user.email]}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
 
       <FriendSection
         title="Incoming requests"
@@ -673,5 +807,55 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+
+  // Discover rail
+  discoverHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  discoverRail: {
+    gap: spacing.md,
+    paddingVertical: 2,
+    paddingRight: spacing.base,
+  },
+  discoverCard: {
+    width: 140,
+    alignItems: 'center',
+    backgroundColor: palette.card,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.sm,
+    gap: 3,
+    ...shadows.sm,
+  },
+  discoverAvatar: {
+    width: 62,
+    height: 62,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  discoverName: {
+    maxWidth: 120,
+  },
+  discoverAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: palette.primary,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: spacing.sm,
+  },
+  discoverRequestedButton: {
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 });

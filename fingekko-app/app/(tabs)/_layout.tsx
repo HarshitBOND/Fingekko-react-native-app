@@ -109,15 +109,18 @@ export default function TabLayout() {
         options={{ tabBarIcon: ({ focused }) => <TabIcon name="Target" label="Goals" focused={focused} /> }}
       />
 
+      {/* Split replaces the old Profile tab — profile is reachable from the
+          avatar and the side menu, so a tab for it was a duplicate. */}
       <Tabs.Screen
-        name="profile"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="User" label="Profile" focused={focused} /> }}
+        name="YourGroups"
+        options={{ tabBarIcon: ({ focused }) => <TabIcon name="Users" label="Split" focused={focused} /> }}
       />
 
-      {/* ─── Hidden routes (navigable, not shown in bar) — unchanged ─── */}
+      {/* ─── Hidden routes (navigable, not shown in bar) ─── */}
+      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="quests" options={{ href: null }} />
       <Tabs.Screen name="safe-to-spend" options={{ href: null }} />
       <Tabs.Screen name="AddNewExpense" options={{ href: null }} />
-      <Tabs.Screen name="YourGroups" options={{ href: null }} />
       <Tabs.Screen name="Friends" options={{ href: null }} />
       <Tabs.Screen name="NonGroupExpenses" options={{ href: null }} />
       <Tabs.Screen name="GroupExpenses" options={{ href: null }} />

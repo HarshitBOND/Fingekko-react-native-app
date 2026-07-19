@@ -1,17 +1,21 @@
 import { useAuth, useUser } from '@clerk/clerk-expo';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
-import { apiRequest } from '../../utils/api';
-import ConfirmDialog from "../../components/ConfirmDialog";
-import Icon from '../../components/ui/Icon';
-import ScreenContainer from '../../components/ui/ScreenContainer';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import Navbar from '../../components/Navbar';
 import AppText from '../../components/ui/AppText';
 import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import Icon from '../../components/ui/Icon';
+import LoadingScreen from '../../components/ui/LoadingScreen';
+import PressableScale from '../../components/ui/PressableScale';
+import ScreenContainer from '../../components/ui/ScreenContainer';
 import Toast from '../../components/ui/Toast';
 import { useToast } from '../../hooks/useToast';
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
+import { layout, palette, radius, shadows, spacing } from '../../constants/design';
+import { apiRequest } from '../../utils/api';
 
 const ICONS = {
     Plane: 'Plane',
@@ -34,424 +38,759 @@ type GroupItem = {
     amountColor: string;
 };
 
-type QuickAction = {
+// Shapes served by /api/expenses (see server serializeExpense).
+type ExpenseUser = { id: string; name: string; email: string } | null;
+type ExpenseItem = {
     id: string;
-    title: string;
-    subtitle: string;
-    icon: string;
-    href: '/(tabs)/Friends' | '/(tabs)/group/AddNewGroup' | '/(tabs)/YourGroups' | '/(tabs)/NonGroupExpenses' | '/(tabs)/insights';
+    groupId: string | null;
+    groupName: string | null;
+    description: string;
+    amount: number;
+    expenseDate: string;
+    createdAt: string;
+    createdBy: ExpenseUser;
+    paidBy: { userId: ExpenseUser; amount: number }[];
+    participants: { userId: ExpenseUser; amount: number; settled: boolean }[];
+    netBalance: number;
 };
 
-const QUICK_ACTIONS: QuickAction[] = [
-    {
-        id: 'add-expense',
-        title: 'Create New Group',
-        subtitle: 'Create a new group',
-        icon: 'Plus',
-        href: '/(tabs)/group/AddNewGroup',
-    },
-    {
-        id: 'view-insights',
-        title: 'View Full Insights',
-        subtitle: 'Check spending patterns',
-        icon: 'TrendingUp',
-        href: '/(tabs)/insights',
-    },
-];
+type FriendRow = {
+    id: string; // db user id — what FriendSplits expects as friendId
+    name: string;
+    email: string;
+    friendshipId: string;
+};
 
+type FriendsApiResponse = {
+    friends: { id: string; friend: { id: string; name: string; email: string } }[];
+};
+
+type SplitTab = 'groups' | 'friends' | 'activity';
+
+const EMPTY_GROUPS: GroupItem[] = [];
+const EMPTY_EXPENSES: ExpenseItem[] = [];
+const EMPTY_FRIENDS: FriendRow[] = [];
+
+const inr = (n: number) =>
+    `₹${Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function amountColorFor(raw: string) {
+    if (raw === '#eb5a4f') return palette.danger;
+    if (raw === '#148a46') return palette.success;
+    return palette.textSecondary;
+}
+
+const getInitials = (name: string): string =>
+    name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('') || '?';
+
+function timeAgo(iso: string): string {
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return '';
+    const days = Math.floor((Date.now() - then) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return `${days} days ago`;
+    const months = Math.floor(days / 30);
+    return `${months} month${months === 1 ? '' : 's'} ago`;
+}
 
 export default function YourGroups() {
     const router = useRouter();
-    const [groups, setGroups] = useState<GroupItem[]>([]);
-
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-    const [deletingGroup, setDeletingGroup] = useState(false);
-    const { toast, showToast, dismissToast } = useToast();
-
     const { user } = useUser();
     const { getToken } = useAuth();
+    const insets = useSafeAreaInsets();
+    const { toast, showToast, dismissToast } = useToast();
 
-    const fetchGroups = async () => {
+    // Sit clear of the floating tab bar: same inset math the bar itself uses
+    // in (tabs)/_layout, plus a gap — a fixed constant sinks under the bar on
+    // devices with tall system navigation.
+    const fabBottom =
+        (insets.bottom > 0 ? insets.bottom : layout.navBarBottomInset) +
+        layout.navBarHeight +
+        spacing.base;
 
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return;
-        }
+    const [tab, setTab] = useState<SplitTab>('friends');
+    const [groups, setGroups] = useState<GroupItem[]>(EMPTY_GROUPS);
+    const [expenses, setExpenses] = useState<ExpenseItem[]>(EMPTY_EXPENSES);
+    const [friendRows, setFriendRows] = useState<FriendRow[]>(EMPTY_FRIENDS);
+    const [myDbId, setMyDbId] = useState('');
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [showSettled, setShowSettled] = useState(false);
+
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+    const [leavingGroup, setLeavingGroup] = useState(false);
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [deletingGroup, setDeletingGroup] = useState(false);
+
+    const getTokenRef = useRef(getToken);
+    useEffect(() => {
+        getTokenRef.current = getToken;
+    }, [getToken]);
+
+    const fetchAll = useCallback(async () => {
         try {
-            const response = await apiRequest<GroupItem[]>({
-                method: 'get',
-                url: '/api/groups',
-                token,
-            });
-            setGroups(response);
+            const token = await getTokenRef.current();
+            if (!token) return;
+            const [groupsRes, expensesRes, friendsRes, meRes] = await Promise.all([
+                apiRequest<GroupItem[]>({ method: 'get', url: '/api/groups', token }),
+                apiRequest<{ expenses: ExpenseItem[] }>({ method: 'get', url: '/api/expenses', token }),
+                apiRequest<FriendsApiResponse>({ method: 'get', url: '/api/friends', token }),
+                apiRequest<any>('/api/me', {}, token),
+            ]);
+            setGroups(groupsRes ?? EMPTY_GROUPS);
+            setExpenses(expensesRes?.expenses ?? EMPTY_EXPENSES);
+            setFriendRows(
+                (friendsRes?.friends ?? []).map((f) => ({
+                    id: f.friend.id,
+                    name: f.friend.name,
+                    email: f.friend.email,
+                    friendshipId: f.id,
+                }))
+            );
+            const me = meRes?.user ?? meRes;
+            setMyDbId(me?._id?.toString?.() ?? me?.id ?? '');
         } catch (error) {
-            console.error('Error fetching groups:', error);
+            console.warn('Error fetching split data:', error);
         }
-    };
+    }, []);
 
-    // Refresh on focus so groups created/joined elsewhere show up immediately.
     useFocusEffect(
         useCallback(() => {
-            fetchGroups();
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [])
+            let active = true;
+            fetchAll().finally(() => {
+                if (active) setInitialLoading(false);
+            });
+            return () => {
+                active = false;
+            };
+        }, [fetchAll])
     );
 
-    const leaveGroup = async (groupId: string) => {
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return;
-        }
-        try {
-            await apiRequest({
-                method: 'post',
-                url: `/api/groups/${groupId}/leave`,
-                token,
-            });
-            // Refresh the groups list after leaving a group
-            fetchGroups();
-        } catch (error) {
-            console.error('Error leaving group:', error);
-        }
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchAll();
+        setRefreshing(false);
     };
 
     const deleteGroup = async (groupId: string) => {
-        const token = await getToken();
-        if (!token) {
-            console.error('No token available for API request.');
-            return false;
-        }
         try {
-            await apiRequest({
-                method: 'delete',
-                url: `/api/groups/${groupId}`,
-                token,
-            });
-            // Refresh the groups list after deleting a group
-            fetchGroups();
+            const token = await getTokenRef.current();
+            if (!token) return false;
+            await apiRequest({ method: 'delete', url: `/api/groups/${groupId}`, token });
+            await fetchAll();
             return true;
         } catch (error) {
-            console.error('Error deleting group:', error);
+            console.warn('Error deleting group:', error);
             return false;
         }
     };
 
-    return (
-        <ScreenContainer
-            contentStyle={{ gap: spacing.lg }}
-            header={
-                <View style={styles.header}>
-                    <Pressable style={styles.headerButton} onPress={() => router.back()}>
-                        <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
-                    </Pressable>
-                    <AppText variant="title" color="textPrimary" weight="bold">
-                        Your Groups
-                    </AppText>
-                    <View style={{ width: 40 }} />
-                </View>
+    const leaveGroup = async (groupId: string) => {
+        try {
+            const token = await getTokenRef.current();
+            if (!token) return false;
+            await apiRequest({ method: 'post', url: `/api/groups/${groupId}/leave`, token });
+            await fetchAll();
+            return true;
+        } catch (error) {
+            console.warn('Error leaving group:', error);
+            return false;
+        }
+    };
+
+    // Overall position across every expense — the server has already computed
+    // each expense's net for the current user, so this is just a sum.
+    const overall = useMemo(
+        () => expenses.reduce((sum, exp) => sum + (exp.netBalance ?? 0), 0),
+        [expenses]
+    );
+
+    // Pairwise balances, mirroring the server's settle-aware logic: if you paid,
+    // every unsettled other participant owes you their share; if someone else
+    // paid and your share is unsettled, you owe the payer.
+    const friendBalances = useMemo(() => {
+        const map = new Map<string, number>();
+        if (!myDbId) return map;
+
+        expenses.forEach((exp) => {
+            const iPaid = exp.paidBy.some((p) => p.userId?.id === myDbId);
+            if (iPaid) {
+                exp.participants
+                    .filter((p) => p.userId && p.userId.id !== myDbId && !p.settled)
+                    .forEach((p) => {
+                        const id = p.userId!.id;
+                        map.set(id, (map.get(id) ?? 0) + p.amount);
+                    });
+            } else {
+                const mine = exp.participants.find((p) => p.userId?.id === myDbId);
+                const payer = exp.paidBy[0]?.userId;
+                if (mine && !mine.settled && payer && payer.id !== myDbId) {
+                    map.set(payer.id, (map.get(payer.id) ?? 0) - mine.amount);
+                }
             }
-        >
-            <View style={styles.heroSection}>
-                <LinearGradient
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    colors={['rgba(102, 204, 68, 0.16)', 'rgba(102, 204, 68, 0.04)', 'transparent']}
-                    locations={[0, 0.35, 1]}
-                    style={[
-                        StyleSheet.absoluteFill,
-                        {
-                            width: 240,
-                            height: 240,
-                            top: -70,
-                            left: -70,
-                            borderRadius: 200,
-                        },
-                    ]}
+        });
+        return map;
+    }, [expenses, myDbId]);
+
+    const { activeFriends, settledFriends } = useMemo(() => {
+        const active: (FriendRow & { balance: number })[] = [];
+        const settled: (FriendRow & { balance: number })[] = [];
+        friendRows.forEach((f) => {
+            const balance = friendBalances.get(f.id) ?? 0;
+            if (Math.abs(balance) > 0.009) active.push({ ...f, balance });
+            else settled.push({ ...f, balance: 0 });
+        });
+        // Biggest debts first — the row you most need to act on is on top.
+        active.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+        return { activeFriends: active, settledFriends: settled };
+    }, [friendRows, friendBalances]);
+
+    const recentActivity = useMemo(
+        () =>
+            [...expenses].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            ),
+        [expenses]
+    );
+
+    if (initialLoading) {
+        return <LoadingScreen label="Loading your splits..." />;
+    }
+
+    const overallLabel =
+        overall > 0.009 ? 'you are owed' : overall < -0.009 ? 'you owe' : "you're all settled up";
+    const overallColor =
+        overall > 0.009 ? palette.success : overall < -0.009 ? palette.danger : palette.textSecondary;
+
+    const goToFriend = (friend: FriendRow) =>
+        router.push({
+            pathname: '/(tabs)/FriendSplits',
+            params: { friendId: friend.id, friendName: friend.name },
+        });
+
+    const renderBalanceCell = (balance: number) => {
+        if (Math.abs(balance) < 0.01) {
+            return (
+                <AppText variant="micro" color="textTertiary">
+                    settled up
+                </AppText>
+            );
+        }
+        const owed = balance > 0;
+        return (
+            <View style={{ alignItems: 'flex-end' }}>
+                <AppText variant="micro" style={{ color: owed ? palette.success : palette.danger }}>
+                    {owed ? 'owes you' : 'you owe'}
+                </AppText>
+                <AppText variant="label" style={{ color: owed ? palette.success : palette.danger }}>
+                    {inr(balance)}
+                </AppText>
+            </View>
+        );
+    };
+
+    return (
+        <View style={{ flex: 1 }}>
+            <ScreenContainer
+                contentStyle={{ gap: spacing.base }}
+                header={
+                    <View style={{ paddingHorizontal: layout.gutter }}>
+                        <Navbar />
+                    </View>
+                }
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={palette.primaryDeep} />
+                }
+            >
+                {/* Title + quick reach into Friends management */}
+                <View style={styles.titleRow}>
+                    <AppText variant="h1">Split</AppText>
+                    <Pressable
+                        style={styles.headerIconBtn}
+                        onPress={() => router.push('/(tabs)/Friends')}
+                        hitSlop={6}
+                        accessibilityLabel="Manage friends"
+                    >
+                        <Icon name="UserPlus" size={18} color={palette.textPrimary} clickable={false} />
+                    </Pressable>
+                </View>
+
+                {/* Overall banner — the Splitwise anchor line */}
+                <View style={styles.overallRow}>
+                    <AppText variant="body" color="textSecondary">
+                        Overall,{' '}
+                        <AppText variant="body" weight="bold" style={{ color: overallColor }}>
+                            {overallLabel}
+                            {Math.abs(overall) > 0.009 ? ` ${inr(overall)}` : ''}
+                        </AppText>
+                    </AppText>
+                </View>
+
+                {/* Segmented tabs */}
+                <View style={styles.segmented}>
+                    {(
+                        [
+                            { key: 'groups', label: 'Groups' },
+                            { key: 'friends', label: 'Friends' },
+                            { key: 'activity', label: 'Activity' },
+                        ] as { key: SplitTab; label: string }[]
+                    ).map((option) => {
+                        const active = tab === option.key;
+                        return (
+                            <Pressable
+                                key={option.key}
+                                style={[styles.segment, active && styles.segmentActive]}
+                                onPress={() => setTab(option.key)}
+                            >
+                                <AppText
+                                    variant="label"
+                                    style={{ color: active ? palette.primaryDeep : palette.textTertiary }}
+                                >
+                                    {option.label}
+                                </AppText>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+
+                {/* ─── Groups ─── */}
+                {tab === 'groups' &&
+                    (groups.length === 0 ? (
+                        <EmptyState
+                            icon="Users"
+                            title="No groups yet"
+                            subtitle="Create a group to split expenses with flatmates, trips or teams."
+                            actionLabel="Create a group"
+                            onAction={() => router.push('/(tabs)/group/AddNewGroup')}
+                        />
+                    ) : (
+                        <Card variant="elevated" padding={0} style={styles.listCard}>
+                            {groups.map((item, index) => (
+                                <Pressable
+                                    key={item.id}
+                                    style={({ pressed }) => [
+                                        styles.row,
+                                        index !== groups.length - 1 && styles.rowDivider,
+                                        pressed && styles.rowPressed,
+                                    ]}
+                                    onPress={() =>
+                                        router.push({ pathname: '/(tabs)/group/[groupId]', params: { groupId: item.id } })
+                                    }
+                                >
+                                    <View style={styles.groupIcon}>
+                                        <Icon
+                                            name={ICONS[item.icon as keyof typeof ICONS] ?? 'Users'}
+                                            size={20}
+                                            color={palette.primaryDeep}
+                                            clickable={false}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1, gap: 2 }}>
+                                        <AppText variant="label" numberOfLines={1}>
+                                            {item.name}
+                                        </AppText>
+                                        <AppText variant="micro" color="textTertiary">
+                                            {item.members.length} {item.members.length === 1 ? 'member' : 'members'}
+                                        </AppText>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <AppText variant="micro" style={{ color: amountColorFor(item.amountColor) }}>
+                                            {item.amountLabel.toLowerCase()}
+                                        </AppText>
+                                        {item.amountLabel !== 'You are settled up' && (
+                                            <AppText variant="label" style={{ color: amountColorFor(item.amountColor) }}>
+                                                {item.amount}
+                                            </AppText>
+                                        )}
+                                    </View>
+                                    {item.createdBy === user?.id ? (
+                                        <Pressable
+                                            onPress={() => {
+                                                setSelectedGroupId(item.id);
+                                                setShowDeleteDialog(true);
+                                            }}
+                                            hitSlop={6}
+                                            style={styles.deleteBtn}
+                                            accessibilityLabel={`Delete ${item.name}`}
+                                        >
+                                            <Icon name="Trash" size={13} color={palette.danger} clickable={false} />
+                                        </Pressable>
+                                    ) : (
+                                        // The creator can't leave their own group (server rejects it),
+                                        // so this is the exit for everyone else.
+                                        <Pressable
+                                            onPress={() => {
+                                                setSelectedGroupId(item.id);
+                                                setShowLeaveDialog(true);
+                                            }}
+                                            hitSlop={6}
+                                            style={styles.leaveBtn}
+                                            accessibilityLabel={`Leave ${item.name}`}
+                                        >
+                                            <Icon name="LogOut" size={13} color={palette.textSecondary} clickable={false} />
+                                        </Pressable>
+                                    )}
+                                </Pressable>
+                            ))}
+                            <Pressable
+                                style={({ pressed }) => [styles.row, styles.newGroupRow, pressed && styles.rowPressed]}
+                                onPress={() => router.push('/(tabs)/group/AddNewGroup')}
+                            >
+                                <View style={[styles.groupIcon, styles.newGroupIcon]}>
+                                    <Icon name="Plus" size={18} color={palette.primaryDeep} clickable={false} />
+                                </View>
+                                <AppText variant="label" color="primaryDeep">
+                                    Start a new group
+                                </AppText>
+                            </Pressable>
+                        </Card>
+                    ))}
+
+                {/* ─── Friends ─── */}
+                {tab === 'friends' && (
+                    <>
+                        {friendRows.length === 0 ? (
+                            <EmptyState
+                                icon="UserPlus"
+                                title="No friends yet"
+                                subtitle="Add friends to split expenses one-on-one, outside of groups."
+                                actionLabel="Find friends"
+                                onAction={() => router.push('/(tabs)/Friends')}
+                            />
+                        ) : (
+                            <>
+                                <Card variant="elevated" padding={0} style={styles.listCard}>
+                                    {activeFriends.map(
+                                        (friend, index) => (
+                                            <Pressable
+                                                key={friend.id}
+                                                style={({ pressed }) => [
+                                                    styles.row,
+                                                    index !== activeFriends.length - 1 && styles.rowDivider,
+                                                    pressed && styles.rowPressed,
+                                                ]}
+                                                onPress={() => goToFriend(friend)}
+                                            >
+                                                <View style={styles.avatar}>
+                                                    <AppText variant="label" color="primaryDeep">
+                                                        {getInitials(friend.name)}
+                                                    </AppText>
+                                                </View>
+                                                <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>
+                                                    {friend.name}
+                                                </AppText>
+                                                {renderBalanceCell(friend.balance)}
+                                            </Pressable>
+                                        )
+                                    )}
+                                    {activeFriends.length === 0 && (
+                                        <View style={styles.allSettled}>
+                                            <Icon name="Check" size={18} color={palette.success} clickable={false} />
+                                            <AppText variant="caption" color="textSecondary">
+                                                You&apos;re settled up with all your friends.
+                                            </AppText>
+                                        </View>
+                                    )}
+                                </Card>
+
+                                {settledFriends.length > 0 && (
+                                    <>
+                                        {!showSettled ? (
+                                            <PressableScale style={styles.settledToggle} onPress={() => setShowSettled(true)}>
+                                                <AppText variant="caption" color="primaryDeep">
+                                                    Show {settledFriends.length} settled-up friend
+                                                    {settledFriends.length === 1 ? '' : 's'}
+                                                </AppText>
+                                            </PressableScale>
+                                        ) : (
+                                            <>
+                                                <Card variant="flat" padding={0} style={styles.listCard}>
+                                                    {settledFriends.map((friend, index) => (
+                                                        <Pressable
+                                                            key={friend.id}
+                                                            style={({ pressed }) => [
+                                                                styles.row,
+                                                                index !== settledFriends.length - 1 && styles.rowDivider,
+                                                                pressed && styles.rowPressed,
+                                                            ]}
+                                                            onPress={() => goToFriend(friend)}
+                                                        >
+                                                            <View style={styles.avatar}>
+                                                                <AppText variant="label" color="primaryDeep">
+                                                                    {getInitials(friend.name)}
+                                                                </AppText>
+                                                            </View>
+                                                            <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>
+                                                                {friend.name}
+                                                            </AppText>
+                                                            <AppText variant="micro" color="textTertiary">
+                                                                settled up
+                                                            </AppText>
+                                                        </Pressable>
+                                                    ))}
+                                                </Card>
+                                                <PressableScale style={styles.settledToggle} onPress={() => setShowSettled(false)}>
+                                                    <AppText variant="caption" color="textSecondary">
+                                                        Hide settled-up friends
+                                                    </AppText>
+                                                </PressableScale>
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </>
+                )}
+
+                {/* ─── Activity ─── */}
+                {tab === 'activity' &&
+                    (recentActivity.length === 0 ? (
+                        <EmptyState
+                            icon="StickyNote"
+                            title="No activity yet"
+                            subtitle="Split expenses will show up here as they happen."
+                        />
+                    ) : (
+                        <Card variant="elevated" padding={0} style={styles.listCard}>
+                            {recentActivity.slice(0, 25).map((exp, index) => {
+                                const isMine = exp.createdBy?.id === myDbId;
+                                const actor = isMine ? 'You' : exp.createdBy?.name?.split(' ')[0] ?? 'Someone';
+                                const net = exp.netBalance ?? 0;
+                                return (
+                                    <View
+                                        key={exp.id}
+                                        style={[styles.activityRow, index !== Math.min(recentActivity.length, 25) - 1 && styles.rowDivider]}
+                                    >
+                                        <View style={styles.activityIcon}>
+                                            <Icon name="StickyNote" size={16} color={palette.primaryDeep} clickable={false} />
+                                        </View>
+                                        <View style={{ flex: 1, gap: 2 }}>
+                                            <AppText variant="caption" color="textPrimary">
+                                                <AppText variant="caption" weight="bold">
+                                                    {actor}
+                                                </AppText>{' '}
+                                                added &quot;{exp.description}&quot;
+                                                {exp.groupName ? ` in ${exp.groupName}` : ''}
+                                            </AppText>
+                                            {Math.abs(net) > 0.009 ? (
+                                                <AppText
+                                                    variant="micro"
+                                                    style={{ color: net > 0 ? palette.success : palette.danger }}
+                                                >
+                                                    {net > 0 ? 'You get back' : 'You owe'} {inr(net)}
+                                                </AppText>
+                                            ) : (
+                                                <AppText variant="micro" color="textTertiary">
+                                                    Not involving you
+                                                </AppText>
+                                            )}
+                                            <AppText variant="micro" color="textTertiary">
+                                                {timeAgo(exp.createdAt)}
+                                            </AppText>
+                                        </View>
+                                        <AppText variant="label" color="textSecondary">
+                                            {inr(exp.amount)}
+                                        </AppText>
+                                    </View>
+                                );
+                            })}
+                        </Card>
+                    ))}
+
+                <ConfirmDialog
+                    visible={showDeleteDialog}
+                    title="Delete group"
+                    message="Are you sure you want to permanently delete this group? This action cannot be undone."
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    destructive
+                    loading={deletingGroup}
+                    onCancel={() => {
+                        setShowDeleteDialog(false);
+                        setSelectedGroupId(null);
+                    }}
+                    onConfirm={async () => {
+                        if (!selectedGroupId) return;
+                        setDeletingGroup(true);
+                        const ok = await deleteGroup(selectedGroupId);
+                        setDeletingGroup(false);
+                        setShowDeleteDialog(false);
+                        setSelectedGroupId(null);
+                        showToast(
+                            ok
+                                ? { title: 'Group deleted', tone: 'info', duration: 2200 }
+                                : { title: 'Could not delete group', message: 'Please try again.', tone: 'error' }
+                        );
+                    }}
                 />
 
-                <View style={styles.heroCopy}>
-                    <AppText variant="display" color="textPrimary" weight="bold">
-                        All your groups
-                    </AppText>
-                    <AppText variant="caption" color="textSecondary">
-                        Keep every split in one place.
-                    </AppText>
-                </View>
-            </View>
+                <ConfirmDialog
+                    visible={showLeaveDialog}
+                    title="Leave group"
+                    message="You'll stop seeing this group and its expenses. Any balances you have will still need settling."
+                    confirmText="Leave"
+                    cancelText="Cancel"
+                    destructive
+                    loading={leavingGroup}
+                    onCancel={() => {
+                        setShowLeaveDialog(false);
+                        setSelectedGroupId(null);
+                    }}
+                    onConfirm={async () => {
+                        if (!selectedGroupId) return;
+                        setLeavingGroup(true);
+                        const ok = await leaveGroup(selectedGroupId);
+                        setLeavingGroup(false);
+                        setShowLeaveDialog(false);
+                        setSelectedGroupId(null);
+                        showToast(
+                            ok
+                                ? { title: 'You left the group', tone: 'info', duration: 2200 }
+                                : { title: 'Could not leave group', message: 'Please try again.', tone: 'error' }
+                        );
+                    }}
+                />
 
-            <Card variant="elevated" padding={0} style={styles.groupsCard}>
-                {groups.length === 0 ? (
-                    <View style={{ padding: 24, justifyContent: 'center', alignItems: 'center' }}>
-                        <AppText variant="caption" color="textTertiary">
-                            You are not part of any groups yet.
-                        </AppText>
-                    </View>
-                ) : (
-                    groups.map((item, index) => (
-                        <Pressable
-                            key={item.id}
-                            style={[styles.groupRow, index !== groups.length - 1 && styles.divider]}
-                            onPress={() =>
-                                router.push({
-                                    pathname: "/(tabs)/group/[groupId]",
-                                    params: {
-                                        groupId: item.id,
-                                    },
-                                })
-                            }
-                        >
-                            <View style={styles.groupIconWrap}>
-                                {(() => {
-                                    const iconName = ICONS[item.icon as keyof typeof ICONS] ?? 'Users';
-                                    return <Icon name={iconName} size={20} color={palette.primaryDeep} />;
-                                })()}
-                            </View>
-                            <View style={styles.groupTextWrap}>
-                                <AppText variant="bodySm" color="textPrimary" weight="bold">
-                                    {item.name}
-                                </AppText>
-                                <AppText variant="micro" color="textSecondary">
-                                    {item.members.length} {item.members.length === 1 ? 'member' : 'members'}
-                                </AppText>
-                            </View>
-                            <View style={styles.groupRight}>
-                                <AppText variant="micro" color="textSecondary" weight="bold">
-                                    {item.amountLabel}
-                                </AppText>
-                                <AppText
-                                    variant="bodySm"
-                                    weight="bold"
-                                    style={{
-                                        color: item.amountColor === '#eb5a4f' ? palette.danger : (item.amountColor === '#148a46' ? palette.success : palette.textPrimary)
-                                    }}
-                                >
-                                    {item.amount}
-                                </AppText>
-                            </View>
-                            {item.createdBy === user?.id && (
-                                <Pressable
-                                    onPress={() => {
-                                        setSelectedGroupId(item.id);
-                                        setShowDeleteDialog(true);
-                                    }}
-                                    style={{ marginLeft: 8 }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 8, padding: 6, backgroundColor: 'rgba(235,90,79,0.08)' }}>
-                                        <Icon name="Trash" size={14} color={palette.danger} />
-                                    </View>
-                                </Pressable>
-                            )}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 8, padding: 6, backgroundColor: palette.primaryLight, marginLeft: 8 }}>
-                                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} />
-                            </View>
-                        </Pressable>
-                    ))
-                )}
-            </Card>
+                <Toast toast={toast} onDismiss={dismissToast} />
+            </ScreenContainer>
 
-            <Pressable
-                style={styles.insightsButton}
-                onPress={() => router.push('/(tabs)/insights')}
-            >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Icon name="TrendingUp" size={20} color={palette.primaryDeep} />
-                    <AppText variant="bodySm" color="primaryDeep" weight="bold">
-                        View Full Insights
-                    </AppText>
-                </View>
-                <Icon name="ChevronRight" size={18} color={palette.primaryDeep} />
-            </Pressable>
-
-            <View style={styles.quickActionsGrid}>
-                {QUICK_ACTIONS.map((action) => {
-                    return (
-                        <Card
-                            key={action.id}
-                            variant="elevated"
-                            padding={16}
-                            style={styles.quickActionCard}
-                            onPress={() => router.push(action.href)}
-                        >
-                            <View style={styles.quickActionIconWrap}>
-                                <Icon name={action.icon} size={22} color={palette.primaryDeep} />
-                            </View>
-                            <AppText variant="bodySm" color="textPrimary" weight="bold" style={styles.quickActionTitle}>
-                                {action.title}
-                              </AppText>
-                            <AppText variant="micro" color="textSecondary" style={styles.quickActionSubtitle}>
-                                {action.subtitle}
-                            </AppText>
-                        </Card>
-                    );
-                })}
-            </View>
-
-            <View style={styles.footerBanner}>
-                <ImageBackground
-                    source={require('../../assets/images/bgadd.png')}
-                    style={styles.footerBannerBg}
-                    resizeMode="cover"
-                    imageStyle={styles.footerBannerBgImage}
-                >
-                    <View style={styles.footerBannerOverlay} />
-                    <View style={styles.footerBannerContent}>
-                        <AppText variant="title" color="textPrimary" weight="bold">
-                            Stay organized.
-                        </AppText>
-                        <AppText variant="title" color="textPrimary" weight="bold">
-                            Stay settled up.
-                        </AppText>
-                    </View>
-                </ImageBackground>
-            </View>
-
-            <ConfirmDialog
-                visible={showDeleteDialog}
-                title="Delete Group"
-                message="Are you sure you want to permanently delete this group? This action cannot be undone."
-                confirmText="Delete"
-                cancelText="Cancel"
-                destructive
-                loading={deletingGroup}
-                onCancel={() => {
-                    setShowDeleteDialog(false);
-                    setSelectedGroupId(null);
-                }}
-                onConfirm={async () => {
-                    if (!selectedGroupId) return;
-
-                    setDeletingGroup(true);
-                    const ok = await deleteGroup(selectedGroupId);
-                    setDeletingGroup(false);
-
-                    setShowDeleteDialog(false);
-                    setSelectedGroupId(null);
-
-                    showToast(
-                        ok
-                            ? { title: 'Group deleted', tone: 'info', duration: 2200 }
-                            : { title: 'Could not delete group', message: 'Please try again.', tone: 'error' }
-                    );
-                }}
-            />
-
-            <Toast toast={toast} onDismiss={dismissToast} />
-        </ScreenContainer>
+            {/* Floating add-expense pill, Splitwise-style, floating above the nav bar */}
+            <PressableScale style={[styles.fab, { bottom: fabBottom }]} onPress={() => router.push('/(tabs)/AddNewExpense')}>
+                <Icon name="StickyNote" size={18} color={palette.white} clickable={false} />
+                <AppText variant="label" style={{ color: palette.white }}>
+                    Add expense
+                </AppText>
+            </PressableScale>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    header: {
+    titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: layout.gutter,
-        paddingVertical: spacing.md,
-        backgroundColor: palette.card,
-        borderBottomWidth: 1,
-        borderBottomColor: palette.divider,
     },
-    headerButton: {
+    headerIconBtn: {
         width: 40,
         height: 40,
+        borderRadius: radius.pill,
+        backgroundColor: palette.card,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...shadows.sm,
+    },
+    overallRow: { marginTop: -spacing.sm },
+    segmented: {
+        flexDirection: 'row',
+        backgroundColor: palette.card,
+        borderRadius: radius.pill,
+        padding: 4,
+        ...shadows.xs,
+    },
+    segment: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+        borderRadius: radius.pill,
+    },
+    segmentActive: { backgroundColor: palette.primaryLight },
+    listCard: { paddingHorizontal: spacing.base },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        paddingVertical: spacing.md,
+    },
+    rowDivider: { borderBottomWidth: 1, borderBottomColor: palette.divider },
+    rowPressed: { opacity: 0.6 },
+    groupIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: radius.md,
+        backgroundColor: palette.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    heroSection: {
-        width: '100%',
+    newGroupRow: { paddingVertical: spacing.md },
+    newGroupIcon: {
+        backgroundColor: palette.bg,
+        borderWidth: 1.5,
+        borderColor: palette.border,
+        borderStyle: 'dashed',
     },
-    heroCopy: {
-        paddingTop: spacing.sm,
-        gap: 2,
-    },
-    groupsCard: {
-        paddingHorizontal: spacing.base,
-    },
-    divider: {
-        borderBottomWidth: 1,
-        borderBottomColor: palette.divider,
-    },
-    groupRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.md,
-        gap: spacing.sm,
-    },
-    groupIconWrap: {
-        width: 40,
-        height: 40,
+    avatar: {
+        width: 42,
+        height: 42,
         borderRadius: radius.pill,
         backgroundColor: palette.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    groupTextWrap: {
-        flex: 1,
-        gap: 2,
-    },
-    groupRight: {
-        alignItems: 'flex-end',
-        gap: 2,
-    },
-    quickActionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: spacing.sm,
-    },
-    quickActionCard: {
-        width: '48%',
-        minHeight: 110,
-        gap: spacing.xs,
-    },
-    quickActionIconWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: radius.md,
+    deleteBtn: {
+        width: 28,
+        height: 28,
+        borderRadius: radius.pill,
+        backgroundColor: palette.dangerLight,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    leaveBtn: {
+        width: 28,
+        height: 28,
+        borderRadius: radius.pill,
+        backgroundColor: palette.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    allSettled: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        paddingVertical: spacing.lg,
+    },
+    settledToggle: {
+        alignSelf: 'center',
+        borderWidth: 1.5,
+        borderColor: palette.primary,
+        borderRadius: radius.pill,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.lg,
+        marginTop: spacing.xs,
+    },
+    activityRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.md,
+        paddingVertical: spacing.md,
+    },
+    activityIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: radius.md,
         backgroundColor: palette.primaryLight,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    quickActionTitle: {
-        lineHeight: 18,
-        marginTop: 2,
-    },
-    quickActionSubtitle: {
-        lineHeight: 14,
-    },
-    footerBanner: {
-        borderRadius: radius.xl,
-        overflow: 'hidden',
-        ...shadows.sm,
-        marginBottom: spacing.xxl,
-    },
-    footerBannerBg: {
-        minHeight: 120,
-        justifyContent: 'flex-end',
-    },
-    footerBannerBgImage: {
-        borderRadius: radius.xl,
-    },
-    footerBannerOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(102, 204, 68, 0.12)',
-        borderRadius: radius.xl,
-    },
-    footerBannerContent: {
-        padding: spacing.lg,
-    },
-    insightsButton: {
-        backgroundColor: palette.primaryLight,
+    fab: {
+        position: 'absolute',
+        right: layout.gutter,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: palette.primary,
         borderRadius: radius.pill,
         paddingVertical: 14,
         paddingHorizontal: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        ...shadows.xs,
-        marginTop: 8,
+        ...shadows.primary,
     },
 });

@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -22,6 +22,7 @@ import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
 import Icon from '@/components/ui/Icon';
 import Input from '@/components/ui/Input';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 import ProgressRing from '@/components/ui/ProgressRing';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import Toast from '@/components/ui/Toast';
@@ -66,6 +67,14 @@ const QUICK_DEADLINES = [
   { label: '6 months', months: 6 },
   { label: '1 year', months: 12 },
 ];
+
+// Stable fallbacks. Inlining `?? []` / `?? {}` at each setState handed React a
+// brand-new reference on every fetch, so an empty response still counted as a
+// state change and kicked off another render — the "no goals" refresh loop.
+const EMPTY_GOALS: ApiGoal[] = [];
+const EMPTY_BADGES: EarnedBadge[] = [];
+const EMPTY_CATALOG: BadgeDefinition[] = [];
+const EMPTY_STATS: GoalStats = { contributionStreak: 0, bestContributionStreak: 0 };
 
 // Parses a "YYYY-MM-DD" deadline as a *local* calendar date. Deliberately
 // avoids `new Date(string)` here — that parses date-only strings as UTC
@@ -112,11 +121,18 @@ function formatDeadlineLabel(deadline: string): string {
 
 export default function GoalsScreen() {
   const { getToken, isSignedIn } = useAuth();
-  const [goals, setGoals] = useState<ApiGoal[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [goals, setGoals] = useState<ApiGoal[]>(EMPTY_GOALS);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const hasLoadedOnce = useRef(false);
   const [loadError, setLoadError] = useState('');
+
+  // Clerk hands back a fresh `getToken` on most renders. Reading it through a
+  // ref keeps `fetchGoals` referentially stable, so the focus effect below
+  // fires once per focus instead of on every render.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   const [createVisible, setCreateVisible] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -141,9 +157,9 @@ export default function GoalsScreen() {
   const [userXp, setUserXp] = useState(0);
   const [reward, setReward] = useState<GoalRewardInfo | null>(null);
 
-  const [goalStats, setGoalStats] = useState<GoalStats>({ contributionStreak: 0, bestContributionStreak: 0 });
-  const [badges, setBadges] = useState<EarnedBadge[]>([]);
-  const [badgeCatalog, setBadgeCatalog] = useState<BadgeDefinition[]>([]);
+  const [goalStats, setGoalStats] = useState<GoalStats>(EMPTY_STATS);
+  const [badges, setBadges] = useState<EarnedBadge[]>(EMPTY_BADGES);
+  const [badgeCatalog, setBadgeCatalog] = useState<BadgeDefinition[]>(EMPTY_CATALOG);
 
   const [historyVisible, setHistoryVisible] = useState(false);
   const [xpEvents, setXpEvents] = useState<XpEventDto[]>([]);
@@ -155,27 +171,27 @@ export default function GoalsScreen() {
 
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
-      setGoals([]);
+      setGoals(EMPTY_GOALS);
       return;
     }
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       if (!token) return;
       const [goalsResponse, profileResponse] = await Promise.all([
         apiRequest<GoalsResponse>('/api/goals', {}, token),
         apiRequest<ProfileResponse>('/api/profile', {}, token),
       ]);
-      setGoals(goalsResponse?.goals ?? []);
+      setGoals(goalsResponse?.goals ?? EMPTY_GOALS);
       setUserXp(profileResponse?.user?.xp ?? 0);
-      setGoalStats(goalsResponse?.goalStats ?? { contributionStreak: 0, bestContributionStreak: 0 });
-      setBadges(goalsResponse?.badges ?? []);
-      setBadgeCatalog(goalsResponse?.badgeCatalog ?? []);
+      setGoalStats(goalsResponse?.goalStats ?? EMPTY_STATS);
+      setBadges(goalsResponse?.badges ?? EMPTY_BADGES);
+      setBadgeCatalog(goalsResponse?.badgeCatalog ?? EMPTY_CATALOG);
       setLoadError('');
     } catch (error) {
       console.warn('Failed to load goals:', error);
       setLoadError('Could not load your goals. Check your connection and try again.');
     }
-  }, [getToken, isSignedIn]);
+  }, [isSignedIn]);
 
   const openHistory = async () => {
     setHistoryVisible(true);
@@ -194,13 +210,15 @@ export default function GoalsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!hasLoadedOnce.current) {
-        setLoading(true);
-      }
+      let active = true;
       fetchGoals().finally(() => {
-        setLoading(false);
-        hasLoadedOnce.current = true;
+        // Setting this to the value it already holds is a React no-op, so a
+        // refocus after the first load can't retrigger a render.
+        if (active) setInitialLoading(false);
       });
+      return () => {
+        active = false;
+      };
     }, [fetchGoals])
   );
 
@@ -403,6 +421,10 @@ export default function GoalsScreen() {
 
   const daysInPickerMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
 
+  if (initialLoading) {
+    return <LoadingScreen label="Loading your goals..." />;
+  }
+
   return (
     <ScreenContainer
       header={
@@ -434,11 +456,7 @@ export default function GoalsScreen() {
 
       <BadgesRow earned={badges} catalog={badgeCatalog} />
 
-      {loading && goals.length === 0 ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={palette.primaryDeep} />
-        </View>
-      ) : loadError && goals.length === 0 ? (
+      {loadError && goals.length === 0 ? (
         <EmptyState
           icon="CircleAlert"
           title="Couldn't load goals"
@@ -753,7 +771,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     gap: spacing.md,
   },
-  centerBox: { paddingVertical: spacing.xxxl, alignItems: 'center' },
   goalCard: { marginBottom: spacing.md, borderRadius: radius.lg },
   goalTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   emojiBadge: {

@@ -1,0 +1,39 @@
+name: EAS Over-The-Air Update
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'fingekko-app/**'
+      - '.github/workflows/eas-update.yml'
+
+jobs:
+  update:
+    name: Publish EAS Update
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'fingekko-app/package-lock.json'
+
+      - name: 📦 Install dependencies
+        working-directory: fingekko-app
+        run: npm ci
+
+      - name: 🚀 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📣 Publish Update
+        working-directory: fingekko-app
+        run: eas update --branch production --auto --message "GitHub Action: ${{ github.event.head_commit.message }}"

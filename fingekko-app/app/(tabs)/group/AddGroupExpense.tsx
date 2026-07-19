@@ -2,27 +2,25 @@ import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Icon from '../../../components/ui/Icon';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
-  Animated,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppText from '../../../components/ui/AppText';
+import Button from '../../../components/ui/Button';
+import Icon from '../../../components/ui/Icon';
+import LoadingScreen from '../../../components/ui/LoadingScreen';
 import Toast from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
-
-const WALLET_ILLUSTRATION = require('../../../assets/images/bgadd.png');
+import { fontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
 
 const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Other'];
 
@@ -39,7 +37,17 @@ type GroupDetailsResponse = {
   members: (Partial<Person> & { dbId?: string })[];
 };
 
-export default function AddNewExpense() {
+const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+const getInitials = (name: string): string =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || '?';
+
+export default function AddGroupExpense() {
   const { userId, getToken, isSignedIn } = useAuth();
   const router = useRouter();
   const { groupId: groupIdParam } = useLocalSearchParams<{ groupId?: string | string[] }>();
@@ -50,44 +58,26 @@ export default function AddNewExpense() {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
-  const [category, setCategory] = useState<string>('');
+  const [category, setCategory] = useState('');
 
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
     incomingRequests: [],
     outgoingRequests: [],
   });
-  const [loadingFriends, setLoadingFriends] = useState(false);
-
   const [group, setGroup] = useState<GroupDetailsResponse | null>(null);
-  const [loadingGroup, setLoadingGroup] = useState(false);
+  const [loadingPeople, setLoadingPeople] = useState(true);
 
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [customOwesMe, setCustomOwesMe] = useState<Record<string, string>>({});
-  const [customIOwe, setCustomIOwe] = useState<Record<string, string>>({});
-  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [customShares, setCustomShares] = useState<Record<string, string>>({});
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
 
-  const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
-  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
-  const [selectedSplit, setSelectedSplit] = useState<'equal' | 'custom'>('equal');
-
-  const { width: SCREEN_WIDTH } = Dimensions.get('window');
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  const handleSplitMethodChange = (method: 'equal' | 'custom') => {
-    setSelectedSplit(method);
-    Animated.timing(slideAnim, {
-      toValue: method === 'custom' ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
   const getTokenRef = useRef(getToken);
-
   useEffect(() => {
     getTokenRef.current = getToken;
   }, [getToken]);
@@ -96,32 +86,19 @@ export default function AddNewExpense() {
     if (isGroupMode) return;
     let active = true;
 
-    const loadFriends = async () => {
+    (async () => {
       if (!isSignedIn) return;
-
-      setLoadingFriends(true);
-
       try {
         const token = await getTokenRef.current();
         if (!token) return;
-
         const response = await apiRequest<FriendsResponse>('/api/friends', {}, token);
-
-        if (active) {
-          setFriends(response);
-        }
-      } catch (fetchError) {
-        if (active) {
-          setError('Unable to load friends for splitting.');
-        }
+        if (active) setFriends(response);
+      } catch {
+        if (active) setError('Unable to load friends for splitting.');
       } finally {
-        if (active) {
-          setLoadingFriends(false);
-        }
+        if (active) setLoadingPeople(false);
       }
-    };
-
-    loadFriends();
+    })();
 
     return () => {
       active = false;
@@ -132,33 +109,23 @@ export default function AddNewExpense() {
     if (!isGroupMode || !groupId) return;
     let active = true;
 
-    const loadGroup = async () => {
+    (async () => {
       if (!isSignedIn) return;
-
-      setLoadingGroup(true);
-
       try {
         const token = await getTokenRef.current();
         if (!token) return;
-
         const response = await apiRequest<GroupDetailsResponse>(`/api/groups/${groupId}`, {}, token);
-
-        if (active) {
-          setGroup(response);
-          setSelectedUserIds([]);
-        }
-      } catch (fetchError) {
-        if (active) {
-          setError('Unable to load group members for splitting.');
-        }
+        if (!active) return;
+        setGroup(response);
+        // Preselect everyone. A group expense with nobody ticked was the default
+        // before, which made the backend reject the very first save attempt.
+        setSelectedUserIds((response.members ?? []).map((m: any) => String(m.id)));
+      } catch {
+        if (active) setError('Unable to load group members for splitting.');
       } finally {
-        if (active) {
-          setLoadingGroup(false);
-        }
+        if (active) setLoadingPeople(false);
       }
-    };
-
-    loadGroup();
+    })();
 
     return () => {
       active = false;
@@ -167,38 +134,19 @@ export default function AddNewExpense() {
 
   const peopleList: Person[] = useMemo(() => {
     if (isGroupMode) {
-      return (group?.members ?? []).map((m: any) => {
-        if (typeof m === 'string') {
-          return {
-            id: m,
-            name: m,
-            email: '',
-          };
-        }
-
-        return {
-          id: String(m.id),
-          name: m.name ?? String(m.id),
-          email: m.email ?? '',
-          dbId: m.dbId,
-        };
-      });
+      return (group?.members ?? []).map((m: any) => ({
+        id: String(m.id),
+        name: m.name ?? String(m.id),
+        email: m.email ?? '',
+        dbId: m.dbId,
+      }));
     }
-
     return friends.friends.map((f) => ({
       id: f.friend.id,
       name: f.friend.name,
       email: f.friend.email,
     }));
   }, [isGroupMode, group, friends.friends]);
-
-  const filteredPeopleList = useMemo(() => {
-    return peopleList
-      .filter(p => p.id !== userId)
-      .filter(p => p.name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
-  }, [peopleList, memberSearchQuery, userId]);
-
-  const loadingPeople = isGroupMode ? loadingGroup : loadingFriends;
 
   const selectedPeople = useMemo(
     () => peopleList.filter((p) => selectedUserIds.includes(p.id)),
@@ -207,57 +155,85 @@ export default function AddNewExpense() {
 
   const allSelected = peopleList.length > 0 && selectedUserIds.length === peopleList.length;
 
-  const toggleUser = (userId: string) => {
+  const toggleUser = (id: string) =>
     setSelectedUserIds((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id]
     );
-  };
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = () =>
     setSelectedUserIds(allSelected ? [] : peopleList.map((p) => p.id));
-  };
 
-  const peopleSummaryLabel = useMemo(() => {
-    if (loadingPeople) return isGroupMode ? 'Loading group members...' : 'Loading friends...';
-    if (selectedPeople.length === 0) {
-      return isGroupMode ? 'Select group members' : 'Select friends to split with';
-    }
-    if (selectedPeople.length === 1) return selectedPeople[0].name;
-    return `${selectedPeople[0].name} + ${selectedPeople.length - 1} more`;
-  }, [selectedPeople, loadingPeople, isGroupMode]);
+  const amountValue = Number(amount) || 0;
+
+  // Equal split preview — the backend splits across participants plus the payer,
+  // so mirror that here rather than dividing by the selection alone.
+  const equalHeadCount = useMemo(() => {
+    const ids = new Set(selectedUserIds);
+    if (userId) ids.add(userId);
+    return ids.size;
+  }, [selectedUserIds, userId]);
+
+  const perHead = equalHeadCount > 0 ? amountValue / equalHeadCount : 0;
+
+  const customTotal = useMemo(
+    () =>
+      selectedPeople.reduce((sum, p) => sum + (Number(customShares[p.id]) || 0), 0),
+    [selectedPeople, customShares]
+  );
+  const customRemainder = amountValue - customTotal;
+
+  const splitEvenlyIntoCustom = () => {
+    if (selectedPeople.length === 0 || amountValue <= 0) return;
+    const each = amountValue / selectedPeople.length;
+    const next: Record<string, string> = {};
+    selectedPeople.forEach((p) => {
+      next[p.id] = each.toFixed(2);
+    });
+    setCustomShares(next);
+  };
 
   const handleSave = async () => {
     setError('');
 
-    const amountValue = Number(amount);
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setError('Enter a valid amount.');
+      setError('Enter an amount greater than 0.');
       return;
     }
-
-    if (selectedSplit === 'custom') {
-      const sum = peopleList.reduce((acc, p) => acc + (Number(customOwesMe[p.id] || 0) - Number(customIOwe[p.id] || 0)), 0);
-      if (Math.abs(sum - amountValue) > 0.01) {
-        setError(`Custom split shares must sum up to the total amount (₹${amountValue}). Currently: ₹${sum.toFixed(2)}`);
-        return;
-      }
+    // Previously missing here, so blank-titled expenses could be saved.
+    if (!description.trim()) {
+      setError('Add a short description so everyone knows what this was.');
+      return;
+    }
+    if (selectedUserIds.length === 0) {
+      setError('Pick at least one person to split this with.');
+      return;
+    }
+    if (splitMode === 'custom' && Math.abs(customRemainder) > 0.01) {
+      setError(
+        customRemainder > 0
+          ? `${inr(customRemainder)} still unassigned — shares must add up to ${inr(amountValue)}.`
+          : `Shares exceed the total by ${inr(Math.abs(customRemainder))}.`
+      );
+      return;
     }
 
     try {
       setSaving(true);
       const token = await getTokenRef.current();
-
       if (!token) {
         setError('Sign in again to save this expense.');
         return;
       }
 
-      const finalParticipantIds = selectedSplit === 'custom'
-        ? peopleList.map((p) => ({
-            userId: p.id,
-            amount: Number(customOwesMe[p.id] || 0) - Number(customIOwe[p.id] || 0),
-          }))
-        : selectedUserIds;
+      // Custom mode sends only the people actually selected — it used to send
+      // every group member, including unticked ones with a zero share.
+      const participantIds =
+        splitMode === 'custom'
+          ? selectedPeople.map((p) => ({
+              userId: p.id,
+              amount: Number(customShares[p.id]) || 0,
+            }))
+          : selectedUserIds;
 
       await apiRequest({
         method: 'post',
@@ -267,8 +243,8 @@ export default function AddNewExpense() {
           description: description.trim(),
           amount: amountValue,
           expenseDate: date,
-          splitType: selectedSplit === 'custom' ? 'unequalPaidByYou' : 'equalPaidByYou',
-          participantIds: finalParticipantIds,
+          splitType: splitMode === 'custom' ? 'unequalPaidByYou' : 'equalPaidByYou',
+          participantIds,
           notes: notes.trim(),
           currency: 'INR',
           ...(isGroupMode ? { groupId } : {}),
@@ -277,14 +253,6 @@ export default function AddNewExpense() {
       });
 
       showToast({ title: 'Expense added! 🎉', message: 'The split has been shared.', tone: 'success', duration: 1600 });
-      setDescription('');
-      setAmount('');
-      setDate(new Date().toISOString().split('T')[0]);
-      setNotes('');
-      setCategory('');
-      setCustomOwesMe({});
-      setCustomIOwe({});
-      setSelectedUserIds(isGroupMode ? peopleList.map((p) => p.id) : []);
       setTimeout(() => router.back(), 700);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
@@ -293,352 +261,251 @@ export default function AddNewExpense() {
     }
   };
 
+  if (loadingPeople) {
+    return <LoadingScreen label={isGroupMode ? 'Loading group members...' : 'Loading friends...'} />;
+  }
+
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
       <Toast toast={toast} onDismiss={dismissToast} />
+
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => (router.canGoBack() ? router.back() : router.replace(`/(tabs)/group/${groupId}`))}>
-          <Icon name="ChevronLeft" size={20} color="#148a46" />
+        <Pressable
+          style={styles.headerButton}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}
+          hitSlop={6}
+        >
+          <Icon name="ArrowLeft" size={22} color={palette.textPrimary} clickable={false} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add Expense</Text>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <AppText variant="title" weight="bold">
+            Add expense
+          </AppText>
+          {isGroupMode && !!group?.name && (
+            <AppText variant="micro" color="textTertiary" numberOfLines={1}>
+              {group.name}
+            </AppText>
+          )}
+        </View>
         <View style={styles.headerButton} />
       </View>
 
-      {/* Top Wallet Card & Switcher */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceIconWrap}>
-            <Icon name="Wallet" size={22} color="#148a46" />
-          </View>
-          <View style={styles.balanceCopy}>
-            <Text style={styles.balanceLabel}>Create</Text>
-            <Text style={styles.balanceValue}>New Group Expense</Text>
-          </View>
-          <Image source={WALLET_ILLUSTRATION} style={styles.balanceImage} resizeMode="contain" />
-        </View>
-
-        {isGroupMode && (
-          <Text style={styles.groupHint}> {group?.name ?? 'Your Squad'}</Text>
-        )}
-
-        {/* Split Method Switcher on Top */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Split Method</Text>
-          <View style={styles.splitContainer}>
-            <Pressable
-              style={[
-                styles.splitButton,
-                selectedSplit === 'equal' && styles.splitButtonActive,
-              ]}
-              onPress={() => handleSplitMethodChange('equal')}
-            >
-              <Text
-                style={[
-                  styles.splitButtonText,
-                  selectedSplit === 'equal' && styles.splitButtonTextActive,
-                ]}
-              >
-                Split Equally
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.splitButton,
-                selectedSplit === 'custom' && styles.splitButtonActive,
-              ]}
-              onPress={() => handleSplitMethodChange('custom')}
-            >
-              <Text
-                style={[
-                  styles.splitButtonText,
-                  selectedSplit === 'custom' && styles.splitButtonTextActive,
-                ]}
-              >
-                Custom Split
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-
-      {/* Animated Sliding Container */}
-      <Animated.View
-        style={{
-          flex: 1,
-          flexDirection: 'row',
-          width: SCREEN_WIDTH * 2,
-          transform: [
-            {
-              translateX: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, -SCREEN_WIDTH],
-              }),
-            },
-          ],
-        }}
-      >
-        {/* Screen 1: Equal Split Fields */}
-        <View style={{ width: SCREEN_WIDTH }}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.container, { paddingTop: 12 }]}
-          >
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Amount</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.iconBubble}>
-                  <Text style={styles.prefix}>₹</Text>
-                </View>
-                <TextInput
-                  value={amount}
-                  onChangeText={setAmount}
-                  style={styles.fieldInput}
-                  placeholder="Enter amount"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Description</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.iconBubble}>
-                  <Icon name="StickyNote" size={18} color="#148a46" />
-                </View>
-                <TextInput
-                  value={description}
-                  onChangeText={setDescription}
-                  style={styles.fieldInput}
-                  placeholder="Dinner, cab, groceries"
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Split With</Text>
-              <Pressable style={styles.inputWrap} onPress={() => setPeoplePickerOpen(true)}>
-                <View style={styles.iconBubble}>
-                  <Icon name="Users" size={18} color="#148a46" />
-                </View>
-                <Text style={[styles.fieldInput, selectedPeople.length === 0 && styles.placeholderText]}>
-                  {peopleSummaryLabel}
-                </Text>
-                <Icon name="ChevronDown" size={18} color="#9ca3af" />
-              </Pressable>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Notes (Optional)</Text>
-              <View style={[styles.inputWrap, styles.textAreaWrap]}>
-                <View style={styles.iconBubble}>
-                  <Icon name="StickyNote" size={18} color="#148a46" />
-                </View>
-                <TextInput
-                  value={notes}
-                  onChangeText={setNotes}
-                  style={[styles.fieldInput, styles.textArea]}
-                  placeholder="Add a note"
-                  placeholderTextColor="#9ca3af"
-                  multiline
-                />
-              </View>
-            </View>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <Pressable style={styles.primaryButton} onPress={handleSave} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color="#000000" />
-              ) : (
-                <>
-                  <Text style={styles.primaryButtonText}>Add Expense</Text>
-                  <Icon name="ChevronRight" size={18} color="#000000" />
-                </>
-              )}
-            </Pressable>
-          </ScrollView>
-        </View>
-
-        {/* Screen 2: Custom Split Fields */}
-        <View style={{ width: SCREEN_WIDTH }}>
-          <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12 }}>
-            {/* Search Input */}
-            <View style={[styles.inputWrap, { marginBottom: 12 }]}>
-              <Icon name="Search" size={18} color="#000000" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          {/* Amount + description hero */}
+          <View style={styles.heroFields}>
+            <View style={styles.amountRow}>
+              <AppText variant="hero" color="textTertiary">
+                ₹
+              </AppText>
               <TextInput
-                value={memberSearchQuery}
-                onChangeText={setMemberSearchQuery}
-                style={styles.fieldInput}
-                placeholder="Search group members..."
-                placeholderTextColor="#9ca3af"
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0"
+                placeholderTextColor={palette.textTertiary}
+                keyboardType="decimal-pad"
+                style={styles.amountInput}
               />
             </View>
-
-            {/* List of members with green/red inputs */}
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 16 }}
-            >
-              {filteredPeopleList.length === 0 ? (
-                <View style={styles.emptyFriendsBox}>
-                  <Text style={styles.helperText}>No members match your search.</Text>
-                </View>
-              ) : (
-                filteredPeopleList.map((person) => {
-                  return (
-                    <View key={person.id} style={styles.customSplitRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.friendName}>{person.name}</Text>
-                        <Text style={styles.friendEmail}>{person.email || 'Group member'}</Text>
-                      </View>
-                      
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {/* They Owe Me Input (Green text) */}
-                        <View style={{ width: 85 }}>
-                          <Text style={{ fontSize: 9, fontWeight: '900', color: '#1FA855', marginBottom: 2 }}>They Owe Me</Text>
-                          <TextInput
-                            style={styles.customSplitInputGreen}
-                            placeholder="₹0"
-                            placeholderTextColor="#a7f3d0"
-                            keyboardType="decimal-pad"
-                            value={customOwesMe[person.id] || ''}
-                            onChangeText={(text) => {
-                              setCustomOwesMe((prev) => ({
-                                ...prev,
-                                [person.id]: text,
-                              }));
-                            }}
-                          />
-                        </View>
-
-                        {/* I Owe Them Input (Red text) */}
-                        <View style={{ width: 85 }}>
-                          <Text style={{ fontSize: 9, fontWeight: '900', color: '#FF3366', marginBottom: 2 }}>I Owe Them</Text>
-                          <TextInput
-                            style={styles.customSplitInputRed}
-                            placeholder="₹0"
-                            placeholderTextColor="#fecdd3"
-                            keyboardType="decimal-pad"
-                            value={customIOwe[person.id] || ''}
-                            onChangeText={(text) => {
-                              setCustomIOwe((prev) => ({
-                                ...prev,
-                                [person.id]: text,
-                              }));
-                            }}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </ScrollView>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <Pressable style={[styles.primaryButton, { marginBottom: layout.navBarHeight + layout.navBarBottomInset + 16 }]} onPress={handleSave} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color="#000000" />
-              ) : (
-                <>
-                  <Text style={styles.primaryButtonText}>Add Custom Split</Text>
-                  <Icon name="ChevronRight" size={18} color="#000000" />
-                </>
-              )}
-            </Pressable>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What was this for?"
+              placeholderTextColor={palette.textTertiary}
+              style={styles.descriptionInput}
+            />
           </View>
-        </View>
-      </Animated.View>
 
-      {/* People Picker Modal */}
-      <Modal visible={peoplePickerOpen} animationType="slide" transparent onRequestClose={() => setPeoplePickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setPeoplePickerOpen(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHandle} />
-
-            <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>{isGroupMode ? 'Group Members' : 'Select Friends'}</Text>
-              {peopleList.length > 0 ? (
-                <Pressable onPress={toggleSelectAll}>
-                  <Text style={styles.selectAllText}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            <ScrollView style={styles.modalList}>
-              {loadingPeople ? (
-                <ActivityIndicator color="#148a46" style={{ marginVertical: 20 }} />
-              ) : peopleList.length === 0 ? (
-                <View style={styles.emptyFriendsBox}>
-                  <Icon name="Users" size={18} color="#148a46" />
-                  <Text style={styles.helperText}>
-                    {isGroupMode
-                      ? 'No members found in this group.'
-                      : 'Add friends first to split expenses with them.'}
-                  </Text>
-                </View>
-              ) : (
-                peopleList.map((person) => {
-                  const selected = selectedUserIds.includes(person.id);
-
-                  return (
-                    <Pressable key={person.id} style={styles.friendRow} onPress={() => toggleUser(person.id)}>
-                      <View style={styles.friendIdentity}>
-                        <Text style={styles.friendName}>{person.name}</Text>
-                        {person.email ? <Text style={styles.friendEmail}>{person.email}</Text> : null}
-                      </View>
-                      {selected ? (
-                        <Icon name="CheckSquare2" size={22} color="#148a46" />
-                      ) : (
-                        <Icon name="Circle" size={22} color="#94a3b8" />
-                      )}
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
-
-            <Pressable style={styles.modalDoneButton} onPress={() => setPeoplePickerOpen(false)}>
-              <Text style={styles.modalDoneText}>Done ({selectedUserIds.length})</Text>
+          {/* Category + date, both reachable — the category sheet used to exist
+              with no way to open it. */}
+          <View style={styles.metaRow}>
+            <Pressable style={styles.metaChip} onPress={() => setCategoryPickerOpen(true)}>
+              <Icon name="Tag" size={15} color={palette.primaryDeep} clickable={false} />
+              <AppText variant="caption" color="primaryDeep">
+                {category || 'Category'}
+              </AppText>
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            <View style={styles.metaChip}>
+              <Icon name="Calendar" size={15} color={palette.textSecondary} clickable={false} />
+              <TextInput
+                value={date}
+                onChangeText={setDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={palette.textTertiary}
+                style={styles.dateInput}
+              />
+            </View>
+          </View>
 
-      {/* Category select modal */}
+          {/* Split mode */}
+          <View style={styles.segmented}>
+            {(['equal', 'custom'] as const).map((mode) => {
+              const active = splitMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  style={[styles.segment, active && styles.segmentActive]}
+                  onPress={() => {
+                    setSplitMode(mode);
+                    if (mode === 'custom' && Object.keys(customShares).length === 0) {
+                      splitEvenlyIntoCustom();
+                    }
+                  }}
+                >
+                  <AppText
+                    variant="label"
+                    style={{ color: active ? palette.primaryDeep : palette.textTertiary }}
+                  >
+                    {mode === 'equal' ? 'Split equally' : 'Custom amounts'}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Participants */}
+          <View style={styles.sectionHeader}>
+            <AppText variant="label">
+              {isGroupMode ? 'Group members' : 'Split with'} ({selectedUserIds.length})
+            </AppText>
+            {peopleList.length > 0 && (
+              <Pressable onPress={toggleSelectAll} hitSlop={6}>
+                <AppText variant="caption" color="primaryDeep">
+                  {allSelected ? 'Clear all' : 'Select all'}
+                </AppText>
+              </Pressable>
+            )}
+          </View>
+
+          {splitMode === 'equal' && amountValue > 0 && selectedUserIds.length > 0 && (
+            <AppText variant="caption" color="textSecondary" style={styles.splitHint}>
+              {inr(perHead)} each, across {equalHeadCount} {equalHeadCount === 1 ? 'person' : 'people'} (including you)
+            </AppText>
+          )}
+
+          {splitMode === 'custom' && (
+            <View style={styles.remainderRow}>
+              <AppText variant="caption" color="textSecondary">
+                {Math.abs(customRemainder) < 0.01
+                  ? 'Shares add up — good to go'
+                  : customRemainder > 0
+                    ? `${inr(customRemainder)} left to assign`
+                    : `${inr(Math.abs(customRemainder))} over the total`}
+              </AppText>
+              <Pressable onPress={splitEvenlyIntoCustom} hitSlop={6}>
+                <AppText variant="caption" color="primaryDeep">
+                  Split evenly
+                </AppText>
+              </Pressable>
+            </View>
+          )}
+
+          <View style={styles.peopleCard}>
+            {peopleList.length === 0 ? (
+              <AppText variant="bodySm" color="textSecondary" align="center" style={{ padding: spacing.lg }}>
+                {isGroupMode
+                  ? 'No members found in this group.'
+                  : 'Add friends first to split expenses with them.'}
+              </AppText>
+            ) : (
+              peopleList.map((person, index) => {
+                const selected = selectedUserIds.includes(person.id);
+                const isYou = person.id === userId;
+                return (
+                  <View
+                    key={person.id}
+                    style={[styles.personRow, index !== peopleList.length - 1 && styles.personDivider]}
+                  >
+                    <Pressable style={styles.personMain} onPress={() => toggleUser(person.id)}>
+                      <View style={[styles.personAvatar, selected && styles.personAvatarActive]}>
+                        <AppText variant="caption" style={{ color: selected ? palette.white : palette.primaryDeep }}>
+                          {getInitials(person.name)}
+                        </AppText>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="label" numberOfLines={1}>
+                          {isYou ? 'You' : person.name}
+                        </AppText>
+                        {!!person.email && (
+                          <AppText variant="micro" color="textTertiary" numberOfLines={1}>
+                            {person.email}
+                          </AppText>
+                        )}
+                      </View>
+                    </Pressable>
+
+                    {splitMode === 'custom' && selected ? (
+                      <TextInput
+                        value={customShares[person.id] ?? ''}
+                        onChangeText={(text) =>
+                          setCustomShares((prev) => ({ ...prev, [person.id]: text }))
+                        }
+                        placeholder="0"
+                        placeholderTextColor={palette.textTertiary}
+                        keyboardType="decimal-pad"
+                        style={styles.shareInput}
+                      />
+                    ) : (
+                      <Pressable onPress={() => toggleUser(person.id)} hitSlop={6}>
+                        <View style={[styles.checkbox, selected && styles.checkboxActive]}>
+                          {selected && <Icon name="Check" size={13} color={palette.white} clickable={false} />}
+                        </View>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+
+          {/* Notes */}
+          <View style={styles.notesWrap}>
+            <Icon name="StickyNote" size={16} color={palette.textSecondary} clickable={false} />
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add a note (optional)"
+              placeholderTextColor={palette.textTertiary}
+              style={styles.notesInput}
+              multiline
+            />
+          </View>
+
+          {!!error && (
+            <AppText variant="caption" color="danger" align="center">
+              {error}
+            </AppText>
+          )}
+
+          <Button variant="primary" size="lg" onPress={handleSave} loading={saving}>
+            Add expense
+          </Button>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
       <Modal visible={categoryPickerOpen} animationType="slide" transparent onRequestClose={() => setCategoryPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCategoryPickerOpen(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Select Category</Text>
-
-            <ScrollView style={styles.modalList}>
-              {CATEGORIES.map((item) => {
-                const selected = category === item;
-                return (
-                  <Pressable
-                    key={item}
-                    style={styles.categoryRow}
-                    onPress={() => {
-                      setCategory(item);
-                      setCategoryPickerOpen(false);
-                    }}
-                  >
-                    <Text style={styles.categoryRowText}>{item}</Text>
-                    {selected ? (
-                      <Icon name="CheckSquare2" size={20} color="#148a46" />
-                    ) : (
-                      <Icon name="Circle" size={20} color="#94a3b8" />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <AppText variant="title" weight="bold" style={{ marginBottom: spacing.md }}>
+              Select category
+            </AppText>
+            {CATEGORIES.map((item) => {
+              const selected = category === item;
+              return (
+                <Pressable
+                  key={item}
+                  style={styles.categoryRow}
+                  onPress={() => {
+                    setCategory(item);
+                    setCategoryPickerOpen(false);
+                  }}
+                >
+                  <AppText variant="label">{item}</AppText>
+                  {selected && <Icon name="Check" size={18} color={palette.primaryDeep} clickable={false} />}
+                </Pressable>
+              );
+            })}
           </Pressable>
         </Pressable>
       </Modal>
@@ -647,280 +514,159 @@ export default function AddNewExpense() {
 }
 
 const styles = StyleSheet.create({
-  splitContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  splitButton: {
-    width: '48%',
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: palette.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: palette.border,
-    ...shadows.xs,
-  },
-  splitButtonActive: {
-    backgroundColor: palette.primaryLight,
-    borderColor: palette.primary,
-  },
-  splitButtonText: {
-    fontSize: 14,
-    fontFamily: fontFamily.bold,
-    color: palette.textSecondary,
-  },
-  splitButtonTextActive: {
-    color: palette.primaryDeep,
-  },
-  page: {
-    flex: 1,
-    backgroundColor: palette.bg,
-  },
+  page: { flex: 1, backgroundColor: palette.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: layout.gutter,
     paddingVertical: spacing.md,
-    backgroundColor: palette.card,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.divider,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
+  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   container: {
     paddingHorizontal: layout.gutter,
-    paddingTop: spacing.base,
-    paddingBottom: layout.navBarHeight + layout.navBarBottomInset + 28,
+    paddingBottom: spacing.xxl,
     gap: spacing.base,
   },
-  balanceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: spacing.md,
-    borderRadius: radius.xl,
+
+  heroFields: {
     backgroundColor: palette.card,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
     ...shadows.sm,
   },
-  balanceIconWrap: {
-    width: 44,
-    height: 44,
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  amountInput: {
+    flex: 1,
+    fontSize: 36,
+    fontFamily: fontFamily.extrabold,
+    color: palette.textPrimary,
+    padding: 0,
+  },
+  descriptionInput: {
+    fontSize: 16,
+    fontFamily: fontFamily.medium,
+    color: palette.textPrimary,
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+    paddingTop: spacing.md,
+  },
+
+  metaRow: { flexDirection: 'row', gap: spacing.sm },
+  metaChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: palette.card,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  dateInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: fontFamily.medium,
+    color: palette.textPrimary,
+    padding: 0,
+  },
+
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: palette.card,
+    borderRadius: radius.pill,
+    padding: 4,
+    ...shadows.xs,
+  },
+  segment: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.pill },
+  segmentActive: { backgroundColor: palette.primaryLight },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  splitHint: { marginTop: -spacing.sm },
+  remainderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -spacing.sm,
+  },
+
+  peopleCard: {
+    backgroundColor: palette.card,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.base,
+    ...shadows.xs,
+  },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  personDivider: { borderBottomWidth: 1, borderBottomColor: palette.divider },
+  personMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  personAvatar: {
+    width: 38,
+    height: 38,
     borderRadius: radius.pill,
     backgroundColor: palette.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  balanceCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  balanceLabel: {
-    fontSize: 13,
-    color: palette.textSecondary,
-    fontFamily: fontFamily.semibold,
-  },
-  balanceValue: {
-    fontSize: 20,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  balanceImage: {
-    width: 56,
-    height: 56,
-  },
-  groupHint: {
-    fontSize: 16,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 50,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    backgroundColor: palette.card,
+  personAvatarActive: { backgroundColor: palette.primary },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
     borderWidth: 1.5,
-    borderColor: palette.border,
-  },
-  iconBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.pill,
-    backgroundColor: palette.bg,
+    borderColor: palette.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  prefix: {
+  checkboxActive: { backgroundColor: palette.primary, borderColor: palette.primary },
+  shareInput: {
+    width: 84,
+    textAlign: 'right',
     fontSize: 15,
     fontFamily: fontFamily.bold,
     color: palette.textPrimary,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
   },
-  fieldInput: {
-    flex: 1,
-    fontSize: 15,
-    color: palette.textPrimary,
-    paddingVertical: 0,
-    fontFamily: fontFamily.semibold,
-  },
-  placeholderText: {
-    color: palette.textTertiary,
-  },
-  textAreaWrap: {
-    minHeight: 80,
+
+  notesWrap: {
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 10,
+    gap: spacing.sm,
+    backgroundColor: palette.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    minHeight: 64,
   },
-  textArea: {
-    minHeight: 50,
+  notesInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fontFamily.medium,
+    color: palette.textPrimary,
+    padding: 0,
     textAlignVertical: 'top',
   },
-  errorText: {
-    color: palette.danger,
-    fontSize: 13,
-    fontFamily: fontFamily.bold,
-  },
-  primaryButton: {
-    marginTop: spacing.sm,
-    minHeight: 52,
-    borderRadius: radius.pill,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    ...shadows.primary,
-  },
-  primaryButtonText: {
-    color: palette.white,
-    fontSize: 15,
-    fontFamily: fontFamily.bold,
-  },
-  helperText: {
-    flex: 1,
-    fontSize: 13,
-    color: palette.textSecondary,
-    fontFamily: fontFamily.semibold,
-  },
-  emptyFriendsBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: palette.warningLight,
-    marginVertical: 8,
-  },
-  friendRow: {
-    minHeight: 50,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: palette.card,
-    borderWidth: 1.5,
-    borderColor: palette.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  friendIdentity: {
-    gap: 2,
-  },
-  friendName: {
-    fontSize: 14,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  friendEmail: {
-    fontSize: 12,
-    color: palette.textSecondary,
-    fontFamily: fontFamily.semibold,
-  },
-  categoryRow: {
-    minHeight: 50,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    backgroundColor: palette.card,
-    borderWidth: 1.5,
-    borderColor: palette.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  categoryRowText: {
-    fontSize: 14,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  customSplitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.divider,
-  },
-  customSplitInputGreen: {
-    borderWidth: 1,
-    borderColor: palette.success,
-    borderRadius: radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 13,
-    fontFamily: fontFamily.bold,
-    color: palette.success,
-    backgroundColor: palette.successLight,
-    textAlign: 'right',
-  },
-  customSplitInputRed: {
-    borderWidth: 1,
-    borderColor: palette.danger,
-    borderRadius: radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 13,
-    fontFamily: fontFamily.bold,
-    color: palette.danger,
-    backgroundColor: palette.dangerLight,
-    textAlign: 'right',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.4)',
-    justifyContent: 'flex-end',
-  },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: palette.card,
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-    maxHeight: '70%',
+    paddingBottom: spacing.xxl,
     ...shadows.lg,
   },
   modalHandle: {
@@ -929,39 +675,14 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: palette.border,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  modalTitleRow: {
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-  },
-  selectAllText: {
-    fontSize: 13,
-    fontFamily: fontFamily.bold,
-    color: palette.primaryDeep,
-  },
-  modalList: {
-    marginBottom: 8,
-  },
-  modalDoneButton: {
-    minHeight: 50,
-    borderRadius: radius.pill,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-    ...shadows.primary,
-  },
-  modalDoneText: {
-    color: palette.white,
-    fontSize: 15,
-    fontFamily: fontFamily.bold,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
 });

@@ -209,6 +209,65 @@ groupRoute.post("/:groupId/leave", async (req: Request, res: Response) => {
   }
 });
 
+groupRoute.post("/:groupId/members", async (req: Request, res: Response) => {
+  try {
+    const userId = req.auth?.clerkId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const groupId = resolveGroupId(req.params.groupId);
+
+    if (!groupId) {
+      return res.status(400).json({ message: "Group id is required" });
+    }
+
+    const group = await groupRepository.find(groupId);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // Any existing member can invite — matches how Splitwise-style apps work,
+    // where a group belongs to everyone in it, not just its creator.
+    if (!group.members.some((m) => m.toString() === userId)) {
+      return res.status(403).json({ message: "Only group members can add people" });
+    }
+
+    const rawMembers: unknown = req.body?.members ?? [];
+    const incoming = (Array.isArray(rawMembers) ? rawMembers : [])
+      .filter((m): m is string => typeof m === "string" && m.trim() !== "");
+
+    if (incoming.length === 0) {
+      return res.status(400).json({ message: "No members to add" });
+    }
+
+    // Only accept clerkIds that belong to real users, so a bad payload can't
+    // plant unresolvable ids in the members array.
+    const validUsers = await User.find({ clerkId: { $in: incoming } }).select("clerkId");
+    const validIds = validUsers.map((u) => u.clerkId);
+
+    if (validIds.length === 0) {
+      return res.status(400).json({ message: "None of those users exist" });
+    }
+
+    const updatedMembers = Array.from(new Set([...group.members.map((m) => m.toString()), ...validIds]));
+    const addedCount = updatedMembers.length - group.members.length;
+
+    if (addedCount === 0) {
+      return res.status(200).json({ message: "Everyone is already in the group", added: 0 });
+    }
+
+    await groupRepository.updateGroup(groupId, { members: updatedMembers });
+
+    return res.json({ message: "Members added", added: addedCount });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to add members" });
+  }
+});
+
 groupRoute.get("/:groupId/balances", async (req: Request, res: Response) => {
   try {
     const userId = req.auth?.clerkId;

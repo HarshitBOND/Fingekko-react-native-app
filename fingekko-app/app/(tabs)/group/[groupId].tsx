@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiRequest } from '../../../utils/api';
+import AddMembersModal from '../../../components/groups/AddMembersModal';
 import Toast from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
 
@@ -108,6 +109,7 @@ export default function GroupDetailScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const membersY = useRef(0);
   const [settleUpVisible, setSettleUpVisible] = useState(false);
+  const [addMembersVisible, setAddMembersVisible] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
 
   const [group, setGroup] = useState<GroupItem | null>(null);
@@ -234,6 +236,32 @@ export default function GroupDetailScreen() {
     setSettleUpVisible(true);
   };
 
+  // Add people to the group after creation — any member can invite.
+  const handleAddMembers = async (clerkIds: string[]) => {
+    if (!resolvedGroupId) return false;
+    try {
+      const token = await getToken();
+      if (!token) return false;
+      const response = await apiRequest<{ message: string; added: number }>({
+        method: 'post',
+        url: `/api/groups/${resolvedGroupId}/members`,
+        token,
+        data: { members: clerkIds },
+      });
+      await fetchGroupDetails(resolvedGroupId);
+      await fetchGroupBalances(resolvedGroupId);
+      showToast({
+        title: response.added > 0 ? `Added ${response.added} member${response.added === 1 ? '' : 's'}` : 'Already in the group',
+        tone: 'info',
+        duration: 2200,
+      });
+      return true;
+    } catch (error) {
+      console.warn('Error adding members:', error);
+      return false;
+    }
+  };
+
   const getMemberGroupBalance = (memberId: string) => {
     if (!balancesData) return { amount: 0, label: 'Settled' };
     
@@ -279,8 +307,12 @@ export default function GroupDetailScreen() {
           <Text style={styles.headerSubtitle}>{subtitle}</Text>
         </View>
 
-        <Pressable style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}>
-          <Icon name="Menu" size={18} color={COLORS.textDark} />
+        <Pressable
+          style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}
+          onPress={() => setAddMembersVisible(true)}
+          accessibilityLabel="Add members"
+        >
+          <Icon name="UserPlus" size={18} color={COLORS.textDark} />
         </Pressable>
       </View>
 
@@ -346,17 +378,12 @@ export default function GroupDetailScreen() {
             <Text style={styles.quickActionSubtitle}>View group members</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.quickActionCard}
-            onPress={() => {
-              showToast({ title: 'Coming soon', message: 'Group settings aren’t available yet.', tone: 'info' });
-            }}
-          >
+          <Pressable style={styles.quickActionCard} onPress={() => setAddMembersVisible(true)}>
             <View style={styles.quickActionIconWrap}>
-              <Icon name="Settings" size={22} color="#1FA855" />
+              <Icon name="UserPlus" size={22} color="#1FA855" />
             </View>
-            <Text style={styles.quickActionTitle}>Settings</Text>
-            <Text style={styles.quickActionSubtitle}>Manage options</Text>
+            <Text style={styles.quickActionTitle}>Add Members</Text>
+            <Text style={styles.quickActionSubtitle}>Invite more people</Text>
           </Pressable>
         </View>
 
@@ -530,6 +557,13 @@ export default function GroupDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <AddMembersModal
+        visible={addMembersVisible}
+        onClose={() => setAddMembersVisible(false)}
+        existingMemberIds={(group?.members ?? []).map((m) => m.id)}
+        onAdd={handleAddMembers}
+      />
 
       {/* Settle Up modal — shows who you owe / who owes you */}
       <Modal
