@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import communityExpenseRepository from '../repositories/communityExpenseRepository.js';
-import { createCommunityExpense, updateCommunityExpense } from '../services/communityExpenseService.js';
+import { createCommunityExpense, createExplicitExpense, updateCommunityExpense } from '../services/communityExpenseService.js';
 import { createTransaction } from '../repositories/transactionRepository.js';
 import { awardXp } from '../repositories/userRepository.js';
 import { logXpEvent } from '../repositories/xpEventRepository.js';
@@ -44,6 +44,42 @@ async function resolveIds(paidBy: string, participantIds: { userId: string; amou
   })).filter((p: any) => mongoose.Types.ObjectId.isValid(p.userId));
 
   return { resolvedPaidBy, resolvedParticipants };
+}
+
+// Resolve a list of {userId, amount} entries (userId as clerkId or _id) to DB
+// _ids. Used by the explicit multi-payer / exact-split contract.
+async function resolveShareList(
+  entries: { userId: string; amount: number }[],
+  currentUserId: string
+) {
+  const ids = new Set<string>();
+  entries.forEach((e) => {
+    if (e.userId) ids.add(e.userId);
+  });
+
+  const users = await User.find({
+    $or: [
+      { clerkId: { $in: Array.from(ids) } },
+      { _id: { $in: Array.from(ids).filter((id) => mongoose.Types.ObjectId.isValid(id)) } },
+    ],
+  });
+
+  const map = new Map<string, string>();
+  users.forEach((u: any) => {
+    map.set(u.clerkId, u._id.toString());
+    map.set(u._id.toString(), u._id.toString());
+  });
+
+  return entries
+    .map((e) => ({ userId: map.get(e.userId) || (e.userId === '' ? currentUserId : e.userId), amount: Number(e.amount) || 0 }))
+    .filter((e) => mongoose.Types.ObjectId.isValid(e.userId));
+}
+
+function normalizeShares(raw: unknown): { userId: string; amount: number }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((p: any) => ({ userId: String(p?.userId || p?.id || ''), amount: Number(p?.amount ?? 0) }))
+    .filter((p) => p.userId);
 }
 
 function getCurrentUserId(req: Request) {
@@ -207,57 +243,81 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
 
-    let splitType = req.body?.splitType;
-    let participantIds = req.body?.participantIds || [];
+    // Explicit contract (group Adjust-split / Who-paid): paidBy arrives as an
+    // array of {userId, amount}. Everything is already exact, so store verbatim.
+    const usesExplicit = Array.isArray(req.body?.paidBy);
 
-    // Transform string arrays to object format expected by the service
-    if (Array.isArray(participantIds)) {
-      participantIds = participantIds.map((p: any) => {
-        if (typeof p === 'string') {
-          return { userId: p, amount: 0 };
-        } else if (p && typeof p === 'object') {
-          return {
-            userId: String(p.userId || p.id || ''),
-            amount: Number(p.amount ?? 0),
-          };
-        }
-        return { userId: '', amount: 0 };
-      }).filter((p: any) => p.userId);
+    let expense;
+    if (usesExplicit) {
+      const [payers, participants] = await Promise.all([
+        resolveShareList(normalizeShares(req.body?.paidBy), currentUserId),
+        resolveShareList(normalizeShares(req.body?.participants), currentUserId),
+      ]);
+
+      expense = await createExplicitExpense(currentUserId, {
+        description: String(req.body?.description ?? ''),
+        amount: Number(req.body?.amount ?? 0),
+        expenseDate: String(req.body?.expenseDate ?? ''),
+        notes: String(req.body?.notes ?? ''),
+        currency: String(req.body?.currency ?? 'INR'),
+        paidBy: payers,
+        participants,
+        groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
+        category: req.body?.category ? String(req.body.category) : '',
+      });
     } else {
-      participantIds = [];
+      let splitType = req.body?.splitType;
+      let participantIds = req.body?.participantIds || [];
+
+      // Transform string arrays to object format expected by the service
+      if (Array.isArray(participantIds)) {
+        participantIds = participantIds.map((p: any) => {
+          if (typeof p === 'string') {
+            return { userId: p, amount: 0 };
+          } else if (p && typeof p === 'object') {
+            return {
+              userId: String(p.userId || p.id || ''),
+              amount: Number(p.amount ?? 0),
+            };
+          }
+          return { userId: '', amount: 0 };
+        }).filter((p: any) => p.userId);
+      } else {
+        participantIds = [];
+      }
+
+      const validSplitTypes = [
+        "equalPaidByYou",
+        "unequalPaidByYou",
+        "equalPaidByOthers",
+        "unequalPaidByOthers",
+        "fullyOwedPaidByYou",
+        "fullyOwedPaidByOthers",
+      ];
+
+      if (!splitType || !validSplitTypes.includes(splitType)) {
+        splitType = "equalPaidByYou";
+      }
+
+      const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
+        String(req.body?.paidBy ?? ''),
+        participantIds,
+        currentUserId
+      );
+
+      expense = await createCommunityExpense(currentUserId, {
+        description: String(req.body?.description ?? ''),
+        amount: Number(req.body?.amount ?? 0),
+        expenseDate: String(req.body?.expenseDate ?? ''),
+        splitType: splitType,
+        participantIds: resolvedParticipants,
+        notes: String(req.body?.notes ?? ''),
+        currency: String(req.body?.currency ?? 'INR'),
+        paidBy: resolvedPaidBy,
+        groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
+        category: req.body?.category ? String(req.body.category) : '',
+      });
     }
-
-    const validSplitTypes = [
-      "equalPaidByYou",
-      "unequalPaidByYou",
-      "equalPaidByOthers",
-      "unequalPaidByOthers",
-      "fullyOwedPaidByYou",
-      "fullyOwedPaidByOthers",
-    ];
-
-    if (!splitType || !validSplitTypes.includes(splitType)) {
-      splitType = "equalPaidByYou";
-    }
-
-    const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
-      String(req.body?.paidBy ?? ''),
-      participantIds,
-      currentUserId
-    );
-
-    const expense = await createCommunityExpense(currentUserId, {
-      description: String(req.body?.description ?? ''),
-      amount: Number(req.body?.amount ?? 0),
-      expenseDate: String(req.body?.expenseDate ?? ''),
-      splitType: splitType,
-      participantIds: resolvedParticipants,
-      notes: String(req.body?.notes ?? ''),
-      currency: String(req.body?.currency ?? 'INR'),
-      paidBy: resolvedPaidBy,
-      groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
-      category: req.body?.category ? String(req.body.category) : '',
-    });
 
     // Mirror the current user's own share into their personal transactions so
     // Home / Insights (which read /api/transactions) reflect this expense too.

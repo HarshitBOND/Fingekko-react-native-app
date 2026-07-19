@@ -19,6 +19,18 @@ import Button from '../../../components/ui/Button';
 import Icon from '../../../components/ui/Icon';
 import LoadingScreen from '../../../components/ui/LoadingScreen';
 import Toast from '../../../components/ui/Toast';
+import AdjustSplitModal from '../../../components/groups/AdjustSplitModal';
+import WhoPaidModal from '../../../components/groups/WhoPaidModal';
+import {
+  PayerConfig,
+  Person as SplitPerson,
+  SplitConfig,
+  payerLabel,
+  resolvePayers,
+  resolveSplit,
+  splitLabel,
+  sumValues,
+} from '../../../components/groups/splitModel';
 import { useToast } from '../../../hooks/useToast';
 import { fontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
 
@@ -68,14 +80,11 @@ export default function AddGroupExpense() {
   const [group, setGroup] = useState<GroupDetailsResponse | null>(null);
   const [loadingPeople, setLoadingPeople] = useState(true);
 
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [customShares, setCustomShares] = useState<Record<string, string>>({});
-  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
-  // Who fronted the money. Defaults to you; a group expense could never say
-  // "someone else paid" before, so every split was recorded against the wrong
-  // person.
-  const [paidById, setPaidById] = useState<string>('');
-  const [payerPickerOpen, setPayerPickerOpen] = useState(false);
+  // Split + payer are the Splitwise-style configs edited in the two sub-pages.
+  const [splitConfig, setSplitConfig] = useState<SplitConfig>({ mode: 'equally', selectedIds: [] });
+  const [payerConfig, setPayerConfig] = useState<PayerConfig>({ mode: 'single', id: '' });
+  const [adjustSplitOpen, setAdjustSplitOpen] = useState(false);
+  const [whoPaidOpen, setWhoPaidOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -122,9 +131,8 @@ export default function AddGroupExpense() {
         const response = await apiRequest<GroupDetailsResponse>(`/api/groups/${groupId}`, {}, token);
         if (!active) return;
         setGroup(response);
-        // Preselect everyone. A group expense with nobody ticked was the default
-        // before, which made the backend reject the very first save attempt.
-        setSelectedUserIds((response.members ?? []).map((m: any) => String(m.id)));
+        // Default split: everyone owes an equal share; default payer: you.
+        setSplitConfig({ mode: 'equally', selectedIds: (response.members ?? []).map((m: any) => String(m.id)) });
       } catch {
         if (active) setError('Unable to load group members for splitting.');
       } finally {
@@ -153,67 +161,39 @@ export default function AddGroupExpense() {
     }));
   }, [isGroupMode, group, friends.friends]);
 
-  const selectedPeople = useMemo(
-    () => peopleList.filter((p) => selectedUserIds.includes(p.id)),
-    [peopleList, selectedUserIds]
-  );
-
-  const allSelected = peopleList.length > 0 && selectedUserIds.length === peopleList.length;
-
-  const toggleUser = (id: string) =>
-    setSelectedUserIds((current) =>
-      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id]
+  // Seed equal-split selection once people arrive (friends mode has no load hook
+  // that sets it, and it keeps group mode correct if members change).
+  useEffect(() => {
+    setSplitConfig((cur) =>
+      cur.mode === 'equally' && cur.selectedIds.length === 0 && peopleList.length > 0
+        ? { mode: 'equally', selectedIds: peopleList.map((p) => p.id) }
+        : cur
     );
+  }, [peopleList]);
 
-  const toggleSelectAll = () =>
-    setSelectedUserIds(allSelected ? [] : peopleList.map((p) => p.id));
+  // People passed to the sub-pages, with "you" flagged for friendly labels.
+  const splitPeople: SplitPerson[] = useMemo(
+    () => peopleList.map((p) => ({ id: p.id, name: p.name, isYou: p.id === userId })),
+    [peopleList, userId]
+  );
 
   const amountValue = Number(amount) || 0;
 
-  // Effective payer — defaults to you until you pick someone else.
-  const payerId = paidById || userId || '';
-  const payerIsYou = payerId === userId;
-  const payerName = payerIsYou
-    ? 'you'
-    : (peopleList.find((p) => p.id === payerId)?.name ?? 'someone').split(' ')[0];
-
-  // Maps the payer + split-mode choice onto the backend's four split types.
-  const splitType = payerIsYou
-    ? splitMode === 'custom'
-      ? 'unequalPaidByYou'
-      : 'equalPaidByYou'
-    : splitMode === 'custom'
-      ? 'unequalPaidByOthers'
-      : 'equalPaidByOthers';
-
-  // Equal split preview — the backend splits across participants plus the payer
-  // plus you (the author), so mirror that here rather than dividing by the
-  // selection alone.
-  const equalHeadCount = useMemo(() => {
-    const ids = new Set(selectedUserIds);
-    if (userId) ids.add(userId);
-    if (payerId) ids.add(payerId);
-    return ids.size;
-  }, [selectedUserIds, userId, payerId]);
-
-  const perHead = equalHeadCount > 0 ? amountValue / equalHeadCount : 0;
-
-  const customTotal = useMemo(
-    () =>
-      selectedPeople.reduce((sum, p) => sum + (Number(customShares[p.id]) || 0), 0),
-    [selectedPeople, customShares]
+  // Exact owed amounts and payer list derived from the two configs.
+  const owed = useMemo(() => resolveSplit(splitConfig, amountValue), [splitConfig, amountValue]);
+  const owedTotal = sumValues(owed);
+  const payers = useMemo(
+    () => resolvePayers(payerConfig, amountValue, userId ?? ''),
+    [payerConfig, amountValue, userId]
   );
-  const customRemainder = amountValue - customTotal;
+  const payersTotal = sumValues(Object.fromEntries(payers.map((p) => [p.userId, p.amount])));
 
-  const splitEvenlyIntoCustom = () => {
-    if (selectedPeople.length === 0 || amountValue <= 0) return;
-    const each = amountValue / selectedPeople.length;
-    const next: Record<string, string> = {};
-    selectedPeople.forEach((p) => {
-      next[p.id] = each.toFixed(2);
-    });
-    setCustomShares(next);
-  };
+  const nameFor = (id: string) => (id === userId ? 'You' : peopleList.find((p) => p.id === id)?.name ?? 'Someone');
+
+  // In percentages/equal modes owed always re-scales to the amount; only the
+  // fixed-amount modes can drift when the total is edited afterwards.
+  const splitMismatch = amountValue > 0 && Math.abs(owedTotal - amountValue) > 0.01;
+  const payerMismatch = amountValue > 0 && Math.abs(payersTotal - amountValue) > 0.01;
 
   const handleSave = async () => {
     setError('');
@@ -222,21 +202,20 @@ export default function AddGroupExpense() {
       setError('Enter an amount greater than 0.');
       return;
     }
-    // Previously missing here, so blank-titled expenses could be saved.
     if (!description.trim()) {
       setError('Add a short description so everyone knows what this was.');
       return;
     }
-    if (selectedUserIds.length === 0) {
-      setError('Pick at least one person to split this with.');
+    if (Object.keys(owed).length === 0) {
+      setError('Tap “split” to choose who owes a share.');
       return;
     }
-    if (splitMode === 'custom' && Math.abs(customRemainder) > 0.01) {
-      setError(
-        customRemainder > 0
-          ? `${inr(customRemainder)} still unassigned — shares must add up to ${inr(amountValue)}.`
-          : `Shares exceed the total by ${inr(Math.abs(customRemainder))}.`
-      );
+    if (splitMismatch) {
+      setError(`The split adds up to ${inr(owedTotal)}, not ${inr(amountValue)} — tap “split” to adjust.`);
+      return;
+    }
+    if (payerMismatch) {
+      setError(`Paid amounts add up to ${inr(payersTotal)}, not ${inr(amountValue)} — tap “Paid by” to adjust.`);
       return;
     }
 
@@ -248,16 +227,8 @@ export default function AddGroupExpense() {
         return;
       }
 
-      // Custom mode sends only the people actually selected — it used to send
-      // every group member, including unticked ones with a zero share.
-      const participantIds =
-        splitMode === 'custom'
-          ? selectedPeople.map((p) => ({
-              userId: p.id,
-              amount: Number(customShares[p.id]) || 0,
-            }))
-          : selectedUserIds;
-
+      // Explicit contract: exact payers[] and participants[] so the backend
+      // never has to re-derive the split from a type string.
       await apiRequest({
         method: 'post',
         url: '/api/expenses',
@@ -266,11 +237,11 @@ export default function AddGroupExpense() {
           description: description.trim(),
           amount: amountValue,
           expenseDate: date,
-          splitType,
-          participantIds,
+          splitType: 'explicit',
+          paidBy: payers,
+          participants: Object.entries(owed).map(([id, amt]) => ({ userId: id, amount: amt })),
           notes: notes.trim(),
           currency: 'INR',
-          paidBy: payerIsYou ? undefined : payerId,
           ...(isGroupMode ? { groupId } : {}),
           category: category || undefined,
         },
@@ -340,8 +311,7 @@ export default function AddGroupExpense() {
             />
           </View>
 
-          {/* Category + date, both reachable — the category sheet used to exist
-              with no way to open it. */}
+          {/* Category + date */}
           <View style={styles.metaRow}>
             <Pressable style={styles.metaChip} onPress={() => setCategoryPickerOpen(true)}>
               <Icon name="Tag" size={15} color={palette.primaryDeep} clickable={false} />
@@ -361,135 +331,58 @@ export default function AddGroupExpense() {
             </View>
           </View>
 
-          {/* Paid by [name] and split [equally / custom] — Splitwise-style */}
-          <View style={styles.paidByRow}>
-            <AppText variant="label" color="textSecondary">Paid by</AppText>
-            <Pressable style={styles.payerPill} onPress={() => setPayerPickerOpen(true)}>
-              <AppText variant="label" color="primaryDeep" numberOfLines={1}>{payerName}</AppText>
-              <Icon name="ChevronDown" size={14} color={palette.primaryDeep} clickable={false} />
-            </Pressable>
-          </View>
-
-          {/* Split mode */}
-          <View style={styles.segmented}>
-            {(['equal', 'custom'] as const).map((mode) => {
-              const active = splitMode === mode;
-              return (
-                <Pressable
-                  key={mode}
-                  style={[styles.segment, active && styles.segmentActive]}
-                  onPress={() => {
-                    setSplitMode(mode);
-                    if (mode === 'custom' && Object.keys(customShares).length === 0) {
-                      splitEvenlyIntoCustom();
-                    }
-                  }}
-                >
-                  <AppText
-                    variant="label"
-                    style={{ color: active ? palette.primaryDeep : palette.textTertiary }}
-                  >
-                    {mode === 'equal' ? 'Split equally' : 'Custom amounts'}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Participants */}
-          <View style={styles.sectionHeader}>
-            <AppText variant="label">
-              {isGroupMode ? 'Group members' : 'Split with'} ({selectedUserIds.length})
-            </AppText>
-            {peopleList.length > 0 && (
-              <Pressable onPress={toggleSelectAll} hitSlop={6}>
-                <AppText variant="caption" color="primaryDeep">
-                  {allSelected ? 'Clear all' : 'Select all'}
+          {/* Paid by [____] and split [____] — the two buttons open the sub-pages */}
+          <View style={styles.sentenceCard}>
+            <View style={styles.sentenceLine}>
+              <AppText variant="label" color="textSecondary">Paid by</AppText>
+              <Pressable style={styles.sentencePill} onPress={() => setWhoPaidOpen(true)}>
+                <AppText variant="label" color="primaryDeep" numberOfLines={1}>
+                  {payerLabel(payerConfig, splitPeople, userId ?? '')}
                 </AppText>
-              </Pressable>
-            )}
-          </View>
-
-          {splitMode === 'equal' && amountValue > 0 && selectedUserIds.length > 0 && (
-            <AppText variant="caption" color="textSecondary" style={styles.splitHint}>
-              {inr(perHead)} each, across {equalHeadCount} {equalHeadCount === 1 ? 'person' : 'people'} (including you)
-            </AppText>
-          )}
-
-          {splitMode === 'custom' && (
-            <View style={styles.remainderRow}>
-              <AppText variant="caption" color="textSecondary">
-                {Math.abs(customRemainder) < 0.01
-                  ? 'Shares add up — good to go'
-                  : customRemainder > 0
-                    ? `${inr(customRemainder)} left to assign`
-                    : `${inr(Math.abs(customRemainder))} over the total`}
-              </AppText>
-              <Pressable onPress={splitEvenlyIntoCustom} hitSlop={6}>
-                <AppText variant="caption" color="primaryDeep">
-                  Split evenly
-                </AppText>
+                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
               </Pressable>
             </View>
-          )}
+            <View style={styles.sentenceLine}>
+              <AppText variant="label" color="textSecondary">and split</AppText>
+              <Pressable style={styles.sentencePill} onPress={() => setAdjustSplitOpen(true)}>
+                <AppText variant="label" color="primaryDeep" numberOfLines={1}>
+                  {splitLabel(splitConfig.mode)}
+                </AppText>
+                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
+              </Pressable>
+            </View>
+          </View>
 
+          {/* Live breakdown of who owes what */}
+          <AppText variant="label" style={styles.sectionHeader}>
+            Breakdown ({Object.keys(owed).length})
+          </AppText>
           <View style={styles.peopleCard}>
-            {peopleList.length === 0 ? (
+            {Object.keys(owed).length === 0 ? (
               <AppText variant="bodySm" color="textSecondary" align="center" style={{ padding: spacing.lg }}>
-                {isGroupMode
-                  ? 'No members found in this group.'
-                  : 'Add friends first to split expenses with them.'}
+                Enter an amount, then tap “split” to choose who owes.
               </AppText>
             ) : (
-              peopleList.map((person, index) => {
-                const selected = selectedUserIds.includes(person.id);
-                const isYou = person.id === userId;
-                return (
-                  <View
-                    key={person.id}
-                    style={[styles.personRow, index !== peopleList.length - 1 && styles.personDivider]}
-                  >
-                    <Pressable style={styles.personMain} onPress={() => toggleUser(person.id)}>
-                      <View style={[styles.personAvatar, selected && styles.personAvatarActive]}>
-                        <AppText variant="caption" style={{ color: selected ? palette.white : palette.primaryDeep }}>
-                          {getInitials(person.name)}
-                        </AppText>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <AppText variant="label" numberOfLines={1}>
-                          {isYou ? 'You' : person.name}
-                        </AppText>
-                        {!!person.email && (
-                          <AppText variant="micro" color="textTertiary" numberOfLines={1}>
-                            {person.email}
-                          </AppText>
-                        )}
-                      </View>
-                    </Pressable>
-
-                    {splitMode === 'custom' && selected ? (
-                      <TextInput
-                        value={customShares[person.id] ?? ''}
-                        onChangeText={(text) =>
-                          setCustomShares((prev) => ({ ...prev, [person.id]: text }))
-                        }
-                        placeholder="0"
-                        placeholderTextColor={palette.textTertiary}
-                        keyboardType="decimal-pad"
-                        style={styles.shareInput}
-                      />
-                    ) : (
-                      <Pressable onPress={() => toggleUser(person.id)} hitSlop={6}>
-                        <View style={[styles.checkbox, selected && styles.checkboxActive]}>
-                          {selected && <Icon name="Check" size={13} color={palette.white} clickable={false} />}
-                        </View>
-                      </Pressable>
-                    )}
+              Object.entries(owed).map(([id, amt], index, arr) => (
+                <View key={id} style={[styles.personRow, index !== arr.length - 1 && styles.personDivider]}>
+                  <View style={styles.personAvatar}>
+                    <AppText variant="caption" color="primaryDeep">{getInitials(nameFor(id))}</AppText>
                   </View>
-                );
-              })
+                  <AppText variant="label" style={{ flex: 1 }} numberOfLines={1}>
+                    {nameFor(id)}
+                  </AppText>
+                  <AppText variant="label" weight="bold" style={{ color: splitMismatch ? palette.danger : palette.textPrimary }}>
+                    {inr(amt)}
+                  </AppText>
+                </View>
+              ))
             )}
           </View>
+          {payers.length > 1 && (
+            <AppText variant="caption" color="textSecondary" style={styles.payerNote}>
+              Paid by {payers.map((p) => `${nameFor(p.userId)} (${inr(p.amount)})`).join(', ')}
+            </AppText>
+          )}
 
           {/* Notes */}
           <View style={styles.notesWrap}>
@@ -516,32 +409,30 @@ export default function AddGroupExpense() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal visible={payerPickerOpen} animationType="slide" transparent onRequestClose={() => setPayerPickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setPayerPickerOpen(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHandle} />
-            <AppText variant="title" weight="bold" style={{ marginBottom: spacing.md }}>
-              Who paid?
-            </AppText>
-            {peopleList.map((person) => {
-              const isPayer = person.id === payerId;
-              return (
-                <Pressable
-                  key={person.id}
-                  style={styles.categoryRow}
-                  onPress={() => {
-                    setPaidById(person.id);
-                    setPayerPickerOpen(false);
-                  }}
-                >
-                  <AppText variant="label">{person.id === userId ? 'You' : person.name}</AppText>
-                  {isPayer && <Icon name="Check" size={18} color={palette.primaryDeep} clickable={false} />}
-                </Pressable>
-              );
-            })}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AdjustSplitModal
+        visible={adjustSplitOpen}
+        totalAmount={amountValue}
+        people={splitPeople}
+        value={splitConfig}
+        onClose={() => setAdjustSplitOpen(false)}
+        onDone={(cfg) => {
+          setSplitConfig(cfg);
+          setAdjustSplitOpen(false);
+        }}
+      />
+
+      <WhoPaidModal
+        visible={whoPaidOpen}
+        totalAmount={amountValue}
+        people={splitPeople}
+        currentUserId={userId ?? ''}
+        value={payerConfig}
+        onClose={() => setWhoPaidOpen(false)}
+        onDone={(cfg) => {
+          setPayerConfig(cfg);
+          setWhoPaidOpen(false);
+        }}
+      />
 
       <Modal visible={categoryPickerOpen} animationType="slide" transparent onRequestClose={() => setCategoryPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCategoryPickerOpen(false)}>
@@ -633,13 +524,15 @@ const styles = StyleSheet.create({
     padding: 0,
   },
 
-  paidByRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
+  sentenceCard: {
+    backgroundColor: palette.card,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    gap: spacing.md,
+    ...shadows.xs,
   },
-  payerPill: {
+  sentenceLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sentencePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -647,32 +540,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    maxWidth: 180,
-  },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: palette.card,
-    borderRadius: radius.pill,
-    padding: 4,
-    ...shadows.xs,
-  },
-  segment: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.pill },
-  segmentActive: { backgroundColor: palette.primaryLight },
-
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  splitHint: { marginTop: -spacing.sm },
-  remainderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: -spacing.sm,
+    maxWidth: 200,
   },
 
+  sectionHeader: { marginTop: spacing.xs },
   peopleCard: {
     backgroundColor: palette.card,
     borderRadius: radius.lg,
@@ -681,7 +552,6 @@ const styles = StyleSheet.create({
   },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   personDivider: { borderBottomWidth: 1, borderBottomColor: palette.divider },
-  personMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   personAvatar: {
     width: 38,
     height: 38,
@@ -690,29 +560,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  personAvatarActive: { backgroundColor: palette.primary },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.sm,
-    borderWidth: 1.5,
-    borderColor: palette.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: { backgroundColor: palette.primary, borderColor: palette.primary },
-  shareInput: {
-    width: 84,
-    textAlign: 'right',
-    fontSize: 15,
-    fontFamily: fontFamily.bold,
-    color: palette.textPrimary,
-    borderWidth: 1.5,
-    borderColor: palette.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
+  payerNote: { marginTop: -spacing.sm },
 
   notesWrap: {
     flexDirection: 'row',

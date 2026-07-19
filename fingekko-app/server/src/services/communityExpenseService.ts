@@ -152,6 +152,57 @@ function buildParticipants(
   throw new Error('Unsupported split type.');
 }
 
+// Explicit contract used by the group composer's Adjust-split / Who-paid flow:
+// the client sends the already-resolved payers[] and participants[] (in DB ids),
+// so the split is stored verbatim instead of being re-derived from a type.
+type ExplicitExpenseInput = {
+  description: string;
+  amount: number;
+  expenseDate: string;
+  notes: string;
+  currency: string;
+  paidBy: ParticipantShare[];
+  participants: ParticipantShare[];
+  groupId?: string;
+  category?: string;
+};
+
+export async function createExplicitExpense(currentUserId: string, input: ExplicitExpenseInput) {
+  const payers = (input.paidBy ?? []).filter((p) => p.userId && Number(p.amount) > 0);
+  const participants = (input.participants ?? []).filter((p) => p.userId && Number(p.amount) > 0);
+
+  if (payers.length === 0) {
+    throw new Error('At least one payer is required.');
+  }
+  if (participants.length === 0) {
+    throw new Error('At least one participant is required.');
+  }
+
+  const payTotal = roundTwo(payers.reduce((s, p) => s + Number(p.amount), 0));
+  const owedTotal = roundTwo(participants.reduce((s, p) => s + Number(p.amount), 0));
+
+  if (Math.abs(payTotal - input.amount) > 0.01) {
+    throw new Error('Paid amounts must add up to the total amount.');
+  }
+  if (Math.abs(owedTotal - input.amount) > 0.01) {
+    throw new Error('Split amounts must add up to the total amount.');
+  }
+
+  return communityExpenseRepository.createExpense({
+    groupId: input.groupId,
+    createdBy: currentUserId,
+    paidBy: payers.map((p) => ({ userId: p.userId, amount: roundTwo(Number(p.amount)) })),
+    description: input.description,
+    amount: input.amount,
+    currency: input.currency,
+    notes: input.notes,
+    category: input.category ?? '',
+    expenseDate: input.expenseDate,
+    participants: participants.map((p) => ({ userId: p.userId, amount: roundTwo(Number(p.amount)), settled: false })),
+    history: [{ action: 'CREATED', performedBy: currentUserId }],
+  });
+}
+
 export async function createCommunityExpense(currentUserId: string, input: CreateExpenseInput) {
   const payerId = input.paidBy || currentUserId;
 
