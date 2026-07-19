@@ -121,6 +121,42 @@ router.get('/', async (req: Request, res: Response) => {
       }
     });
 
+    // 4. Recently deleted shared expenses — tell the *other* parties that
+    // someone removed a split they were in. Derived from the soft-delete record
+    // so no separate notifications collection is needed.
+    let deletedExpenses: any[] = [];
+    try {
+      deletedExpenses = await communityExpenseRepository.listRecentlyDeletedForUser(currentUserId) || [];
+    } catch (err) {
+      console.error('Error loading deleted expenses for notifications:', err);
+    }
+
+    deletedExpenses.forEach((exp: any) => {
+      try {
+        const deleterId = exp.deletedBy?._id?.toString() || exp.deletedBy?.toString() || '';
+        // Don't notify the person who did the deleting.
+        if (!deleterId || deleterId === currentUserId) return;
+
+        list.push({
+          id: `deleted-${exp._id.toString()}`,
+          type: 'expense_deleted',
+          title: `${exp.deletedBy?.name || 'A member'} deleted a shared expense`,
+          subtitle: `"${exp.description || 'Expense'}" was removed. It stays as a record for 30 days.`,
+          dateLabel: exp.deletedAt
+            ? new Date(exp.deletedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+            : 'Recent',
+          createdAt: exp.deletedAt || new Date(),
+          rawData: {
+            id: exp._id.toString(),
+            description: exp.description || '',
+            amount: exp.amount || 0,
+          },
+        });
+      } catch (err) {
+        console.error('Error processing deleted expense notification:', err);
+      }
+    });
+
     // Sort by createdAt descending (newest first)
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

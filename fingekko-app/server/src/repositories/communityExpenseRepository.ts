@@ -21,11 +21,17 @@ async function createExpense(expenseData: {
 }
 
 /////this function can be use to list all the expense for a particular use from all the groups he is part of ...................
-async function listForUser(userId: string, groupId?: string | null) {
+// includeDeleted keeps soft-deleted expenses in the result (flagged isDeleted)
+// so a screen can render them as greyed records; it defaults off so balances and
+// notifications never count a deleted split.
+async function listForUser(userId: string, groupId?: string | null, includeDeleted = false) {
   const filter: Record<string, unknown> = {
-    isDeleted: { $ne: true },
     $or: [{ 'paidBy.userId': userId }, { 'participants.userId': userId }],
   };
+
+  if (!includeDeleted) {
+    filter.isDeleted = { $ne: true };
+  }
 
   if (groupId === null) {
     filter.groupId = null;
@@ -35,8 +41,10 @@ async function listForUser(userId: string, groupId?: string | null) {
 
   return CommunityExpense.find(filter)
     .populate('groupId', 'name')
+    .populate('createdBy', 'name email')
     .populate('paidBy.userId', 'name email')
     .populate('participants.userId', 'name email')
+    .populate('deletedBy', 'name email')
     .sort({ createdAt: -1 });
 }
 
@@ -51,7 +59,23 @@ async function findById(expenseId: string) {
     .populate('groupId', 'name')
     .populate('createdBy', 'name email')
     .populate('paidBy.userId', 'name email')
-    .populate('participants.userId', 'name email');
+    .populate('participants.userId', 'name email')
+    .populate('deletedBy', 'name email')
+    .populate('history.performedBy', 'name email');
+}
+
+/////recently soft-deleted expenses this user was part of — used to surface
+///// "X deleted a shared expense" notifications without a separate collection.
+async function listRecentlyDeletedForUser(userId: string) {
+  return CommunityExpense.find({
+    isDeleted: true,
+    $or: [{ 'paidBy.userId': userId }, { 'participants.userId': userId }],
+  })
+    .populate('deletedBy', 'name email')
+    .populate('paidBy.userId', 'name email')
+    .populate('participants.userId', 'name email')
+    .sort({ deletedAt: -1 })
+    .limit(20);
 }
 
 ///// this funcytion can be used to update a perticular expense and also add the history of the action performed ...................
@@ -66,7 +90,7 @@ async function updateExpense(
     expenseDate: string;
     participants: { userId: string; amount: number; settled: boolean }[];
   }>,
-  historyData?: { action: string; performedBy: string }
+  historyData?: { action: string; performedBy: string; note?: string }
 ) {
   const update: Record<string, unknown> = { $set: updateData };
   if (historyData) {
@@ -77,11 +101,15 @@ async function updateExpense(
     .populate('groupId', 'name')
     .populate('createdBy', 'name email ')
     .populate('paidBy.userId', 'name email')
-    .populate('participants.userId', 'name email ');
+    .populate('participants.userId', 'name email ')
+    .populate('deletedBy', 'name email')
+    .populate('history.performedBy', 'name email');
 }
 
 ///////// this function can be used to solft delete a perticular expense .......................
-async function SoftdeleteExpense(expenseId: string, userId: string, historyData: { action: 'DELETE'; performedBy: string }) {
+// action must match the historySchema enum ('DELETED'); the old 'DELETE' value
+// failed validation and made every delete throw.
+async function SoftdeleteExpense(expenseId: string, userId: string, historyData: { action: 'DELETED'; performedBy: string; note?: string }) {
   return CommunityExpense.findByIdAndUpdate(
     expenseId,
     {
@@ -96,7 +124,9 @@ async function SoftdeleteExpense(expenseId: string, userId: string, historyData:
   )
     .populate('createdBy', 'name email ')
     .populate('paidBy.userId', 'name email')
-    .populate('participants.userId', 'name email ');
+    .populate('participants.userId', 'name email ')
+    .populate('deletedBy', 'name email')
+    .populate('history.performedBy', 'name email');
 }
 
 
@@ -105,6 +135,7 @@ export default {
   SoftdeleteExpense,
   findById,
   listForUser,
+  listRecentlyDeletedForUser,
   listForGroup,
   updateExpense,
 };

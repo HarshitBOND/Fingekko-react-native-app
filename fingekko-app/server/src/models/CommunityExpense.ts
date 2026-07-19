@@ -46,6 +46,11 @@ const historySchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    // Human-readable context for the audit trail, e.g. "Amount ₹200 → ₹250".
+    note: {
+      type: String,
+      default: '',
+    },
     performedAt: {
       type: Date,
       default: Date.now,
@@ -117,6 +122,14 @@ const communityExpenseSchema = new mongoose.Schema(
     }
   },
   { timestamps: true }
+);
+
+// Soft-deleted expenses linger 30 days as a greyed record, then MongoDB removes
+// them automatically. The TTL is keyed on deletedAt, which is only set when an
+// expense is soft-deleted — live expenses have no deletedAt and never expire.
+communityExpenseSchema.index(
+  { deletedAt: 1 },
+  { expireAfterSeconds: 30 * 24 * 60 * 60 }
 );
 
 const CommunityExpense =

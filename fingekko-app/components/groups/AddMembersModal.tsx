@@ -120,13 +120,17 @@ export default function AddMembersModal({ visible, onClose, existingMemberIds, o
         return () => clearTimeout(handle);
     }, [searchQuery, visible]);
 
-    const isSelected = (clerkId: string) => selected.some((m) => m.clerkId === clerkId);
+    // Selection is keyed on the database id, which every picker row is
+    // guaranteed to have. clerkId is only read at submit time, so a user the
+    // API returns without one can never merge into another row's identity.
+    const isSelected = (id: string) => selected.some((m) => m.id === id);
 
     const toggle = (user: PickerUser) => {
+        if (!user.id) return;
         if (existingSet.has(user.clerkId)) return;
         setSelected((prev) =>
-            prev.some((m) => m.clerkId === user.clerkId)
-                ? prev.filter((m) => m.clerkId !== user.clerkId)
+            prev.some((m) => m.id === user.id)
+                ? prev.filter((m) => m.id !== user.id)
                 : [...prev, user]
         );
     };
@@ -145,7 +149,14 @@ export default function AddMembersModal({ visible, onClose, existingMemberIds, o
         if (selected.length === 0 || adding) return;
         setAdding(true);
         setError('');
-        const ok = await onAdd(selected.map((m) => m.clerkId));
+        const clerkIds = selected.map((m) => m.clerkId).filter(Boolean);
+        if (clerkIds.length !== selected.length) {
+            setAdding(false);
+            setError('Some of those accounts are missing an id and cannot be added yet.');
+            return;
+        }
+
+        const ok = await onAdd(clerkIds);
         setAdding(false);
         if (ok) {
             onClose();
@@ -155,7 +166,7 @@ export default function AddMembersModal({ visible, onClose, existingMemberIds, o
     };
 
     const renderRow = (user: PickerUser, key: string) => {
-        const picked = isSelected(user.clerkId);
+        const picked = isSelected(user.id);
         return (
             <Pressable
                 key={key}
@@ -211,7 +222,7 @@ export default function AddMembersModal({ visible, onClose, existingMemberIds, o
                 {selected.length > 0 && (
                     <View style={styles.chipsWrap}>
                         {selected.map((member) => (
-                            <View key={member.clerkId} style={styles.chip}>
+                            <View key={member.id} style={styles.chip}>
                                 <AppText variant="micro" color="primaryDeep" numberOfLines={1} style={{ flexShrink: 1 }}>
                                     {member.name}
                                 </AppText>

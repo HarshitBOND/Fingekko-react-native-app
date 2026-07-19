@@ -72,6 +72,16 @@ function paidByIncludes(expense: any, userId: string) {
   return (expense.paidBy ?? []).some((entry: any) => toId(entry.userId) === userId);
 }
 
+// Anyone financially involved in the expense: its author, a payer, or a
+// participant. These are the people who may view, edit, or delete it.
+function isPartyToExpense(expense: any, userId: string) {
+  return (
+    toId(expense.createdBy) === userId ||
+    paidByIncludes(expense, userId) ||
+    (expense.participants ?? []).some((p: any) => toId(p.userId) === userId)
+  );
+}
+
 function serializeExpense(expense: any, currentUserId?: string) {
   const paidByList = (expense.paidBy ?? []).map((entry: any) => ({
     userId: serializeUser(entry.userId),
@@ -91,6 +101,13 @@ function serializeExpense(expense: any, currentUserId?: string) {
     ? roundTwo((expense.participants ?? []).filter((p: any) => toId(p.userId) === currentUserId).reduce((sum: number, p: any) => sum + p.amount, 0))
     : 0;
 
+  const history = (expense.history ?? []).map((entry: any) => ({
+    action: entry.action,
+    note: entry.note ?? '',
+    performedBy: serializeUser(entry.performedBy),
+    performedAt: entry.performedAt?.toISOString?.() ?? entry.performedAt ?? null,
+  }));
+
   return {
     id: expense._id.toString(),
     groupId: expense.groupId ? toId(expense.groupId) : null,
@@ -107,9 +124,24 @@ function serializeExpense(expense: any, currentUserId?: string) {
     yourAmountPaid,
     yourAmountOwed,
     netBalance: currentUserId ? computeNetBalanceForUser(expense, currentUserId) : roundTwo(yourAmountPaid - yourAmountOwed),
+    isDeleted: !!expense.isDeleted,
+    deletedBy: expense.deletedBy ? serializeUser(expense.deletedBy) : null,
+    deletedAt: expense.deletedAt?.toISOString?.() ?? expense.deletedAt ?? null,
+    // Whole days remaining before the 30-day purge — the client shows a countdown.
+    purgeInDays: expense.deletedAt ? purgeDaysRemaining(expense.deletedAt) : null,
+    history,
     createdAt: expense.createdAt?.toISOString?.() || new Date(expense.createdAt).toISOString(),
     updatedAt: expense.updatedAt?.toISOString?.() || new Date(expense.updatedAt).toISOString(),
   };
+}
+
+const PURGE_WINDOW_DAYS = 30;
+
+// Days left before a soft-deleted expense is auto-purged (never negative).
+function purgeDaysRemaining(deletedAt: Date | string) {
+  const deleted = new Date(deletedAt).getTime();
+  const elapsedDays = (Date.now() - deleted) / (24 * 60 * 60 * 1000);
+  return Math.max(0, Math.ceil(PURGE_WINDOW_DAYS - elapsedDays));
 }
 
 // Net balance for the current user on this single expense, accounting for which
@@ -141,7 +173,9 @@ function roundTwo(value: number) {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
-    const expenses = await communityExpenseRepository.listForUser(currentUserId);
+    // Opt-in: only screens that render greyed deleted records ask for them.
+    const includeDeleted = req.query.includeDeleted === 'true' || req.query.includeDeleted === '1';
+    const expenses = await communityExpenseRepository.listForUser(currentUserId, undefined, includeDeleted);
     return res.json({ expenses: expenses.map((expense) => serializeExpense(expense, currentUserId)) });
   } catch (error) {
     console.error(error);
@@ -158,12 +192,7 @@ router.get('/:expenseId', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    const visible =
-      toId(expense.createdBy) === currentUserId ||
-      toId(expense.paidBy) === currentUserId ||
-      (expense.participants ?? []).some((participant: any) => toId(participant.userId) === currentUserId);
-
-    if (!visible) {
+    if (!isPartyToExpense(expense, currentUserId)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -275,6 +304,19 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
   try {
     const currentUserId = getCurrentUserId(req);
 
+    // A soft-deleted expense is "numb" — a frozen record awaiting purge that
+    // nobody can edit. Guard here before doing any of the resolve work.
+    const existing = await communityExpenseRepository.findById(String(req.params.expenseId));
+    if (!existing) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+    if (!isPartyToExpense(existing, currentUserId)) {
+      return res.status(403).json({ message: 'Only people in this split can edit it' });
+    }
+    if (existing.isDeleted) {
+      return res.status(409).json({ message: 'This expense is deleted and can no longer be edited' });
+    }
+
     let splitType = req.body?.splitType;
     let participantIds = req.body?.participantIds || [];
 
@@ -340,13 +382,12 @@ async function handleSettle(req: Request, res: Response) {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    const visible =
-      toId(expense.createdBy) === currentUserId ||
-      paidByIncludes(expense, currentUserId) ||
-      (expense.participants ?? []).some((participant: any) => toId(participant.userId) === currentUserId);
-
-    if (!visible) {
+    if (!isPartyToExpense(expense, currentUserId)) {
       return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    if (expense.isDeleted) {
+      return res.status(409).json({ message: 'This expense is deleted and can no longer be settled' });
     }
 
     // Which participant's share is being settled — defaults to the caller's own
@@ -358,9 +399,11 @@ async function handleSettle(req: Request, res: Response) {
       toId(participant.userId) === targetUserId ? { ...participant.toObject?.(), settled: true } : participant
     );
 
-    const updated = await communityExpenseRepository.updateExpense(String(req.params.expenseId), {
-      participants: updatedParticipants,
-    });
+    const updated = await communityExpenseRepository.updateExpense(
+      String(req.params.expenseId),
+      { participants: updatedParticipants },
+      { action: 'SETTLED', performedBy: currentUserId, note: 'Marked settled' }
+    );
 
     return res.json({ expense: serializeExpense(updated, currentUserId) });
   } catch (error) {
@@ -381,16 +424,23 @@ router.delete('/:expenseId', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    if (toId(expense.createdBy) !== currentUserId) {
-      return res.status(403).json({ message: 'Only the creator can delete this expense' });
+    // Either side of a split can delete it — matches the ask that both parties
+    // in a shared expense can remove a wrong entry, not just whoever typed it.
+    if (!isPartyToExpense(expense, currentUserId)) {
+      return res.status(403).json({ message: 'Only people in this split can delete it' });
     }
 
-    await communityExpenseRepository.SoftdeleteExpense(
+    if (expense.isDeleted) {
+      return res.status(409).json({ message: 'This expense is already deleted' });
+    }
+
+    const actor = await User.findById(currentUserId).select('name').lean<{ name?: string } | null>();
+    const updated = await communityExpenseRepository.SoftdeleteExpense(
       String(req.params.expenseId),
       currentUserId,
-      { action: 'DELETE', performedBy: currentUserId }
+      { action: 'DELETED', performedBy: currentUserId, note: `Deleted by ${actor?.name ?? 'a member'}` }
     );
-    return res.json({ message: 'Expense deleted' });
+    return res.json({ message: 'Expense deleted', expense: updated ? serializeExpense(updated, currentUserId) : null });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to delete expense' });

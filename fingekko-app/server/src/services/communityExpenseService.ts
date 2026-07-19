@@ -99,10 +99,14 @@ function buildParticipants(
   splitType: string,
   amount: number,
   payerId: string,
-  participantIds: ParticipantShare[]
+  participantIds: ParticipantShare[],
+  currentUserId: string
 ) {
+  // The composer sends only the *other* people as participants, so the current
+  // user has to be folded in here. Without them the "paid by them" splits
+  // resolved to a one-person expense that netted out to zero for everyone.
   const allIds = Array.from(
-    new Set([...participantIds.map((p) => p.userId), payerId])
+    new Set([...participantIds.map((p) => p.userId), payerId, currentUserId].filter(Boolean))
   );
 
   if (splitType === 'equalPaidByYou' || splitType === 'equalPaidByOthers') {
@@ -128,17 +132,21 @@ function buildParticipants(
     });
   }
 
-  if (splitType === 'fullyOwedPaidByYou') {
-    return allIds
-      .filter((id) => id !== payerId)
-      .map((id) => ({ userId: id, amount: roundTwo(amount), settled: false }));
-  }
+  // "Fully owed" is symmetric: whoever did *not* pay carries the whole amount.
+  // The only difference between the two variants is who `payerId` is, so the
+  // payer is always excluded from the participant shares.
+  if (splitType === 'fullyOwedPaidByYou' || splitType === 'fullyOwedPaidByOthers') {
+    const owers = allIds.filter((id) => id !== payerId);
 
-  if (splitType === 'fullyOwedPaidByOthers') {
-    return allIds
-      .filter((id) => id !== payerId)
-      .map((id) => ({ userId: id, amount: 0, settled: false }))
-      .concat([{ userId: payerId, amount: roundTwo(amount), settled: false }]);
+    if (owers.length === 0) {
+      throw new Error('Add someone else to split this expense with.');
+    }
+
+    return splitEvenly(amount, owers).map((share) => ({
+      userId: share.userId,
+      amount: share.amount,
+      settled: false,
+    }));
   }
 
   throw new Error('Unsupported split type.');
@@ -151,7 +159,13 @@ export async function createCommunityExpense(currentUserId: string, input: Creat
     throw new Error('At least one participant is required.');
   }
 
-  const participants = buildParticipants(input.splitType, input.amount, payerId, input.participantIds);
+  const participants = buildParticipants(
+    input.splitType,
+    input.amount,
+    payerId,
+    input.participantIds,
+    currentUserId
+  );
 
   return communityExpenseRepository.createExpense({
     groupId: input.groupId,
@@ -179,7 +193,27 @@ export async function updateCommunityExpense(
   }
 
   const payerId = input.paidBy || currentUserId;
-  const participants = buildParticipants(input.splitType, input.amount, payerId, input.participantIds);
+  // Anchor on the original author, not whoever is editing — otherwise a third
+  // party opening the expense would silently add themselves to the split.
+  const authorId = existing.createdBy?._id?.toString?.() ?? existing.createdBy?.toString?.() ?? currentUserId;
+  const participants = buildParticipants(
+    input.splitType,
+    input.amount,
+    payerId,
+    input.participantIds,
+    authorId
+  );
+
+  // Record what actually moved so the detail page's audit trail reads
+  // meaningfully rather than a bare "edited".
+  const changes: string[] = [];
+  if (existing.description !== input.description) {
+    changes.push(`Description → "${input.description}"`);
+  }
+  if (roundTwo(existing.amount) !== roundTwo(input.amount)) {
+    changes.push(`Amount ${existing.currency ?? ''}${roundTwo(existing.amount)} → ${roundTwo(input.amount)}`);
+  }
+  const note = changes.length ? changes.join(', ') : 'Details updated';
 
   return communityExpenseRepository.updateExpense(
     expenseId,
@@ -192,7 +226,7 @@ export async function updateCommunityExpense(
       paidBy: [{ userId: payerId, amount: input.amount }],
       participants,
     },
-    { action: 'UPDATED', performedBy: currentUserId }
+    { action: 'UPDATED', performedBy: currentUserId, note }
   );
 }
 

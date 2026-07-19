@@ -4,10 +4,15 @@ function pairKey(firstId: string, secondId: string) {
   return [firstId, secondId].sort().join(':');
 }
 
+// clerkId must stay in this projection: clients key friend selection and the
+// group /members payload off it, and a missing clerkId collapses every friend
+// into the same `undefined` identity.
+const FRIEND_FIELDS = 'clerkId name email avatarKey';
+
 async function findById(friendshipId: string) {
   return Friendship.findById(friendshipId)
-    .populate('requester', 'name email avatarKey')
-    .populate('addressee', 'name email avatarKey');
+    .populate('requester', FRIEND_FIELDS)
+    .populate('addressee', FRIEND_FIELDS);
 }
 
 async function findByPair(firstId: string, secondId: string) {
@@ -17,16 +22,16 @@ async function findByPair(firstId: string, secondId: string) {
       { requester: secondId, addressee: firstId },
     ],
   })
-    .populate('requester', 'name email avatarKey')
-    .populate('addressee', 'name email avatarKey');
+    .populate('requester', FRIEND_FIELDS)
+    .populate('addressee', FRIEND_FIELDS);
 }
 
 async function listForUser(userId: string) {
   return Friendship.find({
     $or: [{ requester: userId }, { addressee: userId }],
   })
-    .populate('requester', 'name email avatarKey')
-    .populate('addressee', 'name email avatarKey')
+    .populate('requester', FRIEND_FIELDS)
+    .populate('addressee', FRIEND_FIELDS)
     .sort({ createdAt: -1 });
 }
 
@@ -35,8 +40,8 @@ async function listAcceptedForUser(userId: string) {
     status: 'accepted',
     $or: [{ requester: userId }, { addressee: userId }],
   })
-    .populate('requester', 'name email avatarKey')
-    .populate('addressee', 'name email avatarKey')
+    .populate('requester', FRIEND_FIELDS)
+    .populate('addressee', FRIEND_FIELDS)
     .sort({ createdAt: -1 });
 }
 
@@ -74,8 +79,8 @@ async function createFriendRequest(requesterId: string, addresseeId: string) {
 
 async function updateStatus(friendshipId: string, status: 'pending' | 'accepted' | 'declined') {
   return Friendship.findByIdAndUpdate(friendshipId, { status }, { new: true })
-    .populate('requester', 'name email avatarKey')
-    .populate('addressee', 'name email avatarKey');
+    .populate('requester', FRIEND_FIELDS)
+    .populate('addressee', FRIEND_FIELDS);
 }
 
 async function removeFriendship(friendshipId: string) {

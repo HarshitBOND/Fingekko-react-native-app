@@ -71,6 +71,11 @@ export default function AddGroupExpense() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+  // Who fronted the money. Defaults to you; a group expense could never say
+  // "someone else paid" before, so every split was recorded against the wrong
+  // person.
+  const [paidById, setPaidById] = useState<string>('');
+  const [payerPickerOpen, setPayerPickerOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -165,13 +170,31 @@ export default function AddGroupExpense() {
 
   const amountValue = Number(amount) || 0;
 
-  // Equal split preview — the backend splits across participants plus the payer,
-  // so mirror that here rather than dividing by the selection alone.
+  // Effective payer — defaults to you until you pick someone else.
+  const payerId = paidById || userId || '';
+  const payerIsYou = payerId === userId;
+  const payerName = payerIsYou
+    ? 'you'
+    : (peopleList.find((p) => p.id === payerId)?.name ?? 'someone').split(' ')[0];
+
+  // Maps the payer + split-mode choice onto the backend's four split types.
+  const splitType = payerIsYou
+    ? splitMode === 'custom'
+      ? 'unequalPaidByYou'
+      : 'equalPaidByYou'
+    : splitMode === 'custom'
+      ? 'unequalPaidByOthers'
+      : 'equalPaidByOthers';
+
+  // Equal split preview — the backend splits across participants plus the payer
+  // plus you (the author), so mirror that here rather than dividing by the
+  // selection alone.
   const equalHeadCount = useMemo(() => {
     const ids = new Set(selectedUserIds);
     if (userId) ids.add(userId);
+    if (payerId) ids.add(payerId);
     return ids.size;
-  }, [selectedUserIds, userId]);
+  }, [selectedUserIds, userId, payerId]);
 
   const perHead = equalHeadCount > 0 ? amountValue / equalHeadCount : 0;
 
@@ -243,10 +266,11 @@ export default function AddGroupExpense() {
           description: description.trim(),
           amount: amountValue,
           expenseDate: date,
-          splitType: splitMode === 'custom' ? 'unequalPaidByYou' : 'equalPaidByYou',
+          splitType,
           participantIds,
           notes: notes.trim(),
           currency: 'INR',
+          paidBy: payerIsYou ? undefined : payerId,
           ...(isGroupMode ? { groupId } : {}),
           category: category || undefined,
         },
@@ -335,6 +359,15 @@ export default function AddGroupExpense() {
                 style={styles.dateInput}
               />
             </View>
+          </View>
+
+          {/* Paid by [name] and split [equally / custom] — Splitwise-style */}
+          <View style={styles.paidByRow}>
+            <AppText variant="label" color="textSecondary">Paid by</AppText>
+            <Pressable style={styles.payerPill} onPress={() => setPayerPickerOpen(true)}>
+              <AppText variant="label" color="primaryDeep" numberOfLines={1}>{payerName}</AppText>
+              <Icon name="ChevronDown" size={14} color={palette.primaryDeep} clickable={false} />
+            </Pressable>
           </View>
 
           {/* Split mode */}
@@ -483,6 +516,33 @@ export default function AddGroupExpense() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <Modal visible={payerPickerOpen} animationType="slide" transparent onRequestClose={() => setPayerPickerOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPayerPickerOpen(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <AppText variant="title" weight="bold" style={{ marginBottom: spacing.md }}>
+              Who paid?
+            </AppText>
+            {peopleList.map((person) => {
+              const isPayer = person.id === payerId;
+              return (
+                <Pressable
+                  key={person.id}
+                  style={styles.categoryRow}
+                  onPress={() => {
+                    setPaidById(person.id);
+                    setPayerPickerOpen(false);
+                  }}
+                >
+                  <AppText variant="label">{person.id === userId ? 'You' : person.name}</AppText>
+                  {isPayer && <Icon name="Check" size={18} color={palette.primaryDeep} clickable={false} />}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={categoryPickerOpen} animationType="slide" transparent onRequestClose={() => setCategoryPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCategoryPickerOpen(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
@@ -573,6 +633,22 @@ const styles = StyleSheet.create({
     padding: 0,
   },
 
+  paidByRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  payerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    maxWidth: 180,
+  },
   segmented: {
     flexDirection: 'row',
     backgroundColor: palette.card,

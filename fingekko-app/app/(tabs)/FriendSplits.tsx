@@ -41,13 +41,25 @@ type ExpenseItem = {
     name: string;
     email: string;
   };
+  paidBy: {
+    userId: { id: string; name: string; email: string } | null;
+    amount: number;
+  }[];
   participants: ParticipantShare[];
   netBalance: number;
   yourAmountPaid: number;
   yourAmountOwed: number;
   category?: string;
   notes?: string;
+  isDeleted?: boolean;
+  deletedBy?: { id: string; name: string; email: string } | null;
+  deletedAt?: string | null;
+  purgeInDays?: number | null;
 };
+
+// How many split rows to show before "Load more" — keeps a long history from
+// growing the page without bound.
+const PAGE_SIZE = 8;
 
 const getCategoryIcon = (category?: string): { name: keyof typeof Ionicons.glyphMap; color: string } => {
   switch (category?.toLowerCase()) {
@@ -84,6 +96,7 @@ export default function FriendSplitsScreen() {
   const [settleConfirm, setSettleConfirm] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { toast, showToast, dismissToast } = useToast();
 
   const fetchFriendExpenses = async () => {
@@ -98,9 +111,10 @@ export default function FriendSplitsScreen() {
       const myDbId = meRes?.user?._id || meRes?.user?.id || '';
       setDbUserId(myDbId);
 
+      // includeDeleted keeps soft-deleted splits in the list as greyed records.
       const response = await apiRequest<{ expenses: ExpenseItem[] }>({
         method: 'get',
-        url: '/api/expenses',
+        url: '/api/expenses?includeDeleted=true',
         token,
       });
 
@@ -139,10 +153,12 @@ export default function FriendSplitsScreen() {
     }, [friendId])
   );
 
-  // Compute overall balance with this friend
+  // Compute overall balance with this friend — deleted expenses are frozen
+  // records and must never move the balance.
   const totalBalance = expenses.reduce((sum, exp) => {
+    if (exp.isDeleted) return sum;
     const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-    
+
     if (creatorId === dbUserId) {
       const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
       if (friendPart && !friendPart.settled) {
@@ -173,6 +189,7 @@ export default function FriendSplitsScreen() {
 
       // Find unsettled expenses with this friend
       const unsettled = expenses.filter(exp => {
+        if (exp.isDeleted) return false;
         const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
         if (creatorId === dbUserId) {
           const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
@@ -220,7 +237,7 @@ export default function FriendSplitsScreen() {
       });
 
       setDeleteTargetId(null);
-      showToast({ title: 'Expense deleted', tone: 'info', duration: 2200 });
+      showToast({ title: 'Expense deleted', message: 'Kept as a record for 30 days.', tone: 'info', duration: 2200 });
       fetchFriendExpenses();
     } catch (err: any) {
       showToast({ title: 'Could not delete', message: err.message || 'Please try again.', tone: 'error' });
@@ -295,19 +312,45 @@ export default function FriendSplitsScreen() {
           </AppText>
         </View>
       ) : (
-        expenses.map((item) => {
-          const creatorId = item.createdBy?.id || item.createdBy?.toString() || '';
-          const userPaid = creatorId === dbUserId;
-          
+        <>
+        {expenses.slice(0, visibleCount).map((item) => {
+          const deleted = !!item.isDeleted;
+
+          // Who actually paid — not who typed it in. Using createdBy here meant
+          // logging "they paid" against your own account still rendered as
+          // "Friend owes", flipping the direction of the whole split.
+          const userPaid = (item.paidBy ?? []).some((p) => p.userId?.id === dbUserId);
+
           // Get friend participant share
           const friendPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
           const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-          
+
           const isSettled = userPaid ? friendPart?.settled : userPart?.settled;
           const splitAmount = userPaid ? friendPart?.amount : userPart?.amount;
 
+          // netBalance is signed from your point of view (server-computed and
+          // settle-aware): positive means you are owed, negative means you owe.
+          const net = item.netBalance ?? 0;
+          const owesYou = net > 0;
+          const amountColor = net < 0 ? palette.danger : net > 0 ? palette.success : palette.textSecondary;
+
           return (
-            <Card key={item.id} variant="elevated" style={styles.expenseCard} padding={16}>
+            <Card
+              key={item.id}
+              variant="elevated"
+              style={[styles.expenseCard, deleted && styles.deletedCard]}
+              padding={16}
+              onPress={() => router.push({ pathname: '/(tabs)/ExpenseDetail', params: { expenseId: item.id } })}
+            >
+              {deleted && (
+                <View style={styles.deletedBanner}>
+                  <Icon name="Trash2" size={13} color={palette.danger} />
+                  <AppText variant="micro" color="danger" weight="bold" style={{ flex: 1 }} numberOfLines={1}>
+                    Deleted by {item.deletedBy?.name ?? 'a member'}
+                    {item.purgeInDays != null ? ` · removed in ${item.purgeInDays}d` : ''}
+                  </AppText>
+                </View>
+              )}
               <View style={styles.row}>
                 <View style={styles.iconWrap}>
                   <AnimatedIcon {...getCategoryIcon(item.category)} size={20} mode="pulse" />
@@ -322,14 +365,14 @@ export default function FriendSplitsScreen() {
                 </View>
                 <View style={styles.right}>
                   <AppText variant="micro" color="textSecondary" weight="bold">
-                    {userPaid ? 'Friend owes' : 'You owe'}
+                    {deleted ? '—' : net === 0 ? 'Settled' : owesYou ? 'Friend owes' : 'You owe'}
                   </AppText>
                   <AppText
                     variant="bodySm"
                     weight="bold"
-                    style={{ color: userPaid ? palette.success : palette.danger }}
+                    style={{ color: deleted ? palette.textTertiary : amountColor, textDecorationLine: deleted ? 'line-through' : 'none' }}
                   >
-                    ₹{splitAmount?.toFixed(2)}
+                    ₹{Math.abs(net || splitAmount || 0).toFixed(2)}
                   </AppText>
                 </View>
               </View>
@@ -359,21 +402,23 @@ export default function FriendSplitsScreen() {
                 <View
                   style={[
                     styles.badge,
-                    { backgroundColor: isSettled ? palette.successLight : palette.warningLight }
+                    { backgroundColor: deleted ? palette.border : isSettled ? palette.successLight : palette.warningLight }
                   ]}
                 >
                   <AppText
                     variant="micro"
                     weight="bold"
-                    style={{ color: isSettled ? palette.success : palette.warning }}
+                    style={{ color: deleted ? palette.textTertiary : isSettled ? palette.success : palette.warning }}
                   >
-                    {isSettled ? 'Settled' : 'Unsettled'}
+                    {deleted ? 'Deleted' : isSettled ? 'Settled' : 'Unsettled'}
                   </AppText>
                 </View>
-                {userPaid && (
+                {/* Either party can delete a live split; a deleted one is numb. */}
+                {!deleted && (
                   <Pressable
                     style={styles.deleteBtn}
                     onPress={() => setDeleteTargetId(item.id)}
+                    hitSlop={6}
                   >
                     <Icon name="Trash2" size={16} color={palette.danger} />
                   </Pressable>
@@ -381,7 +426,19 @@ export default function FriendSplitsScreen() {
               </View>
             </Card>
           );
-        })
+        })}
+
+        {expenses.length > visibleCount && (
+          <Button
+            variant="secondary"
+            size="md"
+            onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            style={{ marginTop: spacing.sm }}
+          >
+            {`Show more (${expenses.length - visibleCount} left)`}
+          </Button>
+        )}
+        </>
       )}
 
       <ConfirmDialog
@@ -397,7 +454,7 @@ export default function FriendSplitsScreen() {
       <ConfirmDialog
         visible={!!deleteTargetId}
         title="Delete expense"
-        message="Delete this expense? This action cannot be undone."
+        message="This split will be greyed out as a record and permanently removed after 30 days. Everyone in it will be notified."
         confirmText="Delete"
         destructive
         loading={deleting}
@@ -447,6 +504,19 @@ const styles = StyleSheet.create({
   },
   expenseCard: {
     gap: 12,
+  },
+  deletedCard: {
+    opacity: 0.6,
+    backgroundColor: palette.cardMuted,
+  },
+  deletedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: palette.dangerLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   row: {
     flexDirection: 'row',

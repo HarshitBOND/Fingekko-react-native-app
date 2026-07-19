@@ -1,7 +1,7 @@
 import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Icon from '../../components/ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -46,6 +46,10 @@ const getInitials = (name: string): string =>
 export default function AddNewExpense() {
   const { getToken, isSignedIn } = useAuth();
   const router = useRouter();
+  // When an expenseId is passed we're editing an existing split (PUT), not
+  // creating one (POST). Reached from the expense detail screen's Edit button.
+  const { expenseId } = useLocalSearchParams<{ expenseId?: string }>();
+  const isEditing = Boolean(expenseId);
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -100,6 +104,62 @@ export default function AddNewExpense() {
       active = false;
     };
   }, [isSignedIn]);
+
+  // Edit mode: load the existing expense and reverse-engineer the composer state
+  // from its stored split. A split is "equal" when the payer is themselves a
+  // participant with a non-zero share; "full amount" excludes the payer.
+  useEffect(() => {
+    if (!isEditing || !expenseId) return;
+    let active = true;
+
+    (async () => {
+      try {
+        const token = await getTokenRef.current();
+        if (!token) return;
+
+        const [meRes, expRes] = await Promise.all([
+          apiRequest<any>('/api/me', {}, token),
+          apiRequest<{ expense: any }>({ method: 'get', url: `/api/expenses/${expenseId}`, token }),
+        ]);
+        if (!active) return;
+
+        const myDbId = meRes?.user?._id || meRes?.user?.id || '';
+        const exp = expRes.expense;
+        if (!exp) return;
+
+        setDescription(exp.description ?? '');
+        setAmount(String(exp.amount ?? ''));
+        setDate((exp.expenseDate ?? new Date().toISOString()).split('T')[0]);
+        setNotes(exp.notes ?? '');
+        setCategory(exp.category ?? '');
+        if (exp.notes) setShowNotes(true);
+
+        const payerId = exp.paidBy?.[0]?.userId?.id ?? '';
+        setPaidByYou(payerId === myDbId);
+
+        const payerIsParticipant = (exp.participants ?? []).some(
+          (p: any) => p.userId?.id === payerId && (p.amount ?? 0) > 0
+        );
+        setSplitEqually(payerIsParticipant);
+
+        // Everyone in the split except me becomes a selected friend chip.
+        const others = (exp.participants ?? [])
+          .map((p: any) => p.userId?.id)
+          .filter((id: string) => id && id !== myDbId);
+        // Include the payer if they're the other party and not already listed.
+        if (payerId && payerId !== myDbId && !others.includes(payerId)) {
+          others.push(payerId);
+        }
+        setSelectedFriendIds(Array.from(new Set(others)));
+      } catch {
+        if (active) setError('Could not load this expense to edit.');
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isEditing, expenseId]);
 
   const acceptedFriends = useMemo(() => friends.friends, [friends.friends]);
 
@@ -180,24 +240,26 @@ export default function AddNewExpense() {
       const friendId = selectedFriendIds[0];
       const isPaidByOther = !paidByYou;
 
+      const payload = {
+        description: description.trim(),
+        amount: amountValue,
+        expenseDate: date,
+        participantIds: selectedFriendIds,
+        notes: notes.trim(),
+        currency: 'INR',
+        splitType: selectedSplitType,
+        paidBy: isPaidByOther ? friendId : undefined,
+        category: category || undefined,
+      };
+
       const response = await apiRequest<{
         expense: unknown;
         xpAward: { xp: number; level: number; leveledUp: boolean; xpDelta: number } | null;
       }>({
-        method: 'post',
-        url: '/api/expenses',
+        method: isEditing ? 'put' : 'post',
+        url: isEditing ? `/api/expenses/${expenseId}` : '/api/expenses',
         token,
-        data: {
-          description: description.trim(),
-          amount: amountValue,
-          expenseDate: date,
-          participantIds: selectedFriendIds,
-          notes: notes.trim(),
-          currency: 'INR',
-          splitType: selectedSplitType,
-          paidBy: isPaidByOther ? friendId : undefined,
-          category: category || undefined,
-        },
+        data: payload,
       });
 
       setDescription('');
@@ -210,13 +272,15 @@ export default function AddNewExpense() {
       setSplitEqually(true);
 
       const award = response?.xpAward;
-      const xpLine = award
-        ? award.leveledUp
-          ? `+${award.xpDelta} XP — you reached Level ${award.level}! 🎉`
-          : `+${award.xpDelta} XP earned ⚡`
-        : 'Expense added successfully.';
+      const xpLine = isEditing
+        ? 'Everyone in the split has been notified.'
+        : award
+          ? award.leveledUp
+            ? `+${award.xpDelta} XP — you reached Level ${award.level}! 🎉`
+            : `+${award.xpDelta} XP earned ⚡`
+          : 'Expense added successfully.';
 
-      showToast({ title: 'Saved! 🎉', message: xpLine, tone: 'success', duration: 1600 });
+      showToast({ title: isEditing ? 'Changes saved ✅' : 'Saved! 🎉', message: xpLine, tone: 'success', duration: 1600 });
       setTimeout(() => router.back(), 700);
     } catch (saveError: any) {
       setError(saveError.message || 'Could not save expense.');
@@ -236,7 +300,7 @@ export default function AddNewExpense() {
         <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={6}>
           <Icon name="ArrowLeft" size={22} color={palette.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add expense</Text>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit expense' : 'Add expense'}</Text>
         <Pressable
           style={[styles.headerButton, !canSave && styles.headerButtonDisabled]}
           onPress={handleSave}

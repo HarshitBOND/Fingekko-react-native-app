@@ -126,6 +126,7 @@ export default function TabLayout() {
       <Tabs.Screen name="GroupExpenses" options={{ href: null }} />
       <Tabs.Screen name="Notifications" options={{ href: null }} />
       <Tabs.Screen name="FriendSplits" options={{ href: null }} />
+      <Tabs.Screen name="ExpenseDetail" options={{ href: null }} />
       <Tabs.Screen name="group/[groupId]" options={{ href: null }} />
       <Tabs.Screen name="AddExpense" options={{ href: null }} />
       <Tabs.Screen name="group/AddNewGroup" options={{ href: null }} />
