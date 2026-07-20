@@ -17,12 +17,29 @@ type ExpenseItem = {
   expenseDate: string;
   currency?: string;
   notes?: string;
+  icon?: string;
   createdBy: { id: string; name: string; email: string };
+  paidBy?: { userId: { id: string; name: string; email: string } | null; amount: number }[];
+  yourAmountPaid?: number;
+  netBalance?: number;
+  isDeleted?: boolean;
 };
+
+// Who actually fronted the money — `yourAmountPaid` comes from the server, so
+// this works without knowing our own DB id (the Clerk id never matches it).
+function paidByLabel(item: ExpenseItem): string {
+  const youPaid = (item.yourAmountPaid ?? 0) > 0;
+  const names = (item.paidBy ?? [])
+    .map((p) => p.userId?.name?.split(' ')[0])
+    .filter(Boolean) as string[];
+  if (youPaid) return names.length > 1 ? 'You & others' : 'You';
+  if (names.length === 0) return item.createdBy?.name ?? 'Someone';
+  return names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(' & ');
+}
 
 export default function GroupExpensesScreen() {
   const router = useRouter();
-  const { getToken, userId } = useAuth();
+  const { getToken } = useAuth();
   const { groupId, groupName } = useLocalSearchParams<{ groupId?: string; groupName?: string }>();
 
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -96,19 +113,34 @@ export default function GroupExpensesScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: palette.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="Receipt" size={18} color={palette.primaryDeep} />
+                <Icon name={item.icon?.trim() || 'Receipt'} size={18} color={palette.primaryDeep} />
               </View>
               <View style={{ flex: 1 }}>
                 <AppText variant="bodySm" color="textPrimary" weight="bold">
                   {item.description}
                 </AppText>
                 <AppText variant="micro" color="textSecondary">
-                  Paid by {item.createdBy?.id === userId ? 'You' : item.createdBy?.name} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
+                  Paid by {paidByLabel(item)} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
                 </AppText>
               </View>
-              <AppText variant="bodySm" color="textPrimary" weight="bold">
-                ₹{item.amount.toFixed(2)}
-              </AppText>
+              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                <AppText variant="bodySm" color="textPrimary" weight="bold">
+                  ₹{item.amount.toFixed(2)}
+                </AppText>
+                {Math.abs(item.netBalance ?? 0) > 0.009 ? (
+                  <AppText
+                    variant="micro"
+                    weight="bold"
+                    style={{ color: (item.netBalance ?? 0) > 0 ? palette.success : palette.danger }}
+                  >
+                    {(item.netBalance ?? 0) > 0 ? 'you get back' : 'you owe'} ₹{Math.abs(item.netBalance ?? 0).toFixed(2)}
+                  </AppText>
+                ) : (
+                  <AppText variant="micro" color="textTertiary">
+                    settled
+                  </AppText>
+                )}
+              </View>
             </View>
             {!!item.notes && item.notes.trim() !== '' && (
               <AppText variant="caption" color="textSecondary" style={{ marginTop: 8 }}>

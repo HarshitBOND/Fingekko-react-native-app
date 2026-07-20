@@ -183,24 +183,27 @@ function purgeDaysRemaining(deletedAt: Date | string) {
 
 // Net balance for the current user on this single expense, accounting for which
 // participant shares have already been settled (so it stays in sync with Settle Up).
+// Multi-payer aware: each share is owed to the payers in proportion to what each
+// payer fronted, so someone who paid 10% of the bill is only owed 10% of the shares.
 function computeNetBalanceForUser(expense: any, currentUserId: string) {
+  const total = expense.amount || 0;
   const paidByList = expense.paidBy ?? [];
   const participants = expense.participants ?? [];
-  const isPayer = paidByList.some((p: any) => toId(p.userId) === currentUserId);
 
-  if (isPayer) {
-    const owedToYou = participants
+  const myPaid = paidByList
+    .filter((p: any) => toId(p.userId) === currentUserId)
+    .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+  const myFraction = total > 0 ? myPaid / total : 0;
+
+  const owedToYou =
+    participants
       .filter((p: any) => toId(p.userId) !== currentUserId && !p.settled)
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
-    return roundTwo(owedToYou);
-  }
+      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0) * myFraction;
 
   const myShare = participants.find((p: any) => toId(p.userId) === currentUserId);
-  if (myShare && !myShare.settled) {
-    return roundTwo(-myShare.amount);
-  }
+  const youOwe = myShare && !myShare.settled ? myShare.amount * (1 - myFraction) : 0;
 
-  return 0;
+  return roundTwo(owedToYou - youOwe);
 }
 
 function roundTwo(value: number) {

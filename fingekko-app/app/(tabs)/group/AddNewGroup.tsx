@@ -16,14 +16,17 @@ import AppText from '../../../components/ui/AppText';
 import Button from '../../../components/ui/Button';
 import Card from '../../../components/ui/Card';
 import Icon from '../../../components/ui/Icon';
+import IconPickerModal from '../../../components/ui/IconPickerModal';
 import Input from '../../../components/ui/Input';
 import LoadingScreen from '../../../components/ui/LoadingScreen';
 import ScreenContainer from '../../../components/ui/ScreenContainer';
 import { fontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
 import { apiRequest } from '../../../utils/api';
 
-// Same icon set used on YourGroups so a group created here renders consistently there.
-const ICON_KEYS = ['Plane', 'Home', 'Users', 'Car', 'Coins', 'Utensils', 'Briefcase'] as const;
+// Quick picks for the most common group types; the "more" tile opens the full
+// searchable icon picker (same one the expense composer uses), so a group can
+// carry any icon, not just these seven.
+const QUICK_ICON_KEYS = ['Plane', 'Home', 'Users', 'Car', 'Coins', 'Utensils', 'Briefcase'];
 
 // ---- Types matching the backend exactly ----
 
@@ -62,6 +65,7 @@ export default function AddNewGroup() {
 
     const [groupName, setGroupName] = useState('');
     const [selectedIcon, setSelectedIcon] = useState<string>('Users');
+    const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
     const [friends, setFriends] = useState<Friend[]>(EMPTY_FRIENDS);
     const [friendsLoading, setFriendsLoading] = useState(true);
@@ -88,6 +92,7 @@ export default function AddNewGroup() {
         setSelectedMembers([]);
         setGroupName('');
         setSelectedIcon('Users');
+        setIconPickerOpen(false);
         setSearchQuery('');
         setSearchResults(EMPTY_RESULTS);
         setPendingRequestIds([]);
@@ -261,7 +266,7 @@ export default function AddNewGroup() {
                     Group icon
                 </AppText>
                 <View style={styles.iconGrid}>
-                    {ICON_KEYS.map((key) => {
+                    {QUICK_ICON_KEYS.map((key) => {
                         const active = key === selectedIcon;
                         return (
                             <Pressable
@@ -278,7 +283,29 @@ export default function AddNewGroup() {
                             </Pressable>
                         );
                     })}
+                    {/* Custom icon slot: shows the picked icon when it's not a
+                        quick pick, and always opens the full searchable picker. */}
+                    {(() => {
+                        const customActive = !QUICK_ICON_KEYS.includes(selectedIcon);
+                        return (
+                            <Pressable
+                                onPress={() => setIconPickerOpen(true)}
+                                style={[styles.iconOption, customActive && styles.iconOptionActive]}
+                                accessibilityLabel="Browse all icons"
+                            >
+                                <Icon
+                                    name={customActive ? selectedIcon : 'Ellipsis'}
+                                    size={20}
+                                    color={customActive ? palette.primaryDeep : palette.textSecondary}
+                                    clickable={false}
+                                />
+                            </Pressable>
+                        );
+                    })()}
                 </View>
+                <AppText variant="micro" color="textTertiary" style={{ marginTop: spacing.sm }}>
+                    Tap ··· to browse and search all icons.
+                </AppText>
             </Card>
 
             <Card variant="elevated">
@@ -330,6 +357,17 @@ export default function AddNewGroup() {
             <Button variant="primary" size="lg" onPress={createGroup} disabled={!groupName.trim()} loading={creating}>
                 Create group
             </Button>
+
+            {/* Full searchable icon picker — same component the expense composer uses */}
+            <IconPickerModal
+                visible={iconPickerOpen}
+                value={selectedIcon}
+                onClose={() => setIconPickerOpen(false)}
+                onSelect={(name) => {
+                    setSelectedIcon(name);
+                    setIconPickerOpen(false);
+                }}
+            />
 
             {/* ─── Member picker ─── */}
             <Modal

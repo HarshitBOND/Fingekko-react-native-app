@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
+import { paidAmount, pairwiseBalance, pairwiseSettleTargets, roundMoney } from '../../utils/splitMath';
 import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/ui/Icon';
 import AnimatedIcon from '../../components/ui/AnimatedIcon';
@@ -51,6 +52,7 @@ type ExpenseItem = {
   yourAmountPaid: number;
   yourAmountOwed: number;
   category?: string;
+  icon?: string;
   notes?: string;
   isDeleted?: boolean;
   deletedBy?: { id: string; name: string; email: string } | null;
@@ -156,37 +158,15 @@ export default function FriendSplitsScreen() {
   );
 
   // The signed amount THIS expense contributes to the balance between me and
-  // this one friend — from *my* perspective (positive = they owe me, negative =
-  // I owe them). Keyed on who actually PAID (not who typed it), and only this
-  // friend's own share — so an expense split three ways shows each person their
-  // 1/3, never the whole 2/3 the payer is owed.
-  const shareId = (p: ParticipantShare | any) => p?.userId?.id || p?.userId?.toString() || '';
-  const sumPaidBy = (exp: ExpenseItem, id: string) =>
-    (exp.paidBy ?? []).reduce((s, p) => (shareId(p) === id ? s + (p.amount || 0) : s), 0);
-
-  const pairwiseAmount = (exp: ExpenseItem): number => {
-    if (exp.isDeleted) return 0;
-    const total = exp.amount || 0;
-    if (total <= 0) return 0;
-    const iPaidFrac = sumPaidBy(exp, dbUserId) / total;
-    const friendPaidFrac = sumPaidBy(exp, friendId) / total;
-
-    const myShare = exp.participants?.find((p) => shareId(p) === dbUserId);
-    const friendShare = exp.participants?.find((p) => shareId(p) === friendId);
-
-    let amount = 0;
-    // They owe me their share, for the portion of the bill I financed.
-    if (friendShare && !friendShare.settled) amount += friendShare.amount * iPaidFrac;
-    // I owe them my share, for the portion they financed.
-    if (myShare && !myShare.settled) amount -= myShare.amount * friendPaidFrac;
-    return amount;
-  };
+  // this one friend — shared math (utils/splitMath) so this page always agrees
+  // with the Split hub's friend list.
+  const pairwiseAmount = (exp: ExpenseItem): number => pairwiseBalance(exp, dbUserId, friendId);
 
   // Overall balance with this friend (deleted expenses never move it).
-  const totalBalance = Math.round(expenses.reduce((sum, exp) => sum + pairwiseAmount(exp), 0) * 100) / 100;
+  const totalBalance = roundMoney(expenses.reduce((sum, exp) => sum + pairwiseAmount(exp), 0));
 
   const handleSettleUp = () => {
-    if (totalBalance === 0) {
+    if (Math.abs(totalBalance) < 0.01) {
       showToast({ title: 'All settled up! 🎉', message: 'Nothing to settle with this friend.', tone: 'info' });
       return;
     }
@@ -199,17 +179,18 @@ export default function FriendSplitsScreen() {
       const token = await getToken();
       if (!token) return;
 
-      // Settle each expense in its own direction: if they owe me, mark their
-      // share settled; if I owe them, mark mine. Handles mixed directions.
+      // Settle BOTH directions on each expense where either side still owes
+      // something. On multi-payer bills both shares can carry a balance at
+      // once — settling only the net direction would leave money behind.
       for (const exp of expenses) {
-        const amount = pairwiseAmount(exp);
-        if (Math.abs(amount) < 0.01) continue;
-        await apiRequest({
-          method: 'post',
-          url: `/api/expenses/${exp.id}/settle`,
-          token,
-          data: { userId: amount > 0 ? friendId : dbUserId },
-        });
+        for (const targetUserId of pairwiseSettleTargets(exp, dbUserId, friendId)) {
+          await apiRequest({
+            method: 'post',
+            url: `/api/expenses/${exp.id}/settle`,
+            token,
+            data: { userId: targetUserId },
+          });
+        }
       }
 
       setSettleConfirm(false);
@@ -281,10 +262,13 @@ export default function FriendSplitsScreen() {
             color: totalBalance > 0 ? palette.success : totalBalance < 0 ? palette.danger : palette.textSecondary
           }}
         >
-          {totalBalance > 0 ? `Owes you ₹${totalBalance.toFixed(2)}` : totalBalance < 0 ? `You owe ₹${Math.abs(totalBalance).toFixed(2)}` : 'Settle Up'}
+          {totalBalance > 0 ? `Owes you ₹${totalBalance.toFixed(2)}` : totalBalance < 0 ? `You owe ₹${Math.abs(totalBalance).toFixed(2)}` : 'All settled up 🎉'}
+        </AppText>
+        <AppText variant="micro" color="textTertiary" align="center">
+          Personal splits only — group balances are settled inside each group.
         </AppText>
 
-        {totalBalance !== 0 && (
+        {Math.abs(totalBalance) >= 0.01 && (
           <Button
             variant={totalBalance > 0 ? 'success' : 'danger'}
             size="md"
@@ -315,7 +299,16 @@ export default function FriendSplitsScreen() {
         <>
         {expenses.slice(0, visibleCount).map((item) => {
           const deleted = !!item.isDeleted;
-          const userPaid = sumPaidBy(item, dbUserId) > 0;
+          const userPaid = paidAmount(item, dbUserId) > 0;
+          // Name the actual payer(s) — the creator isn't always who paid.
+          const payerNames = (item.paidBy ?? [])
+            .map((p) => (p.userId?.id === dbUserId ? 'You' : p.userId?.name?.split(' ')[0]))
+            .filter(Boolean);
+          const paidByLabel = userPaid
+            ? payerNames.length > 1
+              ? 'You & others'
+              : 'You'
+            : payerNames.join(' & ') || friendName || 'them';
 
           // Pairwise amount for THIS friend on THIS expense (their share only,
           // never the whole bill): + they owe me, − I owe them.
@@ -344,14 +337,18 @@ export default function FriendSplitsScreen() {
               )}
               <View style={styles.row}>
                 <View style={styles.iconWrap}>
-                  <AnimatedIcon {...getCategoryIcon(item.category)} size={20} mode="pulse" />
+                  {item.icon?.trim() ? (
+                    <Icon name={item.icon} size={20} color={palette.primaryDeep} clickable={false} />
+                  ) : (
+                    <AnimatedIcon {...getCategoryIcon(item.category)} size={20} mode="pulse" />
+                  )}
                 </View>
                 <View style={styles.body}>
                   <AppText variant="bodySm" color="textPrimary" weight="bold">
                     {item.description}
                   </AppText>
                   <AppText variant="micro" color="textSecondary">
-                    Paid by {userPaid ? 'You' : friendName} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
+                    Paid by {paidByLabel} on {new Date(item.expenseDate).toLocaleDateString('en-IN')}
                   </AppText>
                 </View>
                 <View style={styles.right}>

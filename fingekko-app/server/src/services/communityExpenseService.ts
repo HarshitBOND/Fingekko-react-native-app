@@ -341,11 +341,27 @@ export async function computeGroupBalances(groupId: string) {
   const balances = new Map<string, number>();
 
   for (const expense of expenses) {
-    for (const payer of expense.paidBy ?? []) {
+    const total = expense.amount || 0;
+    const participants = expense.participants ?? [];
+    const payers = expense.paidBy ?? [];
+
+    // A settled share means that person already paid the payer(s) back in
+    // cash, so it must stop moving balances entirely: skip the participant's
+    // debit AND remove the matching slice of the payers' credit. Without the
+    // second half, "Settle up" left the group still showing the old debt.
+    const settledSum = participants.reduce(
+      (sum: number, p: { settled?: boolean; amount?: number }) =>
+        p.settled ? sum + (p.amount || 0) : sum,
+      0
+    );
+    const liveFraction = total > 0 ? 1 - settledSum / total : 1;
+
+    for (const payer of payers) {
       const id = payer.userId.toString();
-      balances.set(id, roundTwo((balances.get(id) ?? 0) + payer.amount));
+      balances.set(id, roundTwo((balances.get(id) ?? 0) + payer.amount * liveFraction));
     }
-    for (const participant of expense.participants ?? []) {
+    for (const participant of participants) {
+      if (participant.settled) continue;
       const id = participant.userId.toString();
       balances.set(id, roundTwo((balances.get(id) ?? 0) - participant.amount));
     }

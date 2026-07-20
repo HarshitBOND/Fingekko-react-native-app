@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { apiRequest } from '../../utils/api';
+import { pairwiseBalance, roundMoney } from '../../utils/splitMath';
 import Icon from '../../components/ui/Icon';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import AppText from '../../components/ui/AppText';
@@ -23,6 +24,11 @@ type BackendExpenseItem = {
   description: string;
   amount: number;
   netBalance: number;
+  isDeleted?: boolean;
+  paidBy?: {
+    userId: { id: string; name: string; email: string } | null;
+    amount: number;
+  }[];
   participants: {
     userId: {
       id: string;
@@ -101,28 +107,10 @@ export default function NonGroupExpenses() {
     return 'You are settled up';
   };
 
-  const getFriendBalance = (friendUserId: string) => {
-    let balance = 0;
-    expenses.forEach((exp) => {
-      const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-      if (creatorId === dbUserId) {
-        const friendPart = exp.participants?.find(
-          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === friendUserId
-        );
-        if (friendPart && !friendPart.settled) {
-          balance += friendPart.amount;
-        }
-      } else if (creatorId === friendUserId) {
-        const userPart = exp.participants?.find(
-          (p: any) => (p.userId?.id || p.userId?.toString() || p.userId) === dbUserId
-        );
-        if (userPart && !userPart.settled) {
-          balance -= userPart.amount;
-        }
-      }
-    });
-    return balance;
-  };
+  // Same shared settle-aware math as the Split hub and the friend detail page,
+  // so this summary never disagrees with where you actually settle.
+  const getFriendBalance = (friendUserId: string) =>
+    roundMoney(expenses.reduce((sum, exp) => sum + pairwiseBalance(exp, dbUserId, friendUserId), 0));
 
   return (
     <ScreenContainer

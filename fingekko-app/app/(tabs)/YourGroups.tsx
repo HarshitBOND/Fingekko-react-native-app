@@ -16,16 +16,7 @@ import Toast from '../../components/ui/Toast';
 import { useToast } from '../../hooks/useToast';
 import { layout, palette, radius, shadows, spacing } from '../../constants/design';
 import { apiRequest } from '../../utils/api';
-
-const ICONS = {
-    Plane: 'Plane',
-    Home: 'Home',
-    Users: 'Users',
-    Car: 'Car',
-    Coins: 'Coins',
-    Utensils: 'Utensils',
-    Briefcase: 'Briefcase',
-};
+import { pairwiseBalance, roundMoney } from '../../utils/splitMath';
 
 type GroupItem = {
     id: string;
@@ -212,32 +203,24 @@ export default function YourGroups() {
         [expenses]
     );
 
-    // Pairwise balances, mirroring the server's settle-aware logic: if you paid,
-    // every unsettled other participant owes you their share; if someone else
-    // paid and your share is unsettled, you owe the payer.
+    // Pairwise balances via the same shared math as the friend detail page
+    // (utils/splitMath), restricted to personal (non-group) splits — the same
+    // set that page lists and settles. Counting group expenses here left
+    // "ghost" balances behind after settling up with a friend.
     const friendBalances = useMemo(() => {
         const map = new Map<string, number>();
         if (!myDbId) return map;
 
         expenses.forEach((exp) => {
-            const iPaid = exp.paidBy.some((p) => p.userId?.id === myDbId);
-            if (iPaid) {
-                exp.participants
-                    .filter((p) => p.userId && p.userId.id !== myDbId && !p.settled)
-                    .forEach((p) => {
-                        const id = p.userId!.id;
-                        map.set(id, (map.get(id) ?? 0) + p.amount);
-                    });
-            } else {
-                const mine = exp.participants.find((p) => p.userId?.id === myDbId);
-                const payer = exp.paidBy[0]?.userId;
-                if (mine && !mine.settled && payer && payer.id !== myDbId) {
-                    map.set(payer.id, (map.get(payer.id) ?? 0) - mine.amount);
-                }
-            }
+            if (exp.groupId) return; // group debts are settled inside the group
+            friendRows.forEach((f) => {
+                const amount = pairwiseBalance(exp, myDbId, f.id);
+                if (amount !== 0) map.set(f.id, (map.get(f.id) ?? 0) + amount);
+            });
         });
+        map.forEach((value, key) => map.set(key, roundMoney(value)));
         return map;
-    }, [expenses, myDbId]);
+    }, [expenses, friendRows, myDbId]);
 
     const { activeFriends, settledFriends } = useMemo(() => {
         const active: (FriendRow & { balance: number })[] = [];
@@ -386,7 +369,7 @@ export default function YourGroups() {
                                 >
                                     <View style={styles.groupIcon}>
                                         <Icon
-                                            name={ICONS[item.icon as keyof typeof ICONS] ?? 'Users'}
+                                            name={item.icon?.trim() || 'Users'}
                                             size={20}
                                             color={palette.primaryDeep}
                                             clickable={false}
@@ -565,9 +548,16 @@ export default function YourGroups() {
                                 const actor = isMine ? 'You' : exp.createdBy?.name?.split(' ')[0] ?? 'Someone';
                                 const net = exp.netBalance ?? 0;
                                 return (
-                                    <View
+                                    <Pressable
                                         key={exp.id}
-                                        style={[styles.activityRow, index !== Math.min(recentActivity.length, 25) - 1 && styles.rowDivider]}
+                                        style={({ pressed }) => [
+                                            styles.activityRow,
+                                            index !== Math.min(recentActivity.length, 25) - 1 && styles.rowDivider,
+                                            pressed && styles.rowPressed,
+                                        ]}
+                                        onPress={() =>
+                                            router.push({ pathname: '/(tabs)/ExpenseDetail', params: { expenseId: exp.id } })
+                                        }
                                     >
                                         <View style={styles.activityIcon}>
                                             <Icon name="StickyNote" size={16} color={palette.primaryDeep} clickable={false} />
@@ -599,7 +589,7 @@ export default function YourGroups() {
                                         <AppText variant="label" color="textSecondary">
                                             {inr(exp.amount)}
                                         </AppText>
-                                    </View>
+                                    </Pressable>
                                 );
                             })}
                         </Card>

@@ -90,17 +90,11 @@ interface GroupExpenseItem {
   participants?: ExpenseShare[];
 }
 
+// Groups can carry any icon from the full picker now, so render whatever is
+// stored and only fall back when nothing is set. (The old 7-name whitelist
+// showed an alert triangle for every custom icon.)
 function getGroupIconName(iconName?: string): string {
-  const nameMap: Record<string, string> = {
-    Plane: 'Plane',
-    Home: 'Home',
-    Users: 'Users',
-    Car: 'Car',
-    Coins: 'Coins',
-    Utensils: 'Utensils',
-    Briefcase: 'Briefcase',
-  };
-  return nameMap[iconName ?? ''] ?? 'CircleAlert';
+  return iconName?.trim() ? iconName : 'Users';
 }
 
 const getInitials = (name: string): string => {
