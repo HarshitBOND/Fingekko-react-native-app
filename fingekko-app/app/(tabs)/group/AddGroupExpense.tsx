@@ -1,9 +1,10 @@
 import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
 import { useAuth } from '@clerk/clerk-expo';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,7 +16,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppText from '../../../components/ui/AppText';
-import Button from '../../../components/ui/Button';
 import Icon from '../../../components/ui/Icon';
 import LoadingScreen from '../../../components/ui/LoadingScreen';
 import Toast from '../../../components/ui/Toast';
@@ -51,14 +51,6 @@ type GroupDetailsResponse = {
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-const getInitials = (name: string): string =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('') || '?';
-
 export default function AddGroupExpense() {
   const { userId, getToken, isSignedIn } = useAuth();
   const router = useRouter();
@@ -89,12 +81,38 @@ export default function AddGroupExpense() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [showDate, setShowDate] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
 
   const getTokenRef = useRef(getToken);
   useEffect(() => {
     getTokenRef.current = getToken;
   }, [getToken]);
+
+  // Latest member ids, read at reset time so the cleared form re-selects everyone.
+  const memberIdsRef = useRef<string[]>([]);
+
+  // Expo Router keeps this screen mounted, so re-opening it to add a *second*
+  // expense used to carry the previous one's amount/description/split. Wipe the
+  // form to a clean slate every time the screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      setDescription('');
+      setAmount('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setNotes('');
+      setCategory('');
+      setError('');
+      setPayerConfig({ mode: 'single', id: '' });
+      setAdjustSplitOpen(false);
+      setWhoPaidOpen(false);
+      setCategoryPickerOpen(false);
+      setShowDate(false);
+      setShowNotes(false);
+      setSplitConfig({ mode: 'equally', selectedIds: memberIdsRef.current });
+    }, [])
+  );
 
   useEffect(() => {
     if (isGroupMode) return;
@@ -164,6 +182,7 @@ export default function AddGroupExpense() {
   // Seed equal-split selection once people arrive (friends mode has no load hook
   // that sets it, and it keeps group mode correct if members change).
   useEffect(() => {
+    memberIdsRef.current = peopleList.map((p) => p.id);
     setSplitConfig((cur) =>
       cur.mode === 'equally' && cur.selectedIds.length === 0 && peopleList.length > 0
         ? { mode: 'equally', selectedIds: peopleList.map((p) => p.id) }
@@ -194,6 +213,13 @@ export default function AddGroupExpense() {
   // fixed-amount modes can drift when the total is edited afterwards.
   const splitMismatch = amountValue > 0 && Math.abs(owedTotal - amountValue) > 0.01;
   const payerMismatch = amountValue > 0 && Math.abs(payersTotal - amountValue) > 0.01;
+
+  const canSave = !saving && amountValue > 0 && description.trim() !== '' && Object.keys(owed).length > 0;
+
+  // One-line split preview for the minimal composer (e.g. "You: ₹100 · Ajay: ₹100").
+  const splitPreview = Object.entries(owed)
+    .map(([id, amt]) => `${nameFor(id) === 'You' ? 'You' : nameFor(id).split(' ')[0]}: ₹${amt.toFixed(0)}`)
+    .join('  ·  ');
 
   const handleSave = async () => {
     setError('');
@@ -261,9 +287,10 @@ export default function AddGroupExpense() {
   }
 
   return (
-    <SafeAreaView style={styles.page} edges={['top']}>
+    <SafeAreaView style={styles.page} edges={['top', 'bottom']}>
       <Toast toast={toast} onDismiss={dismissToast} />
 
+      {/* Top bar: back / title / save-checkmark — matches the personal composer */}
       <View style={styles.header}>
         <Pressable
           style={styles.headerButton}
@@ -272,141 +299,139 @@ export default function AddGroupExpense() {
         >
           <Icon name="ArrowLeft" size={22} color={palette.textPrimary} clickable={false} />
         </Pressable>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <AppText variant="title" weight="bold">
-            Add expense
-          </AppText>
+        <View style={{ alignItems: 'center' }}>
+          <AppText variant="title" weight="bold">Add expense</AppText>
           {isGroupMode && !!group?.name && (
-            <AppText variant="micro" color="textTertiary" numberOfLines={1}>
-              {group.name}
-            </AppText>
+            <AppText variant="micro" color="textTertiary" numberOfLines={1}>{group.name}</AppText>
           )}
         </View>
-        <View style={styles.headerButton} />
+        <Pressable
+          style={[styles.headerButton, !canSave && { opacity: 0.5 }]}
+          onPress={handleSave}
+          disabled={!canSave}
+          hitSlop={6}
+          accessibilityLabel="Save expense"
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={palette.primaryDeep} />
+          ) : (
+            <Icon name="Check" size={24} color={canSave ? palette.primaryDeep : palette.textTertiary} clickable={false} />
+          )}
+        </Pressable>
+      </View>
+
+      {/* Who this is split with — the group's members */}
+      <View style={styles.withRow}>
+        <AppText style={styles.withLabel}>
+          With <AppText style={styles.withYou}>you</AppText> and:
+        </AppText>
+        <AppText variant="bodySm" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+          {peopleList.filter((p) => p.id !== userId).map((p) => p.name.split(' ')[0]).join(', ') || 'group members'}
+        </AppText>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          {/* Amount + description hero */}
-          <View style={styles.heroFields}>
-            <View style={styles.amountRow}>
-              <AppText variant="hero" color="textTertiary">
-                ₹
-              </AppText>
-              <TextInput
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="0"
-                placeholderTextColor={palette.textTertiary}
-                keyboardType="decimal-pad"
-                style={styles.amountInput}
-              />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.composer} keyboardShouldPersistTaps="handled">
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldIconBox}>
+              <Icon name="StickyNote" size={22} color={palette.primaryDeep} clickable={false} />
             </View>
             <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder="What was this for?"
+              placeholder="Enter a description"
               placeholderTextColor={palette.textTertiary}
               style={styles.descriptionInput}
             />
           </View>
 
-          {/* Category + date */}
-          <View style={styles.metaRow}>
-            <Pressable style={styles.metaChip} onPress={() => setCategoryPickerOpen(true)}>
-              <Icon name="Tag" size={15} color={palette.primaryDeep} clickable={false} />
-              <AppText variant="caption" color="primaryDeep">
-                {category || 'Category'}
-              </AppText>
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldIconBox}>
+              <AppText style={styles.rupee}>₹</AppText>
+            </View>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor={palette.textTertiary}
+              keyboardType="decimal-pad"
+              style={styles.amountInput}
+            />
+          </View>
+
+          {/* Paid by [who paid] and split [adjust split] — each opens a screen */}
+          <View style={styles.sentenceRow}>
+            <AppText style={styles.sentenceText}>Paid by</AppText>
+            <Pressable style={styles.sentencePill} onPress={() => setWhoPaidOpen(true)}>
+              <AppText style={styles.sentencePillText} numberOfLines={1}>{payerLabel(payerConfig, splitPeople, userId ?? '')}</AppText>
+              <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
             </Pressable>
-            <View style={styles.metaChip}>
-              <Icon name="Calendar" size={15} color={palette.textSecondary} clickable={false} />
+            <AppText style={styles.sentenceText}>and split</AppText>
+            <Pressable style={styles.sentencePill} onPress={() => setAdjustSplitOpen(true)}>
+              <AppText style={styles.sentencePillText} numberOfLines={1}>{splitLabel(splitConfig.mode)}</AppText>
+              <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
+            </Pressable>
+          </View>
+
+          {amountValue > 0 && !!splitPreview && (
+            <AppText style={[styles.splitHint, splitMismatch && { color: palette.danger }]} numberOfLines={2}>
+              {splitPreview}
+            </AppText>
+          )}
+
+          {showDate && (
+            <View style={styles.extraField}>
+              <Icon name="Calendar" size={16} color={palette.textSecondary} clickable={false} />
               <TextInput
                 value={date}
                 onChangeText={setDate}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor={palette.textTertiary}
-                style={styles.dateInput}
+                style={styles.extraInput}
               />
             </View>
-          </View>
-
-          {/* Paid by [____] and split [____] — the two buttons open the sub-pages */}
-          <View style={styles.sentenceCard}>
-            <View style={styles.sentenceLine}>
-              <AppText variant="label" color="textSecondary">Paid by</AppText>
-              <Pressable style={styles.sentencePill} onPress={() => setWhoPaidOpen(true)}>
-                <AppText variant="label" color="primaryDeep" numberOfLines={1}>
-                  {payerLabel(payerConfig, splitPeople, userId ?? '')}
-                </AppText>
-                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
-              </Pressable>
-            </View>
-            <View style={styles.sentenceLine}>
-              <AppText variant="label" color="textSecondary">and split</AppText>
-              <Pressable style={styles.sentencePill} onPress={() => setAdjustSplitOpen(true)}>
-                <AppText variant="label" color="primaryDeep" numberOfLines={1}>
-                  {splitLabel(splitConfig.mode)}
-                </AppText>
-                <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Live breakdown of who owes what */}
-          <AppText variant="label" style={styles.sectionHeader}>
-            Breakdown ({Object.keys(owed).length})
-          </AppText>
-          <View style={styles.peopleCard}>
-            {Object.keys(owed).length === 0 ? (
-              <AppText variant="bodySm" color="textSecondary" align="center" style={{ padding: spacing.lg }}>
-                Enter an amount, then tap “split” to choose who owes.
-              </AppText>
-            ) : (
-              Object.entries(owed).map(([id, amt], index, arr) => (
-                <View key={id} style={[styles.personRow, index !== arr.length - 1 && styles.personDivider]}>
-                  <View style={styles.personAvatar}>
-                    <AppText variant="caption" color="primaryDeep">{getInitials(nameFor(id))}</AppText>
-                  </View>
-                  <AppText variant="label" style={{ flex: 1 }} numberOfLines={1}>
-                    {nameFor(id)}
-                  </AppText>
-                  <AppText variant="label" weight="bold" style={{ color: splitMismatch ? palette.danger : palette.textPrimary }}>
-                    {inr(amt)}
-                  </AppText>
-                </View>
-              ))
-            )}
-          </View>
-          {payers.length > 1 && (
-            <AppText variant="caption" color="textSecondary" style={styles.payerNote}>
-              Paid by {payers.map((p) => `${nameFor(p.userId)} (${inr(p.amount)})`).join(', ')}
-            </AppText>
           )}
 
-          {/* Notes */}
-          <View style={styles.notesWrap}>
-            <Icon name="StickyNote" size={16} color={palette.textSecondary} clickable={false} />
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Add a note (optional)"
-              placeholderTextColor={palette.textTertiary}
-              style={styles.notesInput}
-              multiline
-            />
-          </View>
-
-          {!!error && (
-            <AppText variant="caption" color="danger" align="center">
-              {error}
-            </AppText>
+          {showNotes && (
+            <View style={[styles.extraField, styles.notesField]}>
+              <Icon name="StickyNote" size={16} color={palette.textSecondary} clickable={false} />
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Add a note"
+                placeholderTextColor={palette.textTertiary}
+                style={styles.extraInput}
+                multiline
+              />
+            </View>
           )}
 
-          <Button variant="primary" size="lg" onPress={handleSave} loading={saving}>
-            Add expense
-          </Button>
+          {!!error && <AppText style={styles.errorText}>{error}</AppText>}
         </ScrollView>
+
+        {/* Bottom utility bar: category left, date + notes toggles right */}
+        <View style={styles.bottomBar}>
+          <Pressable style={styles.categoryButton} onPress={() => setCategoryPickerOpen(true)}>
+            <Icon name="Tag" size={16} color={palette.primaryDeep} clickable={false} />
+            <AppText variant="caption" color="primaryDeep" weight="bold">{category || 'Category'}</AppText>
+          </Pressable>
+          <View style={styles.bottomIcons}>
+            <Pressable
+              style={[styles.bottomIconBtn, showDate && styles.bottomIconBtnActive]}
+              onPress={() => setShowDate((v) => !v)}
+              accessibilityLabel="Set date"
+            >
+              <Icon name="Calendar" size={19} color={showDate ? palette.primaryDeep : palette.textSecondary} clickable={false} />
+            </Pressable>
+            <Pressable
+              style={[styles.bottomIconBtn, showNotes && styles.bottomIconBtnActive]}
+              onPress={() => setShowNotes((v) => !v)}
+              accessibilityLabel="Add note"
+            >
+              <Icon name="StickyNote" size={19} color={showNotes ? palette.primaryDeep : palette.textSecondary} clickable={false} />
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
 
       <AdjustSplitModal
@@ -469,119 +494,145 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: layout.gutter,
     paddingVertical: spacing.md,
   },
   headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  container: {
-    paddingHorizontal: layout.gutter,
-    paddingBottom: spacing.xxl,
-    gap: spacing.base,
-  },
 
-  heroFields: {
-    backgroundColor: palette.card,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-    ...shadows.sm,
-  },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  amountInput: {
-    flex: 1,
-    fontSize: 36,
-    fontFamily: fontFamily.extrabold,
-    color: palette.textPrimary,
-    padding: 0,
-  },
-  descriptionInput: {
-    fontSize: 16,
-    fontFamily: fontFamily.medium,
-    color: palette.textPrimary,
-    borderTopWidth: 1,
-    borderTopColor: palette.divider,
-    paddingTop: spacing.md,
-  },
-
-  metaRow: { flexDirection: 'row', gap: spacing.sm },
-  metaChip: {
-    flex: 1,
+  withRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: palette.card,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: layout.gutter,
     paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  dateInput: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: fontFamily.medium,
-    color: palette.textPrimary,
-    padding: 0,
-  },
-
-  sentenceCard: {
     backgroundColor: palette.card,
-    borderRadius: radius.lg,
-    padding: spacing.base,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: palette.divider,
+  },
+  withLabel: { fontSize: 16, fontFamily: fontFamily.medium, color: palette.textPrimary },
+  withYou: { fontFamily: fontFamily.bold },
+
+  composer: {
+    alignItems: 'center',
+    paddingTop: spacing.xxl,
+    paddingHorizontal: layout.gutter,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
+    width: '100%',
+    maxWidth: 340,
+  },
+  fieldIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.card,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadows.xs,
   },
-  sentenceLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rupee: { fontSize: 22, fontFamily: fontFamily.bold, color: palette.primaryDeep },
+  descriptionInput: {
+    flex: 1,
+    fontSize: 18,
+    fontFamily: fontFamily.medium,
+    color: palette.textPrimary,
+    borderBottomWidth: 1.5,
+    borderBottomColor: palette.borderStrong,
+    paddingVertical: spacing.sm,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 30,
+    fontFamily: fontFamily.bold,
+    color: palette.textPrimary,
+    borderBottomWidth: 1.5,
+    borderBottomColor: palette.borderStrong,
+    paddingVertical: spacing.xs,
+  },
+  sentenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  sentenceText: { fontSize: 16, fontFamily: fontFamily.medium, color: palette.textPrimary },
   sentencePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: palette.primaryLight,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    maxWidth: 200,
-  },
-
-  sectionHeader: { marginTop: spacing.xs },
-  peopleCard: {
+    borderWidth: 1.5,
+    borderColor: palette.borderStrong,
+    borderRadius: radius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     backgroundColor: palette.card,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.base,
+    maxWidth: 200,
     ...shadows.xs,
   },
-  personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
-  personDivider: { borderBottomWidth: 1, borderBottomColor: palette.divider },
-  personAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: palette.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  payerNote: { marginTop: -spacing.sm },
-
-  notesWrap: {
+  sentencePillText: { fontSize: 15, fontFamily: fontFamily.semibold, color: palette.primaryDeep },
+  splitHint: { fontSize: 13, fontFamily: fontFamily.medium, color: palette.textSecondary, textAlign: 'center' },
+  extraField: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: palette.card,
-    borderRadius: radius.md,
+    width: '100%',
+    maxWidth: 340,
     borderWidth: 1,
     borderColor: palette.border,
+    borderRadius: radius.md,
+    backgroundColor: palette.card,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 64,
+    paddingVertical: spacing.sm,
   },
-  notesInput: {
+  notesField: { alignItems: 'flex-start', minHeight: 70 },
+  extraInput: {
     flex: 1,
     fontSize: 14,
     fontFamily: fontFamily.medium,
     color: palette.textPrimary,
-    padding: 0,
-    textAlignVertical: 'top',
+    paddingVertical: 2,
   },
+  errorText: { color: palette.danger, fontSize: 13, fontFamily: fontFamily.semibold, textAlign: 'center' },
+
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+    backgroundColor: palette.card,
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primaryLight,
+  },
+  bottomIcons: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  bottomIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomIconBtnActive: { backgroundColor: palette.primaryLight },
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'flex-end' },
   modalSheet: {

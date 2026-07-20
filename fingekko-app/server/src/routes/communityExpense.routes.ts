@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import authMiddleware from '../middleware/auth.js';
 import communityExpenseRepository from '../repositories/communityExpenseRepository.js';
-import { createCommunityExpense, createExplicitExpense, updateCommunityExpense } from '../services/communityExpenseService.js';
+import { createCommunityExpense, createExplicitExpense, updateCommunityExpense, updateExplicitExpense } from '../services/communityExpenseService.js';
 import { createTransaction } from '../repositories/transactionRepository.js';
 import { awardXp } from '../repositories/userRepository.js';
 import { logXpEvent } from '../repositories/xpEventRepository.js';
@@ -154,6 +154,7 @@ function serializeExpense(expense: any, currentUserId?: string) {
     currency: expense.currency,
     notes: expense.notes,
     category: expense.category ?? '',
+    icon: expense.icon ?? '',
     createdBy: serializeUser(expense.createdBy),
     paidBy: paidByList,
     participants,
@@ -264,6 +265,7 @@ router.post('/', async (req: Request, res: Response) => {
         participants,
         groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
         category: req.body?.category ? String(req.body.category) : '',
+        icon: req.body?.icon ? String(req.body.icon) : '',
       });
     } else {
       let splitType = req.body?.splitType;
@@ -316,6 +318,7 @@ router.post('/', async (req: Request, res: Response) => {
         paidBy: resolvedPaidBy,
         groupId: req.body?.groupId ? String(req.body.groupId) : undefined,
         category: req.body?.category ? String(req.body.category) : '',
+        icon: req.body?.icon ? String(req.body.icon) : '',
       });
     }
 
@@ -377,54 +380,75 @@ router.put('/:expenseId', async (req: Request, res: Response) => {
       return res.status(409).json({ message: 'This expense is deleted and can no longer be edited' });
     }
 
-    let splitType = req.body?.splitType;
-    let participantIds = req.body?.participantIds || [];
+    let updated;
+    if (Array.isArray(req.body?.paidBy)) {
+      // Explicit contract (both composers) — store exact payers/participants.
+      const [payers, participants] = await Promise.all([
+        resolveShareList(normalizeShares(req.body?.paidBy), currentUserId),
+        resolveShareList(normalizeShares(req.body?.participants), currentUserId),
+      ]);
 
-    if (Array.isArray(participantIds)) {
-      participantIds = participantIds.map((p: any) => {
-        if (typeof p === 'string') {
-          return { userId: p, amount: 0 };
-        } else if (p && typeof p === 'object') {
-          return {
-            userId: String(p.userId || p.id || ''),
-            amount: Number(p.amount ?? 0),
-          };
-        }
-        return { userId: '', amount: 0 };
-      }).filter((p: any) => p.userId);
+      updated = await updateExplicitExpense(currentUserId, String(req.params.expenseId), {
+        description: String(req.body?.description ?? ''),
+        amount: Number(req.body?.amount ?? 0),
+        expenseDate: String(req.body?.expenseDate ?? ''),
+        notes: String(req.body?.notes ?? ''),
+        currency: String(req.body?.currency ?? 'INR'),
+        paidBy: payers,
+        participants,
+        category: req.body?.category ? String(req.body.category) : '',
+        icon: req.body?.icon !== undefined ? String(req.body.icon) : '',
+      });
     } else {
-      participantIds = [];
+      let splitType = req.body?.splitType;
+      let participantIds = req.body?.participantIds || [];
+
+      if (Array.isArray(participantIds)) {
+        participantIds = participantIds.map((p: any) => {
+          if (typeof p === 'string') {
+            return { userId: p, amount: 0 };
+          } else if (p && typeof p === 'object') {
+            return {
+              userId: String(p.userId || p.id || ''),
+              amount: Number(p.amount ?? 0),
+            };
+          }
+          return { userId: '', amount: 0 };
+        }).filter((p: any) => p.userId);
+      } else {
+        participantIds = [];
+      }
+
+      const validSplitTypes = [
+        "equalPaidByYou",
+        "unequalPaidByYou",
+        "equalPaidByOthers",
+        "unequalPaidByOthers",
+        "fullyOwedPaidByYou",
+        "fullyOwedPaidByOthers",
+      ];
+
+      if (!splitType || !validSplitTypes.includes(splitType)) {
+        splitType = "equalPaidByYou";
+      }
+
+      const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
+        String(req.body?.paidBy ?? ''),
+        participantIds,
+        currentUserId
+      );
+
+      updated = await updateCommunityExpense(currentUserId, String(req.params.expenseId), {
+        description: String(req.body?.description ?? ''),
+        amount: Number(req.body?.amount ?? 0),
+        expenseDate: String(req.body?.expenseDate ?? ''),
+        splitType: splitType,
+        participantIds: resolvedParticipants,
+        notes: String(req.body?.notes ?? ''),
+        currency: String(req.body?.currency ?? 'INR'),
+        paidBy: resolvedPaidBy,
+      });
     }
-
-    const validSplitTypes = [
-      "equalPaidByYou",
-      "unequalPaidByYou",
-      "equalPaidByOthers",
-      "unequalPaidByOthers",
-      "fullyOwedPaidByYou",
-      "fullyOwedPaidByOthers",
-    ];
-
-    if (!splitType || !validSplitTypes.includes(splitType)) {
-      splitType = "equalPaidByYou";
-    }
-
-    const { resolvedPaidBy, resolvedParticipants } = await resolveIds(
-      String(req.body?.paidBy ?? ''),
-      participantIds,
-      currentUserId
-    );
-
-    const updated = await updateCommunityExpense(currentUserId, String(req.params.expenseId), {
-      description: String(req.body?.description ?? ''),
-      amount: Number(req.body?.amount ?? 0),
-      expenseDate: String(req.body?.expenseDate ?? ''),
-      splitType: splitType,
-      participantIds: resolvedParticipants,
-      notes: String(req.body?.notes ?? ''),
-      currency: String(req.body?.currency ?? 'INR'),
-      paidBy: resolvedPaidBy,
-    });
 
     return res.json({ expense: serializeExpense(updated) });
   } catch (error) {

@@ -10,6 +10,7 @@ async function createExpense(expenseData: {
   currency: string;
   notes: string;
   category?: string;
+  icon?: string;
   expenseDate?: string;
   participants: { userId: string; amount: number; settled: boolean }[];
   history: { action: string; performedBy: string }[];
@@ -87,6 +88,8 @@ async function updateExpense(
     paidBy: { userId: string; amount: number }[];
     currency: string;
     notes: string;
+    category: string;
+    icon: string;
     expenseDate: string;
     participants: { userId: string; amount: number; settled: boolean }[];
   }>,

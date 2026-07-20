@@ -155,7 +155,6 @@ export default function ExpenseDetailScreen() {
   const net = expense.netBalance ?? 0;
   const netColor = net < 0 ? palette.danger : net > 0 ? palette.success : palette.textSecondary;
   const netLabel = deleted ? 'No longer counts' : net > 0 ? 'You are owed' : net < 0 ? 'You owe' : 'Settled';
-  const payerName = expense.paidBy?.[0]?.userId?.name ?? 'Someone';
 
   return (
     <>
@@ -198,13 +197,21 @@ export default function ExpenseDetailScreen() {
           </View>
         </Card>
 
-        {/* Who paid / who owes */}
+        {/* Who paid — lists every payer, so multi-payer expenses are clear */}
         <AppText variant="label" style={styles.sectionHeader}>Paid by</AppText>
-        <Card variant="flat" padding={16} style={deleted && styles.numb}>
-          <AppText variant="bodySm" weight="bold">{payerName} paid {inr(expense.amount)}</AppText>
+        <Card variant="flat" padding={0} style={deleted && styles.numb}>
+          {(expense.paidBy ?? []).map((p, i) => (
+            <View
+              key={(p.userId?.id ?? '') + i}
+              style={[styles.breakdownRow, i !== (expense.paidBy?.length ?? 0) - 1 && styles.rowDivider]}
+            >
+              <AppText variant="bodySm" numberOfLines={1} style={{ flex: 1 }}>{p.userId?.name ?? 'Unknown'}</AppText>
+              <AppText variant="bodySm" weight="bold" color="success">+{inr(p.amount)}</AppText>
+            </View>
+          ))}
         </Card>
 
-        <AppText variant="label" style={styles.sectionHeader}>Split breakdown</AppText>
+        <AppText variant="label" style={styles.sectionHeader}>Owed by</AppText>
         <Card variant="flat" padding={0} style={deleted && styles.numb}>
           {expense.participants.map((p, i) => (
             <View
@@ -219,10 +226,28 @@ export default function ExpenseDetailScreen() {
                   <AppText variant="micro" color="success" weight="bold">SETTLED</AppText>
                 </View>
               )}
-              <AppText variant="bodySm" weight="bold">{inr(p.amount)}</AppText>
+              <AppText variant="bodySm" weight="bold" style={{ color: p.settled ? palette.textTertiary : palette.textPrimary }}>
+                {inr(p.amount)}
+              </AppText>
             </View>
           ))}
         </Card>
+
+        {/* Plain-language calculation, so the maths is never a mystery */}
+        <View style={styles.calcCard}>
+          <AppText variant="caption" color="textSecondary">
+            Total bill {inr(expense.amount)} · paid by {(expense.paidBy ?? []).map((p) => `${p.userId?.name?.split(' ')[0] ?? '?'} (${inr(p.amount)})`).join(', ') || '—'} · split across {expense.participants.length} {expense.participants.length === 1 ? 'person' : 'people'}.
+          </AppText>
+          {!deleted && (
+            <AppText variant="bodySm" weight="bold" style={{ color: netColor, marginTop: 4 }}>
+              {net > 0
+                ? `Net: you are owed ${inr(net)}.`
+                : net < 0
+                  ? `Net: you owe ${inr(net)}.`
+                  : 'Net: you are settled on this expense.'}
+            </AppText>
+          )}
+        </View>
 
         {!!expense.notes && (
           <>
@@ -348,6 +373,12 @@ const styles = StyleSheet.create({
     borderTopColor: palette.divider,
   },
 
+  calcCard: {
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
   sectionHeader: { marginTop: spacing.lg, marginBottom: spacing.sm },
   breakdownRow: {
     flexDirection: 'row',

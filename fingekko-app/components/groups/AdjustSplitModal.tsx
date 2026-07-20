@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { layout, palette, radius, spacing } from '@/constants/design';
 import AppText from '../ui/AppText';
@@ -204,7 +204,20 @@ export default function AdjustSplitModal({ visible, totalAmount, people, value, 
           </AppText>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: spacing.xl }} keyboardShouldPersistTaps="handled">
+        {/* Keyboard-avoiding so typing amounts/percentages never hides the
+            names; the list scrolls independently for large member counts. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        >
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator
+        >
           {people.map((person, i) => (
             <View key={person.id} style={[styles.row, i !== people.length - 1 && styles.rowDivider]}>
               <View style={styles.avatar}>
@@ -260,6 +273,7 @@ export default function AdjustSplitModal({ visible, totalAmount, people, value, 
             </View>
           )}
         </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );

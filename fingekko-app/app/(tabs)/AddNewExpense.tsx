@@ -6,6 +6,7 @@ import Icon from '../../components/ui/Icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,10 +19,39 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from '../../components/ui/Toast';
+import Button from '../../components/ui/Button';
+import IconPickerModal from '../../components/ui/IconPickerModal';
+import AdjustSplitModal from '../../components/groups/AdjustSplitModal';
+import WhoPaidModal from '../../components/groups/WhoPaidModal';
+import {
+  PayerConfig,
+  Person as SplitPerson,
+  SplitConfig,
+  payerLabel,
+  resolvePayers,
+  resolveSplit,
+  splitLabel,
+  sumValues,
+} from '../../components/groups/splitModel';
 import { useToast } from '../../hooks/useToast';
 import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
 
-const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Other'];
+// Each category carries a lucide icon (rendered via the Icon lucide fallback),
+// shown in the picker and reflected on the category button once chosen.
+const CATEGORY_ICONS: Record<string, string> = {
+  Food: 'Utensils',
+  Groceries: 'ShoppingCart',
+  Travel: 'Plane',
+  Transport: 'Car',
+  Shopping: 'ShoppingBag',
+  Bills: 'ReceiptText',
+  Rent: 'House',
+  Entertainment: 'Clapperboard',
+  Health: 'HeartPulse',
+  Gifts: 'Gift',
+  Other: 'Tag',
+};
+const CATEGORIES = Object.keys(CATEGORY_ICONS);
 
 const getInitials = (name: string): string =>
   name
@@ -48,7 +78,7 @@ export default function AddNewExpense() {
   const router = useRouter();
   // When an expenseId is passed we're editing an existing split (PUT), not
   // creating one (POST). Reached from the expense detail screen's Edit button.
-  const { expenseId } = useLocalSearchParams<{ expenseId?: string }>();
+  const { expenseId, friendId } = useLocalSearchParams<{ expenseId?: string; friendId?: string }>();
   const isEditing = Boolean(expenseId);
 
   const [description, setDescription] = useState('');
@@ -56,6 +86,8 @@ export default function AddNewExpense() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>('');
+  const [expenseIcon, setExpenseIcon] = useState<string>('');
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
@@ -63,8 +95,12 @@ export default function AddNewExpense() {
     outgoingRequests: [],
   });
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
-  const [paidByYou, setPaidByYou] = useState(true);
-  const [splitEqually, setSplitEqually] = useState(true);
+  const [myDbId, setMyDbId] = useState('');
+  // Splitwise-style configs edited in the two sub-screens (Who paid / Adjust split).
+  const [splitConfig, setSplitConfig] = useState<SplitConfig>({ mode: 'equally', selectedIds: [] });
+  const [payerConfig, setPayerConfig] = useState<PayerConfig>({ mode: 'single', id: '' });
+  const [adjustSplitOpen, setAdjustSplitOpen] = useState(false);
+  const [whoPaidOpen, setWhoPaidOpen] = useState(false);
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -90,8 +126,13 @@ export default function AddNewExpense() {
       try {
         const token = await getTokenRef.current();
         if (!token) return;
-        const response = await apiRequest<FriendsResponse>(`/api/friends`, {}, token);
-        if (active) setFriends(response);
+        const [response, meRes] = await Promise.all([
+          apiRequest<FriendsResponse>(`/api/friends`, {}, token),
+          apiRequest<any>('/api/me', {}, token),
+        ]);
+        if (!active) return;
+        setFriends(response);
+        setMyDbId(meRes?.user?._id || meRes?.user?.id || '');
       } catch {
         if (active) setError('Unable to load friends for splitting.');
       } finally {
@@ -105,9 +146,9 @@ export default function AddNewExpense() {
     };
   }, [isSignedIn]);
 
-  // Edit mode: load the existing expense and reverse-engineer the composer state
-  // from its stored split. A split is "equal" when the payer is themselves a
-  // participant with a non-zero share; "full amount" excludes the payer.
+  // Edit mode: load the expense and restore the composer configs from its stored
+  // paidBy[]/participants[]. Amounts are kept verbatim (unequally + explicit
+  // payers), so re-saving preserves exactly what was there.
   useEffect(() => {
     if (!isEditing || !expenseId) return;
     let active = true;
@@ -123,7 +164,8 @@ export default function AddNewExpense() {
         ]);
         if (!active) return;
 
-        const myDbId = meRes?.user?._id || meRes?.user?.id || '';
+        const dbId = meRes?.user?._id || meRes?.user?.id || '';
+        setMyDbId(dbId);
         const exp = expRes.expense;
         if (!exp) return;
 
@@ -132,25 +174,32 @@ export default function AddNewExpense() {
         setDate((exp.expenseDate ?? new Date().toISOString()).split('T')[0]);
         setNotes(exp.notes ?? '');
         setCategory(exp.category ?? '');
+        setExpenseIcon(exp.icon ?? '');
         if (exp.notes) setShowNotes(true);
-
-        const payerId = exp.paidBy?.[0]?.userId?.id ?? '';
-        setPaidByYou(payerId === myDbId);
-
-        const payerIsParticipant = (exp.participants ?? []).some(
-          (p: any) => p.userId?.id === payerId && (p.amount ?? 0) > 0
-        );
-        setSplitEqually(payerIsParticipant);
 
         // Everyone in the split except me becomes a selected friend chip.
         const others = (exp.participants ?? [])
           .map((p: any) => p.userId?.id)
-          .filter((id: string) => id && id !== myDbId);
-        // Include the payer if they're the other party and not already listed.
-        if (payerId && payerId !== myDbId && !others.includes(payerId)) {
-          others.push(payerId);
-        }
+          .filter((id: string) => id && id !== dbId);
         setSelectedFriendIds(Array.from(new Set(others)));
+
+        // Restore exact owed amounts and payer(s).
+        const amounts: Record<string, number> = {};
+        (exp.participants ?? []).forEach((p: any) => {
+          if (p.userId?.id) amounts[p.userId.id] = p.amount ?? 0;
+        });
+        setSplitConfig({ mode: 'unequally', amounts });
+
+        const payList = exp.paidBy ?? [];
+        if (payList.length > 1) {
+          const payAmounts: Record<string, number> = {};
+          payList.forEach((p: any) => {
+            if (p.userId?.id) payAmounts[p.userId.id] = p.amount ?? 0;
+          });
+          setPayerConfig({ mode: 'multiple', amounts: payAmounts });
+        } else {
+          setPayerConfig({ mode: 'single', id: payList[0]?.userId?.id ?? dbId });
+        }
       } catch {
         if (active) setError('Could not load this expense to edit.');
       }
@@ -162,6 +211,16 @@ export default function AddNewExpense() {
   }, [isEditing, expenseId]);
 
   const acceptedFriends = useMemo(() => friends.friends, [friends.friends]);
+
+  // Deep-linked from a friend's split screen — preselect that friend once loaded.
+  const preselectedRef = useRef(false);
+  useEffect(() => {
+    if (isEditing || preselectedRef.current || !friendId) return;
+    if (acceptedFriends.some((f) => f.friend.id === friendId)) {
+      preselectedRef.current = true;
+      setSelectedFriendIds((cur) => (cur.includes(friendId) ? cur : [...cur, friendId]));
+    }
+  }, [friendId, acceptedFriends, isEditing]);
 
   const selectedFriends = useMemo(
     () => acceptedFriends.filter((f) => selectedFriendIds.includes(f.friend.id)),
@@ -181,7 +240,9 @@ export default function AddNewExpense() {
     });
   }, [acceptedFriends, selectedFriendIds, query]);
 
-  const suggestionsVisible = participantsFocused || query.trim() !== '';
+  // The picker is an explicit mode now (opened by tapping the field, closed by
+  // Confirm), so it doesn't flicker when the in-picker search grabs focus.
+  const suggestionsVisible = participantsFocused;
 
   const addFriend = (friendId: string) => {
     setSelectedFriendIds((current) =>
@@ -194,13 +255,37 @@ export default function AddNewExpense() {
     setSelectedFriendIds((current) => current.filter((id) => id !== friendId));
   };
 
-  const selectedSplitType = paidByYou
-    ? splitEqually
-      ? 'equalPaidByYou'
-      : 'fullyOwedPaidByYou'
-    : splitEqually
-      ? 'equalPaidByOthers'
-      : 'fullyOwedPaidByOthers';
+  // You + the picked friends, in the id space the backend resolves (DB ids).
+  const splitPeople: SplitPerson[] = useMemo(() => {
+    const list: SplitPerson[] = [];
+    if (myDbId) list.push({ id: myDbId, name: 'You', isYou: true });
+    selectedFriends.forEach((f) => list.push({ id: f.friend.id, name: f.friend.name }));
+    return list;
+  }, [myDbId, selectedFriends]);
+
+  const peopleKey = splitPeople.map((p) => p.id).join(',');
+
+  // Keep the split in sync with who's in the expense: equally always covers
+  // everyone; the amount/percentage modes just drop people who were removed.
+  useEffect(() => {
+    const ids = peopleKey ? peopleKey.split(',') : [];
+    setSplitConfig((cur) => {
+      if (cur.mode === 'equally') return { mode: 'equally', selectedIds: ids };
+      if (cur.mode === 'unequally') {
+        return { mode: 'unequally', amounts: Object.fromEntries(Object.entries(cur.amounts).filter(([id]) => ids.includes(id))) };
+      }
+      return { mode: 'percentages', percents: Object.fromEntries(Object.entries(cur.percents).filter(([id]) => ids.includes(id))) };
+    });
+  }, [peopleKey]);
+
+  const amountValue = Number(amount) || 0;
+  const owed = useMemo(() => resolveSplit(splitConfig, amountValue), [splitConfig, amountValue]);
+  const owedTotal = sumValues(owed);
+  const payers = useMemo(() => resolvePayers(payerConfig, amountValue, myDbId), [payerConfig, amountValue, myDbId]);
+  const payersTotal = sumValues(Object.fromEntries(payers.map((p) => [p.userId, p.amount])));
+
+  const splitMismatch = amountValue > 0 && Math.abs(owedTotal - amountValue) > 0.01;
+  const payerMismatch = amountValue > 0 && Math.abs(payersTotal - amountValue) > 0.01;
 
   const canSave =
     !saving &&
@@ -211,7 +296,6 @@ export default function AddNewExpense() {
   const handleSave = async () => {
     setError('');
 
-    const amountValue = Number(amount);
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setError('Enter a valid amount.');
       return;
@@ -228,6 +312,14 @@ export default function AddNewExpense() {
       setError('Add at least one person to split with.');
       return;
     }
+    if (Object.keys(owed).length === 0 || splitMismatch) {
+      setError('Tap “split” — the shares must add up to the total.');
+      return;
+    }
+    if (payerMismatch) {
+      setError('Tap “Paid by” — the paid amounts must add up to the total.');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -237,19 +329,19 @@ export default function AddNewExpense() {
         return;
       }
 
-      const friendId = selectedFriendIds[0];
-      const isPaidByOther = !paidByYou;
-
+      // Explicit contract: exact payers[] and participants[], same as the group
+      // composer — the split is stored verbatim.
       const payload = {
         description: description.trim(),
         amount: amountValue,
         expenseDate: date,
-        participantIds: selectedFriendIds,
+        participants: Object.entries(owed).map(([userId, amt]) => ({ userId, amount: amt })),
         notes: notes.trim(),
         currency: 'INR',
-        splitType: selectedSplitType,
-        paidBy: isPaidByOther ? friendId : undefined,
+        splitType: 'explicit',
+        paidBy: payers,
         category: category || undefined,
+        icon: expenseIcon || undefined,
       };
 
       const response = await apiRequest<{
@@ -267,9 +359,10 @@ export default function AddNewExpense() {
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
       setCategory('');
+      setExpenseIcon('');
       setSelectedFriendIds([]);
-      setPaidByYou(true);
-      setSplitEqually(true);
+      setSplitConfig({ mode: 'equally', selectedIds: [] });
+      setPayerConfig({ mode: 'single', id: '' });
 
       const award = response?.xpAward;
       const xpLine = isEditing
@@ -289,10 +382,8 @@ export default function AddNewExpense() {
     }
   };
 
-  const otherName = selectedFriends[0]?.friend.name.split(' ')[0] ?? 'them';
-
   return (
-    <SafeAreaView style={styles.page} edges={['top']}>
+    <SafeAreaView style={styles.page} edges={['top', 'bottom']}>
       <Toast toast={toast} onDismiss={dismissToast} />
 
       {/* Top bar: back / title / save-checkmark, Splitwise-style */}
@@ -334,16 +425,11 @@ export default function AddNewExpense() {
               <Icon name="X" size={12} color={palette.primaryDeep} />
             </Pressable>
           ))}
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            onFocus={() => setParticipantsFocused(true)}
-            onBlur={() => setParticipantsFocused(false)}
-            placeholder={selectedFriends.length === 0 ? 'Enter names or emails' : 'Add more'}
-            placeholderTextColor={palette.textTertiary}
-            style={styles.participantInput}
-            autoCapitalize="none"
-          />
+          <Pressable style={styles.participantInputTrigger} onPress={() => setParticipantsFocused(true)}>
+            <Text style={styles.participantTriggerText}>
+              {selectedFriends.length === 0 ? 'Enter names or emails' : 'Add more'}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -353,41 +439,96 @@ export default function AddNewExpense() {
       >
         {suggestionsVisible ? (
           /* People list takes over while picking — same as Splitwise */
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.suggestionsList}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.sectionLabel}>Friends</Text>
-            {loadingFriends ? (
-              <ActivityIndicator color={palette.primaryDeep} style={{ marginTop: spacing.lg }} />
-            ) : suggestions.length === 0 ? (
-              <Text style={styles.emptyText}>
-                {acceptedFriends.length === 0
-                  ? 'Add friends first to split expenses with them.'
-                  : query.trim()
-                    ? 'No one matches that search.'
-                    : 'Everyone is already added.'}
-              </Text>
-            ) : (
-              suggestions.map((friendship) => (
+          <View style={{ flex: 1 }}>
+            {/* Dedicated search bar so finding friends is obvious */}
+            <View style={styles.pickerSearchBar}>
+              <Icon name="Search" size={16} color={palette.textTertiary} clickable={false} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search friends"
+                placeholderTextColor={palette.textTertiary}
+                style={styles.pickerSearchInput}
+                autoCapitalize="none"
+                autoFocus
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <Icon name="X" size={16} color={palette.textTertiary} clickable={false} />
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.suggestionsList}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.sectionLabel}>{selectedFriends.length > 0 ? `Added (${selectedFriends.length}) · tap to remove` : 'Friends'}</Text>
+              {selectedFriends.map((friendship) => (
                 <Pressable
-                  key={friendship.id}
+                  key={`sel-${friendship.id}`}
                   style={({ pressed }) => [styles.suggestionRow, pressed && { opacity: 0.6 }]}
-                  onPress={() => addFriend(friendship.friend.id)}
+                  onPress={() => removeFriend(friendship.friend.id)}
                 >
-                  <View style={styles.suggestionAvatar}>
-                    <Text style={styles.suggestionAvatarText}>{getInitials(friendship.friend.name)}</Text>
+                  <View style={[styles.suggestionAvatar, { backgroundColor: palette.primary }]}>
+                    <Text style={[styles.suggestionAvatarText, { color: palette.white }]}>{getInitials(friendship.friend.name)}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.suggestionName}>{friendship.friend.name}</Text>
                     <Text style={styles.suggestionEmail}>{friendship.friend.email}</Text>
                   </View>
-                  <Icon name="Plus" size={18} color={palette.primaryDeep} />
+                  <Icon name="Check" size={18} color={palette.primaryDeep} clickable={false} />
                 </Pressable>
-              ))
-            )}
-          </ScrollView>
+              ))}
+
+              {suggestions.length > 0 && <Text style={styles.sectionLabel}>Add people</Text>}
+              {loadingFriends ? (
+                <ActivityIndicator color={palette.primaryDeep} style={{ marginTop: spacing.lg }} />
+              ) : suggestions.length === 0 && selectedFriends.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  {acceptedFriends.length === 0
+                    ? 'Add friends first to split expenses with them.'
+                    : query.trim()
+                      ? 'No one matches that search.'
+                      : 'Everyone is already added.'}
+                </Text>
+              ) : (
+                suggestions.map((friendship) => (
+                  <Pressable
+                    key={friendship.id}
+                    style={({ pressed }) => [styles.suggestionRow, pressed && { opacity: 0.6 }]}
+                    onPress={() => addFriend(friendship.friend.id)}
+                  >
+                    <View style={styles.suggestionAvatar}>
+                      <Text style={styles.suggestionAvatarText}>{getInitials(friendship.friend.name)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestionName}>{friendship.friend.name}</Text>
+                      <Text style={styles.suggestionEmail}>{friendship.friend.email}</Text>
+                    </View>
+                    <Icon name="Plus" size={18} color={palette.primaryDeep} clickable={false} />
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Confirm button — leaves the picker and returns to the composer */}
+            <View style={styles.pickerFooter}>
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={selectedFriends.length === 0}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setQuery('');
+                  setParticipantsFocused(false);
+                }}
+              >
+                {selectedFriends.length > 0 ? `Confirm ${selectedFriends.length} ${selectedFriends.length === 1 ? 'person' : 'people'}` : 'Select people to split with'}
+              </Button>
+            </View>
+          </View>
         ) : (
           /* The composer itself: centered description + amount + split sentence */
           <ScrollView
@@ -396,9 +537,10 @@ export default function AddNewExpense() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.fieldRow}>
-              <View style={styles.fieldIconBox}>
-                <Icon name="StickyNote" size={22} color={palette.primaryDeep} />
-              </View>
+              {/* Tap the icon box to choose a custom icon for this expense. */}
+              <Pressable style={styles.fieldIconBox} onPress={() => setIconPickerOpen(true)}>
+                <Icon name={expenseIcon || 'StickyNote'} size={22} color={palette.primaryDeep} clickable={false} />
+              </Pressable>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
@@ -422,22 +564,30 @@ export default function AddNewExpense() {
               />
             </View>
 
-            {/* Paid by [you] and split [equally] */}
+            {/* Paid by [who paid] and split [adjust split] — each opens a screen */}
             <View style={styles.sentenceRow}>
               <Text style={styles.sentenceText}>Paid by</Text>
-              <Pressable style={styles.sentencePill} onPress={() => setPaidByYou((v) => !v)}>
-                <Text style={styles.sentencePillText}>{paidByYou ? 'you' : otherName}</Text>
+              <Pressable
+                style={styles.sentencePill}
+                onPress={() => (selectedFriendIds.length ? setWhoPaidOpen(true) : setParticipantsFocused(true))}
+              >
+                <Text style={styles.sentencePillText}>{payerLabel(payerConfig, splitPeople, myDbId)}</Text>
+                <Icon name="ChevronRight" size={13} color={palette.primaryDeep} />
               </Pressable>
               <Text style={styles.sentenceText}>and split</Text>
-              <Pressable style={styles.sentencePill} onPress={() => setSplitEqually((v) => !v)}>
-                <Text style={styles.sentencePillText}>{splitEqually ? 'equally' : 'full amount'}</Text>
+              <Pressable
+                style={styles.sentencePill}
+                onPress={() => (selectedFriendIds.length ? setAdjustSplitOpen(true) : setParticipantsFocused(true))}
+              >
+                <Text style={styles.sentencePillText}>{splitLabel(splitConfig.mode)}</Text>
+                <Icon name="ChevronRight" size={13} color={palette.primaryDeep} />
               </Pressable>
             </View>
-            {!splitEqually && (
-              <Text style={styles.splitHint}>
-                {paidByYou
-                  ? `${otherName} owes you the full amount`
-                  : `You owe ${otherName} the full amount`}
+            {selectedFriendIds.length > 0 && amountValue > 0 && (
+              <Text style={[styles.splitHint, splitMismatch && { color: palette.danger }]}>
+                {Object.entries(owed)
+                  .map(([id, amt]) => `${splitPeople.find((p) => p.id === id)?.name?.split(' ')[0] ?? '?'}: ₹${amt.toFixed(2)}`)
+                  .join('  ·  ')}
               </Text>
             )}
 
@@ -476,7 +626,7 @@ export default function AddNewExpense() {
         {!suggestionsVisible && (
           <View style={styles.bottomBar}>
             <Pressable style={styles.categoryButton} onPress={() => setCategoryPickerOpen(true)}>
-              <Icon name="Utensils" size={16} color={palette.primaryDeep} />
+              <Icon name={category ? CATEGORY_ICONS[category] ?? 'Tag' : 'Tag'} size={16} color={palette.primaryDeep} clickable={false} />
               <Text style={styles.categoryButtonText}>{category || 'Category'}</Text>
             </Pressable>
             <View style={styles.bottomIcons}>
@@ -499,6 +649,41 @@ export default function AddNewExpense() {
         )}
       </KeyboardAvoidingView>
 
+      <AdjustSplitModal
+        visible={adjustSplitOpen}
+        totalAmount={amountValue}
+        people={splitPeople}
+        value={splitConfig}
+        onClose={() => setAdjustSplitOpen(false)}
+        onDone={(cfg) => {
+          setSplitConfig(cfg);
+          setAdjustSplitOpen(false);
+        }}
+      />
+
+      <WhoPaidModal
+        visible={whoPaidOpen}
+        totalAmount={amountValue}
+        people={splitPeople}
+        currentUserId={myDbId}
+        value={payerConfig}
+        onClose={() => setWhoPaidOpen(false)}
+        onDone={(cfg) => {
+          setPayerConfig(cfg);
+          setWhoPaidOpen(false);
+        }}
+      />
+
+      <IconPickerModal
+        visible={iconPickerOpen}
+        value={expenseIcon}
+        onClose={() => setIconPickerOpen(false)}
+        onSelect={(name) => {
+          setExpenseIcon(name);
+          setIconPickerOpen(false);
+        }}
+      />
+
       {/* Category select sheet (unchanged behavior) */}
       <Modal visible={categoryPickerOpen} animationType="slide" transparent onRequestClose={() => setCategoryPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCategoryPickerOpen(false)}>
@@ -517,12 +702,11 @@ export default function AddNewExpense() {
                       setCategoryPickerOpen(false);
                     }}
                   >
-                    <Text style={styles.categoryRowText}>{item}</Text>
-                    {selected ? (
-                      <Icon name="CheckSquare2" size={20} color={palette.primaryDeep} />
-                    ) : (
-                      <Icon name="Circle" size={20} color={palette.textTertiary} />
-                    )}
+                    <View style={styles.categoryIconWrap}>
+                      <Icon name={CATEGORY_ICONS[item] ?? 'Tag'} size={18} color={palette.primaryDeep} clickable={false} />
+                    </View>
+                    <Text style={[styles.categoryRowText, { flex: 1 }]}>{item}</Text>
+                    {selected && <Icon name="Check" size={20} color={palette.primaryDeep} clickable={false} />}
                   </Pressable>
                 );
               })}
@@ -608,6 +792,31 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontFamily: fontFamily.medium,
     paddingVertical: 4,
+  },
+  participantInputTrigger: { flexGrow: 1, minWidth: 110, paddingVertical: 6 },
+  participantTriggerText: { fontSize: 15, color: palette.textTertiary, fontFamily: fontFamily.medium },
+
+  pickerSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: layout.gutter,
+    marginTop: spacing.md,
+    backgroundColor: palette.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  pickerSearchInput: { flex: 1, fontSize: 14, color: palette.textPrimary, padding: 0, fontFamily: fontFamily.medium },
+  pickerFooter: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+    backgroundColor: palette.card,
   },
 
   suggestionsList: {
@@ -720,6 +929,9 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
   },
   sentencePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1.5,
     borderColor: palette.borderStrong,
     borderRadius: radius.sm,
@@ -836,16 +1048,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   categoryRow: {
-    minHeight: 50,
-    paddingHorizontal: 14,
+    minHeight: 52,
+    paddingHorizontal: 12,
     borderRadius: radius.md,
     backgroundColor: palette.card,
     borderWidth: 1.5,
     borderColor: palette.border,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.md,
     marginBottom: spacing.xs,
+  },
+  categoryIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    backgroundColor: palette.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryRowText: {
     fontSize: 14,

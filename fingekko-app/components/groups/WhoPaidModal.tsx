@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { layout, palette, radius, spacing } from '@/constants/design';
 import AppText from '../ui/AppText';
@@ -113,42 +113,53 @@ export default function WhoPaidModal({ visible, totalAmount, people, currentUser
           </ScrollView>
         ) : (
           <>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: spacing.xl }} keyboardShouldPersistTaps="handled">
-              {people.map((person, i) => (
-                <View key={person.id} style={[styles.row, i !== people.length - 1 && styles.rowDivider]}>
-                  <View style={styles.avatar}>
-                    <AppText variant="caption" color="primaryDeep" weight="bold">{getInitials(person.name)}</AppText>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+            >
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: spacing.xl }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+              >
+                {people.map((person, i) => (
+                  <View key={person.id} style={[styles.row, i !== people.length - 1 && styles.rowDivider]}>
+                    <View style={styles.avatar}>
+                      <AppText variant="caption" color="primaryDeep" weight="bold">{getInitials(person.name)}</AppText>
+                    </View>
+                    <AppText variant="label" style={{ flex: 1 }} numberOfLines={1}>
+                      {person.isYou ? 'You' : person.name}
+                    </AppText>
+                    <View style={styles.amountBox}>
+                      <AppText variant="bodySm" color="textTertiary">₹</AppText>
+                      <TextInput
+                        value={amounts[person.id] ?? ''}
+                        onChangeText={(t) => setAmounts((p) => ({ ...p, [person.id]: t }))}
+                        placeholder="0.00"
+                        placeholderTextColor={palette.textTertiary}
+                        keyboardType="decimal-pad"
+                        style={styles.amountInput}
+                      />
+                    </View>
                   </View>
-                  <AppText variant="label" style={{ flex: 1 }} numberOfLines={1}>
-                    {person.isYou ? 'You' : person.name}
-                  </AppText>
-                  <View style={styles.amountBox}>
-                    <AppText variant="bodySm" color="textTertiary">₹</AppText>
-                    <TextInput
-                      value={amounts[person.id] ?? ''}
-                      onChangeText={(t) => setAmounts((p) => ({ ...p, [person.id]: t }))}
-                      placeholder="0.00"
-                      placeholderTextColor={palette.textTertiary}
-                      keyboardType="decimal-pad"
-                      style={styles.amountInput}
-                    />
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
+                ))}
+              </ScrollView>
 
-            {!!error && (
-              <AppText variant="caption" color="danger" align="center" style={{ marginBottom: spacing.sm }}>
-                {error}
-              </AppText>
-            )}
+              {!!error && (
+                <AppText variant="caption" color="danger" align="center" style={{ marginBottom: spacing.sm }}>
+                  {error}
+                </AppText>
+              )}
 
-            <View style={styles.footer}>
-              <AppText variant="title" weight="bold">{inr(enteredTotal)} of {inr(totalAmount)}</AppText>
-              <AppText variant="caption" color={Math.abs(totalAmount - enteredTotal) < 0.01 ? 'success' : 'danger'}>
-                {inr(Math.max(0, totalAmount - enteredTotal))} left
-              </AppText>
-            </View>
+              <View style={styles.footer}>
+                <AppText variant="title" weight="bold">{inr(enteredTotal)} of {inr(totalAmount)}</AppText>
+                <AppText variant="caption" color={Math.abs(totalAmount - enteredTotal) < 0.01 ? 'success' : 'danger'}>
+                  {inr(Math.max(0, totalAmount - enteredTotal))} left
+                </AppText>
+              </View>
+            </KeyboardAvoidingView>
           </>
         )}
       </SafeAreaView>

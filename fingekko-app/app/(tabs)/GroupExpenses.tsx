@@ -87,7 +87,13 @@ export default function GroupExpensesScreen() {
         </View>
       ) : (
         expenses.map((item) => (
-          <Card key={item.id} variant="elevated" padding={16} style={{ marginBottom: spacing.sm, borderRadius: radius.lg }}>
+          <Card
+            key={item.id}
+            variant="elevated"
+            padding={16}
+            style={{ marginBottom: spacing.sm, borderRadius: radius.lg }}
+            onPress={() => router.push({ pathname: '/(tabs)/ExpenseDetail', params: { expenseId: item.id } })}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: palette.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="Receipt" size={18} color={palette.primaryDeep} />

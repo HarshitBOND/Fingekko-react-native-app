@@ -101,6 +101,11 @@ const communityExpenseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Optional custom lucide icon name chosen for this expense.
+    icon: {
+      type: String,
+      default: '',
+    },
     participants: {
       type: [participantSchema],
       default: [],

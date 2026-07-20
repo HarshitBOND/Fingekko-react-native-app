@@ -9,7 +9,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -73,13 +72,22 @@ interface BalancesResponse {
   expenseCount: number;
 }
 
+interface ExpenseShare {
+  userId: { id: string; name: string } | null;
+  amount: number;
+  settled?: boolean;
+}
+
 interface GroupExpenseItem {
   id: string;
   groupId: string | null;
   description: string;
   amount: number;
   expenseDate: string;
+  isDeleted?: boolean;
   createdBy: { id: string; name: string; email: string };
+  paidBy?: ExpenseShare[];
+  participants?: ExpenseShare[];
 }
 
 function getGroupIconName(iconName?: string): string {
@@ -107,9 +115,9 @@ const getInitials = (name: string): string => {
 
 export default function GroupDetailScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
-  const membersY = useRef(0);
   const [settleUpVisible, setSettleUpVisible] = useState(false);
   const [addMembersVisible, setAddMembersVisible] = useState(false);
+  const [settlingWith, setSettlingWith] = useState<string | null>(null);
   const { toast, showToast, dismissToast } = useToast();
 
   const [group, setGroup] = useState<GroupItem | null>(null);
@@ -121,10 +129,10 @@ export default function GroupDetailScreen() {
   const GroupIconName = useMemo(() => getGroupIconName(group?.icon), [group?.icon]);
 
   const [balancesData, setBalancesData] = useState<BalancesResponse | null>(null);
-  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [, setBalancesLoading] = useState(false);
 
   const [recentExpenses, setRecentExpenses] = useState<GroupExpenseItem[]>([]);
-  const [expensesLoading, setExpensesLoading] = useState(false);
+  const [, setExpensesLoading] = useState(false);
 
   const fetchGroupDetails = async (groupId: string) => {
     setLoading(true);
@@ -216,10 +224,11 @@ export default function GroupDetailScreen() {
   const subtitle = group?.description?.trim() || `${memberCount} ${memberCount === 1 ? 'member' : 'members'}`;
   const isCreator = Boolean(group && userId && group.createdBy === userId);
 
-
-  const scrollToMembers = () => {
-    scrollRef.current?.scrollTo({ y: membersY.current, animated: true });
-  };
+  // My DB id (expenses store DB ids; settlements/members carry both).
+  const myDbId = useMemo(
+    () => group?.members.find((m) => m.id === userId)?.dbId ?? '',
+    [group, userId]
+  );
 
   const handleAddExpense = () => {
     if (!group?.id) {
@@ -262,23 +271,55 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const getMemberGroupBalance = (memberId: string) => {
-    if (!balancesData) return { amount: 0, label: 'Settled' };
-    
-    const directSettlement = balancesData.settlements.find(
-      s => (s.fromUser.id === userId && s.toUser.id === memberId) ||
-           (s.fromUser.id === memberId && s.toUser.id === userId)
-    );
+  // Settle every direct obligation between me and one other member: mark the
+  // debtor's share settled on each shared, unsettled expense. Pairwise (not
+  // chained) but always reflects real obligations, never invented ones.
+  const settleWithMember = async (otherDbId: string, otherName: string) => {
+    if (!otherDbId || !myDbId) return;
+    setSettlingWith(otherDbId);
+    try {
+      const token = await getToken();
+      if (!token) return;
 
-    if (directSettlement) {
-      if (directSettlement.fromUser.id === userId) {
-        return { amount: -directSettlement.amount, label: 'You owe them' };
-      } else {
-        return { amount: directSettlement.amount, label: 'Owes you' };
+      const shareId = (s: ExpenseShare) => s.userId?.id ?? '';
+      const targets: { expenseId: string; userId: string }[] = [];
+
+      recentExpenses.forEach((exp) => {
+        if (exp.isDeleted) return;
+        const iPaid = (exp.paidBy ?? []).some((p) => shareId(p) === myDbId);
+        const theyPaid = (exp.paidBy ?? []).some((p) => shareId(p) === otherDbId);
+        const myShare = (exp.participants ?? []).find((p) => shareId(p) === myDbId);
+        const theirShare = (exp.participants ?? []).find((p) => shareId(p) === otherDbId);
+
+        // They fronted it and I owe a share → settle my share.
+        if (theyPaid && myShare && !myShare.settled) {
+          targets.push({ expenseId: exp.id, userId: myDbId });
+        }
+        // I fronted it and they owe a share → settle their share.
+        if (iPaid && theirShare && !theirShare.settled) {
+          targets.push({ expenseId: exp.id, userId: otherDbId });
+        }
+      });
+
+      if (targets.length === 0) {
+        showToast({ title: 'Nothing to settle', message: `You're square with ${otherName}.`, tone: 'info' });
+        return;
       }
-    }
 
-    return { amount: 0, label: 'Settled' };
+      for (const t of targets) {
+        await apiRequest({ method: 'post', url: `/api/expenses/${t.expenseId}/settle`, token, data: { userId: t.userId } });
+      }
+
+      showToast({ title: 'Settled up! 🎉', message: `You're all square with ${otherName}.`, tone: 'success' });
+      if (resolvedGroupId) {
+        await fetchGroupBalances(resolvedGroupId);
+        await fetchGroupExpenses(resolvedGroupId);
+      }
+    } catch (err: any) {
+      showToast({ title: 'Could not settle', message: err.message || 'Please try again.', tone: 'error' });
+    } finally {
+      setSettlingWith(null);
+    }
   };
 
 
@@ -308,11 +349,14 @@ export default function GroupDetailScreen() {
         </View>
 
         <Pressable
-          style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}
+          style={{ alignItems: 'center' }}
           onPress={() => setAddMembersVisible(true)}
-          accessibilityLabel="Add members"
+          accessibilityLabel="Add new member"
         >
-          <Icon name="UserPlus" size={18} color={COLORS.textDark} />
+          <View style={styles.circleBtn}>
+            <Icon name="UserPlus" size={18} color={COLORS.textDark} />
+          </View>
+          <Text style={styles.addMemberLabel}>Add member</Text>
         </Pressable>
       </View>
 
@@ -370,20 +414,26 @@ export default function GroupDetailScreen() {
             <Text style={styles.quickActionSubtitle}>Pay back debts</Text>
           </Pressable>
 
-          <Pressable style={styles.quickActionCard} onPress={scrollToMembers}>
+          <Pressable
+            style={styles.quickActionCard}
+            onPress={() => router.push({ pathname: '/(tabs)/group/GroupMembers', params: { groupId: resolvedGroupId, groupName: group?.name ?? '' } })}
+          >
             <View style={styles.quickActionIconWrap}>
               <Icon name="Users" size={22} color="#1FA855" />
             </View>
             <Text style={styles.quickActionTitle}>Members</Text>
-            <Text style={styles.quickActionSubtitle}>View group members</Text>
+            <Text style={styles.quickActionSubtitle}>{memberCount} in this group</Text>
           </Pressable>
 
-          <Pressable style={styles.quickActionCard} onPress={() => setAddMembersVisible(true)}>
+          <Pressable
+            style={styles.quickActionCard}
+            onPress={() => router.push({ pathname: '/(tabs)/GroupExpenses', params: { groupId: resolvedGroupId, groupName: group?.name ?? '' } })}
+          >
             <View style={styles.quickActionIconWrap}>
-              <Icon name="UserPlus" size={22} color="#1FA855" />
+              <Icon name="Receipt" size={20} color="#1FA855" />
             </View>
-            <Text style={styles.quickActionTitle}>Add Members</Text>
-            <Text style={styles.quickActionSubtitle}>Invite more people</Text>
+            <Text style={styles.quickActionTitle}>Recent expenses</Text>
+            <Text style={styles.quickActionSubtitle}>See all activity</Text>
           </Pressable>
         </View>
 
@@ -431,131 +481,6 @@ export default function GroupDetailScreen() {
           )}
         </View>
 
-        {/* Recent expenses */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Recent expenses</Text>
-          {recentExpenses.length > 0 && (
-            <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(tabs)/GroupExpenses', params: { groupId: resolvedGroupId, groupName: group?.name ?? '' } })}
-            >
-              <Text style={styles.viewAll}>View all</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.listCard}>
-          {expensesLoading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Loading expenses...</Text>
-            </View>
-          ) : recentExpenses.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Icon name="StickyNote" size={22} color={COLORS.green} />
-              <Text style={styles.emptyStateTitle}>No expenses yet</Text>
-              <Text style={styles.emptyStateText}>Add your first group expense to see it here.</Text>
-            </View>
-          ) : (
-            recentExpenses.slice(0, 5).map((exp, idx) => (
-              <React.Fragment key={exp.id}>
-                <View style={styles.settleRow}>
-                  <View style={styles.settleIconWrap}>
-                    <Icon name="Receipt" size={16} color="#000000" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settleText}>{exp.description}</Text>
-                    <Text style={{ fontSize: 11, color: COLORS.textGray, marginTop: 2 }}>
-                      Paid by {exp.createdBy?.id === userId ? 'You' : exp.createdBy?.name} on {new Date(exp.expenseDate).toLocaleDateString('en-IN')}
-                    </Text>
-                  </View>
-                  <Text style={styles.settleAmount}>₹{exp.amount.toFixed(2)}</Text>
-                </View>
-                {idx < Math.min(recentExpenses.length, 5) - 1 && <View style={styles.rowDivider} />}
-              </React.Fragment>
-            ))
-          )}
-        </View>
-
-        {/* Members */}
-        <View onLayout={(evt) => { membersY.current = evt.nativeEvent.layout.y; }}>
-          <Text style={styles.sectionTitle}>Members ({memberCount})</Text>
-          <View style={styles.listCard}>
-            {(group?.members ?? []).map((member, i) => {
-              const isYou = member.id === userId;
-              const mBalance = !isYou ? getMemberGroupBalance(member.id) : null;
-
-              return (
-                <React.Fragment key={member.id}>
-                  <Pressable
-                    style={styles.memberRow}
-                    onPress={() => {
-                      if (!isYou && member.dbId) {
-                        router.push({
-                          pathname: '/(tabs)/FriendSplits',
-                          params: { friendId: member.dbId, friendName: member.name },
-                        });
-                      }
-                    }}
-                  >
-                    <View style={styles.avatarSm}>
-                      <Text style={styles.avatarSmText}>
-                        {getInitials(isYou ? "You" : member.name)}
-                      </Text>
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.memberNameRow}>
-                        <Text style={styles.memberName}>
-                          {isYou ? "You" : member.name}
-                        </Text>
-
-                        {isYou && (
-                          <View style={styles.youBadge}>
-                            <Text style={styles.youBadgeText}>You</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <Text style={styles.memberSub}>
-                        {member.email}
-                      </Text>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      {!isYou && mBalance && (
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[
-                            styles.memberBalanceLabel,
-                            mBalance.amount > 0 ? styles.owesYouText : mBalance.amount < 0 ? styles.youOweText : styles.settledText
-                          ]}>
-                            {mBalance.label}
-                          </Text>
-                          {mBalance.amount !== 0 && (
-                            <Text style={[
-                              styles.memberBalanceAmount,
-                              mBalance.amount > 0 ? styles.owesYouText : styles.youOweText
-                            ]}>
-                              ₹{Math.abs(mBalance.amount).toFixed(2)}
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                      {isYou && (
-                        <Text style={styles.memberRightLabel}>Current user</Text>
-                      )}
-                      {!isYou && (
-                        <Icon name="ChevronRight" size={18} color="#000000" />
-                      )}
-                    </View>
-                  </Pressable>
-
-                  {i < (group?.members.length ?? 0) - 1 && (
-                    <View style={styles.rowDivider} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </View>
-        </View>
       </ScrollView>
 
       <AddMembersModal
@@ -595,7 +520,9 @@ export default function GroupDetailScreen() {
                 return mySettlements.map((s, idx) => {
                   const isFromYou = s.fromUser.id === userId;
                   const targetUser = isFromYou ? s.toUser : s.fromUser;
-                  
+                  const targetDbId = group?.members.find((m) => m.id === targetUser.id)?.dbId ?? '';
+                  const busy = settlingWith === targetDbId;
+
                   return (
                     <View key={idx} style={styles.settleModalRow}>
                       <View style={[styles.avatarSm, { backgroundColor: isFromYou ? '#FFD4D4' : '#C3FFD8' }]}>
@@ -608,15 +535,16 @@ export default function GroupDetailScreen() {
                           {targetUser.name}
                         </Text>
                         <Text style={{ fontSize: 12, fontWeight: '600', color: '#555555' }}>
-                          {isFromYou ? 'You owe them' : 'Owes you'}
+                          {isFromYou ? 'You owe them' : 'Owes you'} ₹{s.amount.toFixed(2)}
                         </Text>
                       </View>
-                      <Text style={[
-                        { fontSize: 16, fontWeight: '900' },
-                        isFromYou ? { color: '#FF3366' } : { color: '#1FA855' }
-                      ]}>
-                        ₹{s.amount.toFixed(2)}
-                      </Text>
+                      <Pressable
+                        style={({ pressed }) => [styles.settleActionBtn, pressed && { opacity: 0.7 }]}
+                        onPress={() => settleWithMember(targetDbId, targetUser.name)}
+                        disabled={busy || !targetDbId}
+                      >
+                        <Text style={styles.settleActionText}>{busy ? 'Settling…' : 'Settle'}</Text>
+                      </Pressable>
                     </View>
                   );
                 });
@@ -832,6 +760,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: palette.divider,
   },
+  settleActionBtn: {
+    backgroundColor: palette.primaryDeep,
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  settleActionText: { fontSize: 13, fontFamily: fontFamily.bold, color: palette.white },
+  addMemberLabel: { fontSize: 9, fontFamily: fontFamily.semibold, color: COLORS.textGray, marginTop: 2 },
 
   modalCloseBtn: {
     marginTop: 20,

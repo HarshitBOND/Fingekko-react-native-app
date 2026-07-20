@@ -1,4 +1,4 @@
-import { useAuth, useUser } from '@clerk/clerk-expo';
+import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/ui/Icon';
@@ -18,7 +19,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import Toast from '../../components/ui/Toast';
 import { useToast } from '../../hooks/useToast';
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
+import { palette, spacing, radius, shadows, layout } from '../../constants/design';
 
 type ParticipantShare = {
   userId: {
@@ -86,6 +87,7 @@ const getCategoryIcon = (category?: string): { name: keyof typeof Ionicons.glyph
 export default function FriendSplitsScreen() {
   const router = useRouter();
   const { getToken } = useAuth();
+  const insets = useSafeAreaInsets();
   const [dbUserId, setDbUserId] = useState<string>('');
 
   const { friendId, friendName } = useLocalSearchParams<{ friendId: string; friendName: string }>();
@@ -153,25 +155,35 @@ export default function FriendSplitsScreen() {
     }, [friendId])
   );
 
-  // Compute overall balance with this friend — deleted expenses are frozen
-  // records and must never move the balance.
-  const totalBalance = expenses.reduce((sum, exp) => {
-    if (exp.isDeleted) return sum;
-    const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
+  // The signed amount THIS expense contributes to the balance between me and
+  // this one friend — from *my* perspective (positive = they owe me, negative =
+  // I owe them). Keyed on who actually PAID (not who typed it), and only this
+  // friend's own share — so an expense split three ways shows each person their
+  // 1/3, never the whole 2/3 the payer is owed.
+  const shareId = (p: ParticipantShare | any) => p?.userId?.id || p?.userId?.toString() || '';
+  const sumPaidBy = (exp: ExpenseItem, id: string) =>
+    (exp.paidBy ?? []).reduce((s, p) => (shareId(p) === id ? s + (p.amount || 0) : s), 0);
 
-    if (creatorId === dbUserId) {
-      const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-      if (friendPart && !friendPart.settled) {
-        return sum + friendPart.amount;
-      }
-    } else if (creatorId === friendId) {
-      const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-      if (userPart && !userPart.settled) {
-        return sum - userPart.amount;
-      }
-    }
-    return sum;
-  }, 0);
+  const pairwiseAmount = (exp: ExpenseItem): number => {
+    if (exp.isDeleted) return 0;
+    const total = exp.amount || 0;
+    if (total <= 0) return 0;
+    const iPaidFrac = sumPaidBy(exp, dbUserId) / total;
+    const friendPaidFrac = sumPaidBy(exp, friendId) / total;
+
+    const myShare = exp.participants?.find((p) => shareId(p) === dbUserId);
+    const friendShare = exp.participants?.find((p) => shareId(p) === friendId);
+
+    let amount = 0;
+    // They owe me their share, for the portion of the bill I financed.
+    if (friendShare && !friendShare.settled) amount += friendShare.amount * iPaidFrac;
+    // I owe them my share, for the portion they financed.
+    if (myShare && !myShare.settled) amount -= myShare.amount * friendPaidFrac;
+    return amount;
+  };
+
+  // Overall balance with this friend (deleted expenses never move it).
+  const totalBalance = Math.round(expenses.reduce((sum, exp) => sum + pairwiseAmount(exp), 0) * 100) / 100;
 
   const handleSettleUp = () => {
     if (totalBalance === 0) {
@@ -187,29 +199,16 @@ export default function FriendSplitsScreen() {
       const token = await getToken();
       if (!token) return;
 
-      // Find unsettled expenses with this friend
-      const unsettled = expenses.filter(exp => {
-        if (exp.isDeleted) return false;
-        const creatorId = exp.createdBy?.id || exp.createdBy?.toString() || '';
-        if (creatorId === dbUserId) {
-          const friendPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-          return friendPart && !friendPart.settled;
-        } else if (creatorId === friendId) {
-          const userPart = exp.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-          return userPart && !userPart.settled;
-        }
-        return false;
-      });
-
-      // Call settle endpoint for each unsettled expense
-      for (const exp of unsettled) {
+      // Settle each expense in its own direction: if they owe me, mark their
+      // share settled; if I owe them, mark mine. Handles mixed directions.
+      for (const exp of expenses) {
+        const amount = pairwiseAmount(exp);
+        if (Math.abs(amount) < 0.01) continue;
         await apiRequest({
           method: 'post',
           url: `/api/expenses/${exp.id}/settle`,
           token,
-          data: {
-            userId: totalBalance > 0 ? friendId : dbUserId
-          }
+          data: { userId: amount > 0 ? friendId : dbUserId },
         });
       }
 
@@ -250,6 +249,7 @@ export default function FriendSplitsScreen() {
     <>
     <Toast toast={toast} onDismiss={dismissToast} />
     <ScreenContainer
+      contentStyle={{ paddingBottom: (insets.bottom || layout.navBarBottomInset) + layout.navBarHeight + 90 }}
       header={
         <View style={styles.header}>
           <Pressable style={styles.headerButton} onPress={() => router.back()}>
@@ -315,24 +315,15 @@ export default function FriendSplitsScreen() {
         <>
         {expenses.slice(0, visibleCount).map((item) => {
           const deleted = !!item.isDeleted;
+          const userPaid = sumPaidBy(item, dbUserId) > 0;
 
-          // Who actually paid — not who typed it in. Using createdBy here meant
-          // logging "they paid" against your own account still rendered as
-          // "Friend owes", flipping the direction of the whole split.
-          const userPaid = (item.paidBy ?? []).some((p) => p.userId?.id === dbUserId);
-
-          // Get friend participant share
-          const friendPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === friendId);
-          const userPart = item.participants?.find(p => (p.userId?.id || p.userId?.toString()) === dbUserId);
-
-          const isSettled = userPaid ? friendPart?.settled : userPart?.settled;
-          const splitAmount = userPaid ? friendPart?.amount : userPart?.amount;
-
-          // netBalance is signed from your point of view (server-computed and
-          // settle-aware): positive means you are owed, negative means you owe.
-          const net = item.netBalance ?? 0;
-          const owesYou = net > 0;
-          const amountColor = net < 0 ? palette.danger : net > 0 ? palette.success : palette.textSecondary;
+          // Pairwise amount for THIS friend on THIS expense (their share only,
+          // never the whole bill): + they owe me, − I owe them.
+          const pair = pairwiseAmount(item);
+          const owesYou = pair > 0.01;
+          const iOwe = pair < -0.01;
+          const settledPair = !deleted && Math.abs(pair) < 0.01;
+          const amountColor = iOwe ? palette.danger : owesYou ? palette.success : palette.textSecondary;
 
           return (
             <Card
@@ -365,14 +356,14 @@ export default function FriendSplitsScreen() {
                 </View>
                 <View style={styles.right}>
                   <AppText variant="micro" color="textSecondary" weight="bold">
-                    {deleted ? '—' : net === 0 ? 'Settled' : owesYou ? 'Friend owes' : 'You owe'}
+                    {deleted ? '—' : settledPair ? 'Settled' : owesYou ? `${friendName || 'They'} owe` : 'You owe'}
                   </AppText>
                   <AppText
                     variant="bodySm"
                     weight="bold"
                     style={{ color: deleted ? palette.textTertiary : amountColor, textDecorationLine: deleted ? 'line-through' : 'none' }}
                   >
-                    ₹{Math.abs(net || splitAmount || 0).toFixed(2)}
+                    ₹{Math.abs(pair).toFixed(2)}
                   </AppText>
                 </View>
               </View>
@@ -402,15 +393,15 @@ export default function FriendSplitsScreen() {
                 <View
                   style={[
                     styles.badge,
-                    { backgroundColor: deleted ? palette.border : isSettled ? palette.successLight : palette.warningLight }
+                    { backgroundColor: deleted ? palette.border : settledPair ? palette.successLight : palette.warningLight }
                   ]}
                 >
                   <AppText
                     variant="micro"
                     weight="bold"
-                    style={{ color: deleted ? palette.textTertiary : isSettled ? palette.success : palette.warning }}
+                    style={{ color: deleted ? palette.textTertiary : settledPair ? palette.success : palette.warning }}
                   >
-                    {deleted ? 'Deleted' : isSettled ? 'Settled' : 'Unsettled'}
+                    {deleted ? 'Deleted' : settledPair ? 'Settled' : 'Unsettled'}
                   </AppText>
                 </View>
                 {/* Either party can delete a live split; a deleted one is numb. */}
@@ -462,6 +453,17 @@ export default function FriendSplitsScreen() {
         onCancel={() => setDeleteTargetId(null)}
       />
     </ScreenContainer>
+
+    {/* Add an expense with this friend — sits clear above the floating nav. */}
+    <Pressable
+      style={[styles.fab, { bottom: (insets.bottom || layout.navBarBottomInset) + layout.navBarHeight + 22 }]}
+      onPress={() =>
+        router.push({ pathname: '/(tabs)/AddNewExpense', params: { friendId: friendId ?? '', friendName: friendName ?? '' } })
+      }
+    >
+      <Icon name="Plus" size={20} color={palette.white} clickable={false} />
+      <AppText variant="label" color="onDark">Add expense</AppText>
+    </Pressable>
     </>
   );
 }
@@ -502,8 +504,22 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     alignItems: 'center',
   },
+  fab: {
+    position: 'absolute',
+    right: layout.gutter,
+    // `bottom` is set inline (safe-area aware) so it clears the floating nav.
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: palette.primaryDeep,
+    borderRadius: radius.pill,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    ...shadows.lg,
+  },
   expenseCard: {
     gap: 12,
+    marginBottom: 14,
   },
   deletedCard: {
     opacity: 0.6,

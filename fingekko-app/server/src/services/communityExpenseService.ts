@@ -93,6 +93,7 @@ type CreateExpenseInput = {
   paidBy: string;
   groupId?: string;
   category?: string;
+  icon?: string;
 };
 
 function buildParticipants(
@@ -165,6 +166,7 @@ type ExplicitExpenseInput = {
   participants: ParticipantShare[];
   groupId?: string;
   category?: string;
+  icon?: string;
 };
 
 export async function createExplicitExpense(currentUserId: string, input: ExplicitExpenseInput) {
@@ -197,10 +199,61 @@ export async function createExplicitExpense(currentUserId: string, input: Explic
     currency: input.currency,
     notes: input.notes,
     category: input.category ?? '',
+    icon: input.icon ?? '',
     expenseDate: input.expenseDate,
     participants: participants.map((p) => ({ userId: p.userId, amount: roundTwo(Number(p.amount)), settled: false })),
     history: [{ action: 'CREATED', performedBy: currentUserId }],
   });
+}
+
+export async function updateExplicitExpense(
+  currentUserId: string,
+  expenseId: string,
+  input: ExplicitExpenseInput
+) {
+  const existing = await communityExpenseRepository.findById(expenseId);
+  if (!existing) {
+    throw new Error('Expense not found.');
+  }
+
+  const payers = (input.paidBy ?? []).filter((p) => p.userId && Number(p.amount) > 0);
+  const participants = (input.participants ?? []).filter((p) => p.userId && Number(p.amount) > 0);
+
+  if (payers.length === 0 || participants.length === 0) {
+    throw new Error('An expense needs a payer and at least one participant.');
+  }
+
+  const payTotal = roundTwo(payers.reduce((s, p) => s + Number(p.amount), 0));
+  const owedTotal = roundTwo(participants.reduce((s, p) => s + Number(p.amount), 0));
+  if (Math.abs(payTotal - input.amount) > 0.01) {
+    throw new Error('Paid amounts must add up to the total amount.');
+  }
+  if (Math.abs(owedTotal - input.amount) > 0.01) {
+    throw new Error('Split amounts must add up to the total amount.');
+  }
+
+  const changes: string[] = [];
+  if (existing.description !== input.description) changes.push(`Description → "${input.description}"`);
+  if (roundTwo(existing.amount) !== roundTwo(input.amount)) {
+    changes.push(`Amount ${roundTwo(existing.amount)} → ${roundTwo(input.amount)}`);
+  }
+  const note = changes.length ? changes.join(', ') : 'Details updated';
+
+  return communityExpenseRepository.updateExpense(
+    expenseId,
+    {
+      description: input.description,
+      amount: input.amount,
+      currency: input.currency,
+      notes: input.notes,
+      expenseDate: input.expenseDate,
+      ...(input.category !== undefined ? { category: input.category } : {}),
+      ...(input.icon !== undefined ? { icon: input.icon } : {}),
+      paidBy: payers.map((p) => ({ userId: p.userId, amount: roundTwo(Number(p.amount)) })),
+      participants: participants.map((p) => ({ userId: p.userId, amount: roundTwo(Number(p.amount)), settled: false })),
+    },
+    { action: 'UPDATED', performedBy: currentUserId, note }
+  );
 }
 
 export async function createCommunityExpense(currentUserId: string, input: CreateExpenseInput) {
@@ -227,6 +280,7 @@ export async function createCommunityExpense(currentUserId: string, input: Creat
     currency: input.currency,
     notes: input.notes,
     category: input.category ?? '',
+    icon: input.icon ?? '',
     expenseDate: input.expenseDate,
     participants,
     history: [{ action: 'CREATED', performedBy: currentUserId }],

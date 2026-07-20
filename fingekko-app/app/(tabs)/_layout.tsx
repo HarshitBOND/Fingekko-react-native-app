@@ -44,6 +44,10 @@ function FloatingTabBackground() {
   );
 }
 
+// Hidden + full-screen: keep it out of the bar AND hide the floating bar while
+// focused, so bottom-anchored actions (Add expense, Save) aren't covered.
+const hiddenScreen = { href: null, tabBarStyle: { display: 'none' as const } };
+
 // ─── Main Tab Layout ─────────────────────────────────────────────
 export default function TabLayout() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -54,6 +58,10 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      // 'history' makes the hardware/UI back button return to the *previously
+      // visited* screen instead of jumping to the first tab (Home) — the default
+      // 'firstRoute' behaviour was why back from a friend/group landed on Home.
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -116,21 +124,28 @@ export default function TabLayout() {
         options={{ tabBarIcon: ({ focused }) => <TabIcon name="Users" label="Split" focused={focused} /> }}
       />
 
-      {/* ─── Hidden routes (navigable, not shown in bar) ─── */}
+      {/* ─── Hidden routes (navigable, not shown in bar) ───
+          Full-screen flows also hide the floating bar itself (hiddenScreen),
+          so their bottom-anchored buttons aren't covered by the nav. */}
+      {/* Navigation / detail screens keep the bottom nav visible; their content
+          is padded to clear it (ScreenContainer / scrollContent handle that). */}
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="quests" options={{ href: null }} />
       <Tabs.Screen name="safe-to-spend" options={{ href: null }} />
-      <Tabs.Screen name="AddNewExpense" options={{ href: null }} />
       <Tabs.Screen name="Friends" options={{ href: null }} />
       <Tabs.Screen name="NonGroupExpenses" options={{ href: null }} />
-      <Tabs.Screen name="GroupExpenses" options={{ href: null }} />
       <Tabs.Screen name="Notifications" options={{ href: null }} />
+      <Tabs.Screen name="AddExpense" options={{ href: null }} />
+      <Tabs.Screen name="GroupExpenses" options={{ href: null }} />
       <Tabs.Screen name="FriendSplits" options={{ href: null }} />
       <Tabs.Screen name="ExpenseDetail" options={{ href: null }} />
+      <Tabs.Screen name="group/GroupMembers" options={{ href: null }} />
       <Tabs.Screen name="group/[groupId]" options={{ href: null }} />
-      <Tabs.Screen name="AddExpense" options={{ href: null }} />
-      <Tabs.Screen name="group/AddNewGroup" options={{ href: null }} />
-      <Tabs.Screen name="group/AddGroupExpense" options={{ href: null }} />
+      {/* Focused composer flows are full-screen (their own bottom bar), so the
+          floating nav is hidden here — matching the reference add-expense UI. */}
+      <Tabs.Screen name="AddNewExpense" options={hiddenScreen} />
+      <Tabs.Screen name="group/AddNewGroup" options={hiddenScreen} />
+      <Tabs.Screen name="group/AddGroupExpense" options={hiddenScreen} />
     </Tabs>
   );
 }
