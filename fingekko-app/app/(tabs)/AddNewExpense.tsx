@@ -388,7 +388,7 @@ export default function AddNewExpense() {
 
       {/* Top bar: back / title / save-checkmark, Splitwise-style */}
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={6}>
+        <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
           <Icon name="ArrowLeft" size={22} color={palette.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{isEditing ? 'Edit expense' : 'Add expense'}</Text>

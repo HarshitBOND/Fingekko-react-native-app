@@ -16,7 +16,7 @@ interface StatCardProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export default function StatCard({
+function StatCard({
   icon,
   value,
   label,
@@ -48,6 +48,8 @@ export default function StatCard({
   }
   return <View style={[styles.card, style]}>{body}</View>;
 }
+
+export default React.memo(StatCard);
 
 const styles = StyleSheet.create({
   card: {

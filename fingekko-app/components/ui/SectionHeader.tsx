@@ -12,7 +12,7 @@ interface SectionHeaderProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export default function SectionHeader({ title, subtitle, actionLabel, onAction, style }: SectionHeaderProps) {
+function SectionHeader({ title, subtitle, actionLabel, onAction, style }: SectionHeaderProps) {
   return (
     <View style={[styles.row, style]}>
       <View style={styles.textWrap}>
@@ -34,6 +34,8 @@ export default function SectionHeader({ title, subtitle, actionLabel, onAction, 
     </View>
   );
 }
+
+export default React.memo(SectionHeader);
 
 const styles = StyleSheet.create({
   row: {

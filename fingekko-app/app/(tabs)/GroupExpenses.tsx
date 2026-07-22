@@ -82,7 +82,7 @@ export default function GroupExpensesScreen() {
     <ScreenContainer
       header={
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: layout.gutter, paddingVertical: spacing.md, backgroundColor: palette.card, borderBottomWidth: 1, borderBottomColor: palette.divider }}>
-          <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.back()}>
+          <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
             <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
           </Pressable>
           <AppText variant="title" color="textPrimary" weight="bold">

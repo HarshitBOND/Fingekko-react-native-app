@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import AppText from '@/components/ui/AppText';
 import Icon from '@/components/ui/Icon';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -106,6 +107,7 @@ function QuestRow({
 export default function QuestsScreen() {
   const { quests, isLoading, completedCount, totalCount, earnedXp, availableXp, updateQuestStatus } =
     useQuests();
+  const reducedMotion = useReducedMotion();
 
   if (isLoading) {
     return <LoadingScreen label="Building today's quests..." />;
@@ -119,7 +121,13 @@ export default function QuestsScreen() {
       contentStyle={{ gap: spacing.lg }}
       header={
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={8}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Icon name="ArrowLeft" size={20} color={palette.textPrimary} clickable={false} />
           </Pressable>
           <AppText variant="title" weight="bold">
@@ -185,15 +193,23 @@ export default function QuestsScreen() {
         </View>
       </HeroCard>
 
-      {quests.map((quest, index) => (
-        <Animated.View key={quest.id} entering={FadeInDown.duration(360).delay(index * 60)}>
+      {quests.map((quest, index) => {
+        const row = (
           <QuestRow
             quest={quest}
             onComplete={() => updateQuestStatus(quest.id, 'completed')}
             onFail={() => updateQuestStatus(quest.id, 'failed')}
           />
-        </Animated.View>
-      ))}
+        );
+        // Reduce Motion: render the row directly, no staggered entrance.
+        return reducedMotion ? (
+          <View key={quest.id}>{row}</View>
+        ) : (
+          <Animated.View key={quest.id} entering={FadeInDown.duration(360).delay(index * 60)}>
+            {row}
+          </Animated.View>
+        );
+      })}
 
       <View style={styles.footerNote}>
         <Icon name="Sparkles" size={15} color={palette.primaryDeep} clickable={false} />

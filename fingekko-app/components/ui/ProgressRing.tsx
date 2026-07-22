@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { motion, palette } from '@/constants/design';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -39,11 +40,15 @@ export default function ProgressRing({
   const circumference = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(1, progress));
   const anim = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
   const gradientId = React.useMemo(() => `pr-grad-${gradientCounter++}`, []);
 
   useEffect(() => {
-    anim.value = withTiming(clamped, { duration, easing: Easing.bezier(0.22, 1, 0.36, 1) });
-  }, [clamped, duration]);
+    // Reduce Motion: jump the arc to its final value with no sweep.
+    anim.value = reducedMotion
+      ? clamped
+      : withTiming(clamped, { duration, easing: Easing.bezier(0.22, 1, 0.36, 1) });
+  }, [clamped, duration, reducedMotion]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - anim.value),

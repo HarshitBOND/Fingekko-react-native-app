@@ -21,14 +21,19 @@ export default function UserAvatar({ size = 42, navigateOnEmpty = true, onPress 
     <Image source={{ uri: user!.imageUrl }} style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]} />
   ) : (
     <View style={[styles.empty, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Icon name="Plus" size={Math.round(size * 0.45)} color={palette.primary} clickable />
+      <Icon name="Plus" size={Math.round(size * 0.45)} color={palette.primary} />
     </View>
   );
 
   if (!handlePress) return content;
 
   return (
-    <Pressable onPress={handlePress} hitSlop={4}>
+    <Pressable
+      onPress={handlePress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={hasPhoto ? 'Your profile' : 'Add a profile photo'}
+    >
       {content}
     </Pressable>
   );

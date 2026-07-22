@@ -123,7 +123,7 @@ export default function ExpenseDetailScreen() {
 
   const header = (
     <View style={styles.header}>
-      <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={6}>
+      <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
         <Icon name="ChevronLeft" size={22} color={palette.textPrimary} clickable={false} />
       </Pressable>
       <AppText variant="title" weight="bold">Expense details</AppText>

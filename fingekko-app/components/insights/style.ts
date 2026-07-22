@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { fontFamily, layout, palette, radius, shadows, spacing } from '@/constants/design';
-import { AMOUNT_DARK, CARD_BG, GREEN, PAGE_BG, TEXT_HELPER, TEXT_PRIMARY, TEXT_SECONDARY } from './constants';
+import { AMOUNT_DARK, CARD_BG, GREEN, PAGE_BG, TEXT_PRIMARY, TEXT_SECONDARY } from './constants';
 
 const NAV_CLEARANCE = layout.navBarHeight + layout.navBarBottomInset + 28;
 
@@ -8,9 +8,51 @@ export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: PAGE_BG },
   container: { paddingHorizontal: layout.gutter, paddingTop: 4, paddingBottom: NAV_CLEARANCE, gap: spacing.lg },
 
-  header: { marginBottom: 2 },
-  heading: { fontSize: 28, fontFamily: fontFamily.bold, color: TEXT_PRIMARY, letterSpacing: -0.3 },
-  subHeading: { marginTop: 2, fontSize: 13, fontFamily: fontFamily.medium, color: TEXT_SECONDARY },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  heading: { fontSize: 30, fontFamily: fontFamily.extrabold, color: TEXT_PRIMARY, letterSpacing: -0.4 },
+  subHeading: { marginTop: 6, fontSize: 14, lineHeight: 20, fontFamily: fontFamily.medium, color: TEXT_SECONDARY },
+  weekChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingLeft: 12,
+    paddingRight: 10,
+    paddingVertical: 9,
+    marginTop: 4,
+  },
+  weekChipText: { fontSize: 13, color: palette.primaryDeep, fontFamily: fontFamily.bold },
+
+  /* Weekly snapshot: donut pie + budget + legend + tappable tiles */
+  snapshotBodyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  snapLegendCol: { flex: 1, marginLeft: 18, gap: 9, justifyContent: 'center' },
+  snapBudgetBlock: { marginBottom: 14 },
+  snapDivider: { height: 1, backgroundColor: palette.divider, marginBottom: 14 },
+  pieWrap: { alignItems: 'center', width: 132 },
+  pieHint: { fontSize: 10, color: palette.textTertiary, fontFamily: fontFamily.semibold, marginTop: 6 },
+  pieCenterPct: { fontSize: 18, fontFamily: fontFamily.extrabold, color: TEXT_PRIMARY },
+  pieCenterAmt: { fontSize: 16, fontFamily: fontFamily.extrabold, color: TEXT_PRIMARY, maxWidth: 74, textAlign: 'center' },
+  pieCenterSub: { fontSize: 10, fontFamily: fontFamily.semibold, color: palette.textTertiary, marginTop: -2 },
+  weekLegend: { gap: 8, marginTop: 12 },
+  weekLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  weekLegendDot: { width: 9, height: 9, borderRadius: 5 },
+  weekLegendName: { flex: 1, fontSize: 12, fontFamily: fontFamily.semibold, color: TEXT_PRIMARY, textTransform: 'capitalize' },
+  weekLegendPct: { fontSize: 12, fontFamily: fontFamily.bold },
+  statTile: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    gap: 3,
+  },
 
   heroCard: {
     backgroundColor: palette.primaryLight,
@@ -63,6 +105,72 @@ export const s = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 10,
   },
+
+  /* Spending comparison header: label + Full report pill, then a month nav row */
+  trendHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fullReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 6,
+  },
+  fullReportText: { fontSize: 12, color: palette.primaryDeep, fontFamily: fontFamily.bold },
+  monthNavRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, marginBottom: 6 },
+
+  /* Period pill ("Weekly ⌄" style) + chart header */
+  chartHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  periodPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.bg,
+    borderRadius: radius.pill,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 7,
+  },
+  periodPillText: { fontSize: 12, color: TEXT_PRIMARY, fontFamily: fontFamily.bold },
+
+  /* Filled legend dot (reference-style) */
+  legendRowFilled: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDotFilled: { width: 9, height: 9, borderRadius: 5 },
+  legendText: { fontSize: 11, color: TEXT_SECONDARY, fontFamily: fontFamily.medium },
+
+  /* Dark value bubble (line-chart pointer tooltip) */
+  valueBubble: {
+    backgroundColor: palette.ink,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: 78,
+    ...shadows.md,
+  },
+  valueBubbleAmt: { color: palette.white, fontSize: 14, fontFamily: fontFamily.extrabold },
+  valueBubbleSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontFamily: fontFamily.medium, marginTop: 1 },
+
+  /* Day-by-day bar chart card */
+  barHeadline: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 4, marginBottom: 2 },
+  barHeadlineAmt: { fontSize: 30, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, letterSpacing: -0.6 },
+  barHeadlineUnit: { fontSize: 13, fontFamily: fontFamily.semibold, color: TEXT_SECONDARY, marginBottom: 6 },
+  barMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  barMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.primaryLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  barMetaChipText: { fontSize: 11, color: palette.primaryDeep, fontFamily: fontFamily.bold },
+  barMetaMuted: { fontSize: 11, color: TEXT_SECONDARY, fontFamily: fontFamily.medium },
+  barTopLabel: { fontSize: 10, color: AMOUNT_DARK, fontFamily: fontFamily.bold, marginBottom: 4 },
+  barEmpty: { paddingVertical: 20, alignItems: 'center' },
 
   insightPill: {
     marginTop: 14,

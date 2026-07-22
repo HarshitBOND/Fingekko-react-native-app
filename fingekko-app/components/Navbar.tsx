@@ -70,7 +70,15 @@ export default function Navbar() {
       </Pressable>
 
       <View style={styles.headerActions}>
-        <Pressable style={styles.bellButton} onPress={() => router.push('/(tabs)/Notifications')} hitSlop={6}>
+        <Pressable
+          style={styles.bellButton}
+          onPress={() => router.push('/(tabs)/Notifications')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            badgeCount > 0 ? `Notifications, ${badgeCount} unread` : 'Notifications'
+          }
+        >
           <Icon name="Bell" size={20} color={palette.textPrimary} clickable={false} />
           {badgeCount > 0 && (
             <View style={styles.badge}>

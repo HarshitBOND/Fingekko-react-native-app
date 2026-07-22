@@ -1,14 +1,15 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { cva, type VariantProps } from "class-variance-authority";
 import { fontFamily, palette, radius } from '@/constants/design';
+import { cn } from "@/lib/utils";
 import AppText from './AppText';
 
 export type BadgeTone = 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-interface BadgeProps {
+interface NativeBadgeProps {
   label: string;
   tone?: BadgeTone;
-  /** filled = solid color bg with light text; otherwise soft tint bg with colored text */
   solid?: boolean;
   icon?: React.ReactNode;
   size?: 'sm' | 'md';
@@ -24,7 +25,7 @@ const TONES: Record<BadgeTone, { fg: string; bg: string; solidBg: string }> = {
   neutral: { fg: palette.textSecondary, bg: '#F0F1EF', solidBg: palette.textSecondary },
 };
 
-export default function Badge({ label, tone = 'primary', solid = false, icon, size = 'md', style }: BadgeProps) {
+function NativeBadge({ label, tone = 'primary', solid = false, icon, size = 'md', style }: NativeBadgeProps) {
   const t = TONES[tone];
   const pv = size === 'sm' ? 3 : 5;
   const ph = size === 'sm' ? 8 : 11;
@@ -44,6 +45,8 @@ export default function Badge({ label, tone = 'primary', solid = false, icon, si
   );
 }
 
+export default React.memo(NativeBadge);
+
 const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
@@ -57,3 +60,36 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 });
+
+// Shadcn Web Badge Component
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
+        outline: "text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+)
+
+export interface WebBadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function WebBadge({ className, variant, ...props }: WebBadgeProps) {
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
+}
+
+export { WebBadge as Badge, badgeVariants }

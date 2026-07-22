@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { fontFamily, palette, radius as R } from '@/constants/design';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -30,9 +31,11 @@ export default function Input({
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const focus = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   const setFocus = (v: boolean) => {
-    focus.value = withTiming(v ? 1 : 0, { duration: 180 });
+    // Reduce Motion: snap the focus border/glow instantly instead of easing.
+    focus.value = withTiming(v ? 1 : 0, { duration: reducedMotion ? 0 : 180 });
     setIsFocused(v);
   };
 

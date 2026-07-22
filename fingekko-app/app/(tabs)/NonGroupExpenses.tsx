@@ -117,7 +117,7 @@ export default function NonGroupExpenses() {
       contentStyle={{ gap: spacing.lg }}
       header={
         <View style={styles.header}>
-          <Pressable style={styles.headerButton} onPress={() => router.back()}>
+          <Pressable style={styles.headerButton} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
             <Icon name="ChevronLeft" size={22} color={palette.textPrimary} />
           </Pressable>
           <AppText variant="title" color="textPrimary" weight="bold">

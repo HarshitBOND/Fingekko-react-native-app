@@ -115,7 +115,12 @@ export default function BalanceCard({
               <AppText variant="label" color="onDarkMuted">
                 Remaining Balance
               </AppText>
-              <Pressable onPress={() => setHidden((current) => !current)} hitSlop={8}>
+              <Pressable
+                onPress={() => setHidden((current) => !current)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
+              >
                 <Icon name={hidden ? 'EyeOff' : 'Eye'} size={15} color={palette.textOnDarkMuted} />
               </Pressable>
             </View>
@@ -148,7 +153,13 @@ export default function BalanceCard({
               <AppText variant="money" color="onDark" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {inr(monthlySpend)}
               </AppText>
-              <Pressable onPress={openSetup} hitSlop={6} style={styles.budgetRow}>
+              <Pressable
+                onPress={openSetup}
+                hitSlop={8}
+                style={styles.budgetRow}
+                accessibilityRole="button"
+                accessibilityLabel="Edit income and budget"
+              >
                 <AppText variant="caption" color="onDarkMuted">
                   of {inr(monthlyBudget)} budget{payday ? ` • paid on the ${ordinal(payday)}` : ''}
                 </AppText>

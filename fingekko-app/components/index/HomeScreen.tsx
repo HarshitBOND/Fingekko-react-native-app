@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { layout, palette, spacing } from '@/constants/design';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import Navbar from '@/components/Navbar';
 import TodaysQuest from '@/components/TodaysQuest';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -17,9 +18,12 @@ import StreakCard from './StreakCard';
 import SuggestionsBar from './SuggestionsBar';
 import { useHomeScreen } from './hooks';
 
-const Section = ({ delay, children }: { delay: number; children: React.ReactNode }) => (
-  <Animated.View entering={FadeInDown.duration(420).delay(delay)}>{children}</Animated.View>
-);
+const Section = ({ delay, children }: { delay: number; children: React.ReactNode }) => {
+  const reducedMotion = useReducedMotion();
+  // Sections are visible by default; Reduce Motion just drops the staggered entrance.
+  if (reducedMotion) return <View>{children}</View>;
+  return <Animated.View entering={FadeInDown.duration(420).delay(delay)}>{children}</Animated.View>;
+};
 
 export function HomeScreen() {
   const home = useHomeScreen();

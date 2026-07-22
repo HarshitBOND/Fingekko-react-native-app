@@ -97,6 +97,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="add"
         options={{
+          tabBarAccessibilityLabel: 'Add expense',
           tabBarIcon: () => (
             <View style={styles.fabWrap}>
               <LinearGradient
@@ -132,6 +133,9 @@ export default function TabLayout() {
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="quests" options={{ href: null }} />
       <Tabs.Screen name="safe-to-spend" options={{ href: null }} />
+      <Tabs.Screen name="spend-impact" options={{ href: null }} />
+      <Tabs.Screen name="spending-breakdown" options={{ href: null }} />
+      <Tabs.Screen name="spending-trend" options={{ href: null }} />
       <Tabs.Screen name="Friends" options={{ href: null }} />
       <Tabs.Screen name="NonGroupExpenses" options={{ href: null }} />
       <Tabs.Screen name="Notifications" options={{ href: null }} />

@@ -295,7 +295,9 @@ export default function AddGroupExpense() {
         <Pressable
           style={styles.headerButton}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}
-          hitSlop={6}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Icon name="ArrowLeft" size={22} color={palette.textPrimary} clickable={false} />
         </Pressable>

@@ -1,19 +1,19 @@
-import { Colors, FontSizes, Spacing } from '@/constants/Colors';
 import { useSignIn } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import Input from '../../components/ui/Input';
-import Button from '../../components/ui/Button';
-import Icon from '../../components/ui/Icon';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   SafeAreaView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import AppText from '../../components/ui/AppText';
+import Button from '../../components/ui/Button';
+import Icon from '../../components/ui/Icon';
+import Input from '../../components/ui/Input';
+import { palette, radius, shadows, spacing } from '../../constants/design';
 
 type ResetStage = 'request' | 'verify';
 
@@ -92,12 +92,12 @@ export default function ResetPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.card}>
-          <Text style={styles.title}>Reset password</Text>
-          <Text style={styles.subtitle}>
+          <AppText variant="h1" color="textPrimary">Reset password</AppText>
+          <AppText variant="bodySm" color="textSecondary" style={styles.subtitle}>
             {stage === 'request'
               ? 'We will send a reset code to your email.'
               : 'Enter the code and set a new password.'}
-          </Text>
+          </AppText>
 
           {stage === 'request' ? (
             <Input
@@ -124,17 +124,24 @@ export default function ResetPasswordScreen() {
                 placeholder="Your password"
                 secureTextEntry={!isPasswordVisible}
                 rightIcon={
-                  <TouchableOpacity
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  <Pressable
+                    onPress={() => setIsPasswordVisible((v) => !v)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
                   >
-                    <Icon name={isPasswordVisible ? "Eye" : "EyeOff"} size={20} color={Colors.textSecondary} />
-                  </TouchableOpacity>
+                    <Icon name={isPasswordVisible ? 'Eye' : 'EyeOff'} size={20} color={palette.textSecondary} />
+                  </Pressable>
                 }
               />
             </>
           )}
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <AppText variant="caption" color="danger" weight="semibold">
+              {error}
+            </AppText>
+          ) : null}
 
           <Button
             variant="primary"
@@ -158,89 +165,18 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f4f6f5',
+    backgroundColor: palette.bg,
     justifyContent: 'center',
-    padding: Spacing.base,
+    padding: spacing.lg,
   },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: Spacing.md,
-    gap: Spacing.base,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  title: {
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    backgroundColor: palette.card,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    gap: spacing.base,
+    ...shadows.md,
   },
   subtitle: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 12,
-    fontSize: FontSizes.base,
-    backgroundColor: Colors.background,
-    color: Colors.textPrimary,
-  },
-  errorText: {
-    color: Colors.expense,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: Colors.textLight,
-    fontSize: FontSizes.base,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    alignItems: 'center',
-  },
-  linkText: {
-    color: Colors.primaryDark,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.base,
-    backgroundColor: Colors.background,
-  },
-
-  passwordInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: FontSizes.base,
-    color: Colors.textPrimary,
+    marginTop: -spacing.sm,
   },
 });

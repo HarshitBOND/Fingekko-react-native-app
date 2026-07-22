@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleProp, TextStyle } from 'react-native';
 import { TypographyVariant } from '@/constants/design';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import AppText from './AppText';
 
 interface AnimatedNumberProps {
@@ -31,12 +32,15 @@ export default function AnimatedNumber({
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
   const rafRef = useRef<number | null>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const from = fromRef.current;
     const to = value;
-    if (from === to) {
+    // Reduce Motion: snap straight to the final value, no count-up.
+    if (from === to || reducedMotion) {
       setDisplay(to);
+      fromRef.current = to;
       return;
     }
     const start = Date.now();
@@ -57,7 +61,7 @@ export default function AnimatedNumber({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       fromRef.current = to;
     };
-  }, [value, duration]);
+  }, [value, duration, reducedMotion]);
 
   return (
     <AppText

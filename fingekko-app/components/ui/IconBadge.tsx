@@ -18,7 +18,7 @@ interface IconBadgeProps {
 }
 
 /** Rounded, tinted container holding an icon — the standard way to present an icon in the UI. */
-export default function IconBadge({
+function IconBadge({
   name,
   size = 44,
   iconSize,
@@ -46,3 +46,5 @@ export default function IconBadge({
     </View>
   );
 }
+
+export default React.memo(IconBadge);

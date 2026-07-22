@@ -1,224 +1,62 @@
 import Navbar from '@/components/Navbar';
-import type { Transaction } from '@/constants/types';
-import type { ApiUser, ProfileResponse, TransactionsResponse } from '@/types';
-import { apiRequest } from '@/utils/api';
 import { getLevelProgress } from '@/utils/gamification';
-import { formatCurrency } from '@/utils/helpers';
-import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { LineChart } from 'react-native-gifted-charts';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Image, Modal, ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PressableScale from '../ui/PressableScale';
+import DonutChart from '../ui/DonutChart';
 import Icon from '../ui/Icon';
 import { fontFamily, palette } from '@/constants/design';
-import { GREEN, TEXT_MUTED, AMOUNT_DARK } from './constants';
+import { AMOUNT_DARK, GREEN, TEXT_MUTED } from './constants';
+import { buildMonthlyComparison } from './compute';
 import { s } from './style';
+import { useSpendingData } from './useSpendingData';
+
+// Gekko Guidance, Unlock Smart Saver, and Quick Tip are parked for a later
+// version — flip this to re-enable them without re-plumbing anything.
+const ENABLE_LATER_CARDS = false;
+
+const iconForCategory = (label: string) => {
+  const k = label.toLowerCase();
+  if (k.includes('food') || k.includes('dining') || k.includes('grocery') || k.includes('restaurant')) return 'Utensils';
+  if (k.includes('shop')) return 'ShoppingBag';
+  if (k.includes('transport') || k.includes('travel') || k.includes('fuel') || k.includes('car')) return 'Car';
+  if (k.includes('bill') || k.includes('util') || k.includes('rent') || k.includes('home')) return 'Zap';
+  if (k.includes('entertain') || k.includes('fun') || k.includes('subscri')) return 'TrendingUp';
+  return 'Coins';
+};
 
 export default function InsightsScreen() {
-  const { getToken, isSignedIn } = useAuth();
-  const [profile, setProfile] = useState<ApiUser | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const getTokenRef = useRef(getToken);
+  const { profile, transactions, currency, formatAmount, data, now } = useSpendingData();
+  const { width: screenW } = useWindowDimensions();
 
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
-
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-
-      const loadData = async () => {
-        if (!isSignedIn) {
-          setProfile(null);
-          setTransactions([]);
-          return;
-        }
-
-        const token = await getTokenRef.current();
-        if (!token) return;
-
-        try {
-          const [profileResponse, transactionsResponse] = await Promise.all([
-            apiRequest<ProfileResponse>('/api/profile', {}, token),
-            apiRequest<TransactionsResponse>('/api/transactions', {}, token),
-          ]);
-
-          if (!isActive) return;
-
-          setProfile(profileResponse.user);
-          setTransactions(transactionsResponse.transactions);
-        } catch (error) {
-          console.warn('Failed to load insights:', error);
-        }
-      };
-
-      loadData();
-
-      return () => {
-        isActive = false;
-      };
-    }, [isSignedIn])
-  );
-
-  const currency = profile?.currency ?? '₹';
-  const formatAmount = (value: number) => formatCurrency(Math.round(value), currency);
-  const now = useMemo(() => new Date(), []);
-
-  const insights = useMemo(() => {
-    const expenses = transactions.filter((item) => item.type === 'expense');
-
-    const parse = (value: string) => {
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    };
-
-    const inRange = (date: Date | null, start: Date, end: Date) =>
-      date ? date >= start && date <= end : false;
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-
-    const expensesThisMonth = expenses.reduce((sum, item) => {
-      const date = parse(item.date);
-      return inRange(date, startOfMonth, now) ? sum + item.amount : sum;
-    }, 0);
-
-    const expensesLastMonth = expenses.reduce((sum, item) => {
-      const date = parse(item.date);
-      return inRange(date, startOfLastMonth, endOfLastMonth) ? sum + item.amount : sum;
-    }, 0);
-
-    const daysInLastMonth = endOfLastMonth.getDate() || 1;
-    const daysInThisMonth = Math.max(1, now.getDate());
-    const avgLastMonth = expensesLastMonth / daysInLastMonth;
-    const avgThisMonth = expensesThisMonth / daysInThisMonth;
-
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0);
-
-    const weeklySpend = expenses.reduce((sum, item) => {
-      const date = parse(item.date);
-      return date && date >= weekStart ? sum + item.amount : sum;
-    }, 0);
-
-    const monthlyIncome = profile?.monthlyIncome ?? 0;
-    // Without a set income, base the weekly budget on last month's real spend
-    // instead of inflating this week's own number (which always lands ~83% used).
-    const weeklyBudget = monthlyIncome > 0
-      ? monthlyIncome / 4
-      : expensesLastMonth > 0
-        ? expensesLastMonth / 4
-        : Math.max(weeklySpend, 1);
-    const weeklyLeft = Math.max(0, weeklyBudget - weeklySpend);
-    const weeklyProgress = weeklyBudget > 0 ? Math.min(1, weeklySpend / weeklyBudget) : 0;
-
-    const monthlyDelta = expensesLastMonth - expensesThisMonth;
-    const monthlyDeltaAbs = Math.abs(monthlyDelta);
-    const monthlyDeltaPercent =
-      expensesLastMonth > 0 ? Math.round((monthlyDeltaAbs / expensesLastMonth) * 100) : 0;
-    const isSaving = monthlyDelta >= 0;
-
-    const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
-
-    // Scoped to the current calendar month so it actually matches the "This Month" label.
-    const expensesForCategoryBreakdown = expenses.filter((item) => inRange(parse(item.date), startOfMonth, now));
-    const totalExpensesThisMonth = expensesForCategoryBreakdown.reduce((sum, item) => sum + item.amount, 0);
-
-    const categoryTotals = expensesForCategoryBreakdown.reduce((acc, item) => {
-      acc[item.category] = (acc[item.category] ?? 0) + item.amount;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const topCategories = Object.entries(categoryTotals)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([label, amount]) => ({ label, amount }));
-
-    const categoryRows = topCategories.map((item) => {
-      const share = totalExpensesThisMonth > 0 ? Math.round((item.amount / totalExpensesThisMonth) * 100) : 0;
-      return {
-        ...item,
-        share,
-        // use share-of-total for bar percent so 0% = empty, 100% = full
-        barPercent: share,
-      };
+  // ── Routes ──
+  const goImpact = () => router.push('/(tabs)/spend-impact');
+  const goFullReport = () =>
+    router.push({
+      pathname: '/(tabs)/spending-trend',
+      params: { month: String(selectedMonth), year: String(selectedYear) },
     });
-
-    // "Big" spends = this month's expenses notably above this month's own average,
-    // rather than a stat that doesn't actually measure anything.
-    const avgExpenseThisMonth = expensesForCategoryBreakdown.length > 0
-      ? totalExpensesThisMonth / expensesForCategoryBreakdown.length
-      : 0;
-    const biggestSpendsCount = avgExpenseThisMonth > 0
-      ? expensesForCategoryBreakdown.filter((item) => item.amount > avgExpenseThisMonth * 1.5).length
-      : 0;
-
-    const weekendWindowStart = new Date(now);
-    weekendWindowStart.setDate(now.getDate() - 27);
-    weekendWindowStart.setHours(0, 0, 0, 0);
-
-    const weekendDayKeys = new Set<string>();
-    const weekendSpend = expenses.reduce((sum, item) => {
-      const date = parse(item.date);
-      if (!date || date < weekendWindowStart) return sum;
-      const day = date.getDay();
-      if (day === 0 || day === 6) {
-        weekendDayKeys.add(date.toDateString());
-        return sum + item.amount;
-      }
-      return sum;
-    }, 0);
-
-    const weekendAvgPerDay = weekendDayKeys.size > 0 ? weekendSpend / weekendDayKeys.size : 0;
-    const weekendEstimate = weekendAvgPerDay * 2;
-
-    return {
-      expensesThisMonth,
-      expensesLastMonth,
-      avgLastMonth,
-      avgThisMonth,
-      savedAmount: isSaving ? monthlyDeltaAbs : 0,
-      savedPercent: isSaving ? monthlyDeltaPercent : 0,
-      weeklySpend,
-      weeklyBudget,
-      weeklyLeft,
-      weeklyProgress,
-      categoryRows,
-      biggestSpendsCount,
-      transactionCount: expenses.length,
-      monthlyDelta,
-      monthlyDeltaAbs,
-      monthlyDeltaPercent,
-      isSaving,
-      totalExpenses,
-      weekStart,
-      weekendEstimate,
-    };
-  }, [now, profile?.monthlyIncome, transactions]);
+  const goWeekBreakdown = () => router.push({ pathname: '/(tabs)/spending-breakdown', params: { period: 'week' } });
+  const goMonthBreakdown = () => router.push({ pathname: '/(tabs)/spending-breakdown', params: { period: 'month' } });
+  const goTransactions = () => router.push('/(tabs)/NonGroupExpenses');
 
   const [firstName] = (profile?.name ?? 'Friend').split(' ');
-  const weeklyProgressPct = Math.round(insights.weeklyProgress * 100);
-  const comparisonReady = insights.expensesLastMonth > 0 || insights.expensesThisMonth > 0;
-  const deltaAbs = insights.monthlyDeltaAbs;
-  const deltaPercent = insights.monthlyDeltaPercent;
-  const isSaving = insights.isSaving;
+  const weeklyProgressPct = Math.round(data.weeklyProgress * 100);
+  const comparisonReady = data.expensesLastMonth > 0 || data.expensesThisMonth > 0;
+  const deltaAbs = data.monthlyDeltaAbs;
+  const deltaPercent = data.monthlyDeltaPercent;
+  const isSaving = data.isSaving;
 
-  const heroLine = !comparisonReady
-    ? 'Add expenses to start seeing insights.'
-    : deltaAbs === 0
-      ? 'You matched last month. Keep it up!'
-      : `You spent ${formatAmount(deltaAbs)} ${isSaving ? 'less' : 'more'} than\nlast month. Keep it up!`;
-
-  const streakSub = !comparisonReady
-    ? 'No data yet'
+  // Header line — factual momentum, not flattery.
+  const headerLine = !comparisonReady
+    ? 'Add a few expenses to start seeing your trends.'
     : deltaPercent === 0
-      ? 'No change yet'
-      : `${deltaPercent}% ${isSaving ? 'leaner' : 'higher'}`;
+      ? `${firstName}, your spending matches last month so far.`
+      : `${firstName}, you're spending ${deltaPercent}% ${isSaving ? 'less' : 'more'} than last month.`;
 
   const insightTitle = !comparisonReady
     ? 'Start tracking to compare months'
@@ -239,187 +77,102 @@ export default function InsightsScreen() {
     month: 'short',
   });
 
-  const formatShortDate = (date: Date) =>
-    date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  const formatShortDate = (date: Date) => date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  const weekRangeLabel = `${formatShortDate(data.weekStart)} – ${formatShortDate(now)}`;
 
-  const weekRangeLabel = `${formatShortDate(insights.weekStart)} - ${formatShortDate(now)}, ${now.getFullYear()}`;
-
-  // Month selector state & helpers
-  const monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  const nowMonth = now.getMonth();
-  const nowYear = now.getFullYear();
-  const [selectedMonth, setSelectedMonth] = useState<number>(nowMonth);
-  const [selectedYear, setSelectedYear] = useState<number>(nowYear);
+  // ── Month selector + comparison chart ──
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
 
-  const buildCumulativeForRange = (expList: Transaction[], start: Date, end: Date) => {
-    const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-    const result: { value: number }[] = [];
-    let running = 0;
-    for (let d = 0; d < totalDays; d++) {
-      const dayStart = new Date(start);
-      dayStart.setDate(start.getDate() + d);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setHours(23, 59, 59, 999);
-      expList.forEach((item) => {
-        const date = new Date(item.date);
-        if (date >= dayStart && date <= dayEnd) running += item.amount;
-      });
-      result.push({ value: running });
-    }
-    return result;
-  };
+  const comparison = useMemo(
+    () => buildMonthlyComparison(transactions, selectedYear, selectedMonth, now, data.avgThisMonth),
+    [transactions, selectedYear, selectedMonth, now, data.avgThisMonth]
+  );
 
-  // Compute displayed chart series and x-axis labels based on selected month/year
-  const { chartDisplay } = useMemo(() => {
-    const start = new Date(selectedYear, selectedMonth, 1);
-    const end = new Date(selectedYear, selectedMonth + 1, 0);
-    const selectedLine = buildCumulativeForRange(transactions.filter(t => t.type === 'expense'), start, end);
-    const labels = Array.from({ length: selectedLine.length }, (_, i) => String(i + 1));
+  const viewingCurrent = comparison.isCurrentMonth;
 
-    // if viewing current month, include thisMonth, expected and lastMonth as before
-    const isCurrent = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
-    if (isCurrent) {
-      const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lastLine = buildCumulativeForRange(transactions.filter(t => t.type === 'expense'), lastStart, lastEnd);
-      const thisStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const thisLine = buildCumulativeForRange(transactions.filter(t => t.type === 'expense'), thisStart, now);
+  // Series mapping (same as the full report): the backbone drives the x-axis, so
+  // the forecast — which spans the whole month — is series 1 for the current
+  // month, with the actual line on top; a plain month line otherwise.
+  const chartData1 = viewingCurrent ? comparison.expected ?? comparison.current : comparison.current;
+  const chartData2 = viewingCurrent ? comparison.current : undefined;
+  const chartData3 = viewingCurrent ? comparison.previous ?? undefined : undefined;
 
-      const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
-      const expectedLine = [
-        ...new Array(Math.max(0, thisLine.length - 1)).fill({ value: 0 }),
-        ...Array.from({ length: daysLeft + 1 }, (_, i) => ({ value: Math.round(insights.expensesThisMonth + insights.avgThisMonth * i) })),
-      ];
-
-      return { chartDisplay: { data: lastLine, data2: thisLine, data3: expectedLine, labels } };
-    }
-
-    // previous month or any month: show single series (gray)
-    return { chartDisplay: { data: selectedLine, data2: undefined, data3: undefined, labels } };
-  }, [transactions, selectedMonth, selectedYear, now, insights.expensesThisMonth, insights.avgThisMonth]);
-
-  const viewingCurrent = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
-
-  // Scale the chart to whichever series is actually on screen, so browsing a
-  // historical month doesn't clip against the current/last month's totals.
   const chartMaxValue = useMemo(() => {
     const allValues = [
-      ...chartDisplay.data.map((d) => d.value),
-      ...(chartDisplay.data2?.map((d) => d.value) ?? []),
-      ...(chartDisplay.data3?.map((d) => d.value) ?? []),
+      ...comparison.current.map((d) => d.value),
+      ...(comparison.previous?.map((d) => d.value) ?? []),
+      ...(comparison.expected?.map((d) => d.value) ?? []),
     ];
     const max = allValues.length > 0 ? Math.max(...allValues) : 0;
-    return max > 0 ? max * 1.2 : 1;
-  }, [chartDisplay]);
+    return max > 0 ? max * 1.15 : 1;
+  }, [comparison]);
 
-  // Keyed by category name (not row position) so a given category always gets
-  // the same icon/color, however it ranks against the user's other spending.
-  const CATEGORY_STYLES: Record<string, { color: string; bgColor: string; iconName: string; iconColor: string }> = {
-    shopping: { color: '#7FB3FF', bgColor: '#C3FFD8', iconName: 'ShoppingBag', iconColor: '#000000' },
-    food: { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Utensils', iconColor: '#000000' },
-    dining: { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Utensils', iconColor: '#000000' },
-    home: { color: '#F2C078', bgColor: '#FFF8E7', iconName: 'Home', iconColor: '#000000' },
-    travel: { color: '#6FCF97', bgColor: '#E6FAEF', iconName: 'Plane', iconColor: '#000000' },
-    transport: { color: '#6FCF97', bgColor: '#E6FAEF', iconName: 'Car', iconColor: '#000000' },
-    bills: { color: '#F2994A', bgColor: '#FFF1E5', iconName: 'Zap', iconColor: '#000000' },
-    utilities: { color: '#F2994A', bgColor: '#FFF1E5', iconName: 'Zap', iconColor: '#000000' },
-    entertainment: { color: '#EB5757', bgColor: '#FDE7E7', iconName: 'TrendingUp', iconColor: '#000000' },
-  };
-  const FALLBACK_PALETTE = [
-    { color: '#7FB3FF', bgColor: '#C3FFD8', iconName: 'ShoppingBag', iconColor: '#000000' },
-    { color: '#B89CFF', bgColor: '#F1E9FF', iconName: 'Coins', iconColor: '#000000' },
-    { color: '#F2C078', bgColor: '#FFF8E7', iconName: 'CircleAlert', iconColor: '#000000' },
-  ];
-  const styleForCategory = (label: string) => {
-    const known = CATEGORY_STYLES[label.toLowerCase()];
-    if (known) return known;
-    let hash = 0;
-    for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-    return FALLBACK_PALETTE[hash % FALLBACK_PALETTE.length];
+  const chartViewportWidth = Math.max(240, Math.min(screenW, 640) - 88);
+
+  // Fit the whole month inside the card (no inner horizontal scroll) so a vertical
+  // drag over the chart scrolls the page instead of being swallowed by the chart.
+  const chartInitialSpacing = 8;
+  const chartEndSpacing = 12;
+  const chartPointCount = Math.max(chartData1.length, 1);
+  const fitSpacing =
+    chartPointCount > 1
+      ? Math.max(4, (chartViewportWidth - chartInitialSpacing - chartEndSpacing) / (chartPointCount - 1))
+      : chartViewportWidth;
+  // Thin the day labels so only ~6 show across the month without overlapping.
+  const labelStep = Math.max(1, Math.ceil(comparison.labels.length / 6));
+  const thinnedLabels = comparison.labels.map((l, i) =>
+    i % labelStep === 0 || i === comparison.labels.length - 1 ? l : ''
+  );
+
+  // ── Weekly snapshot pie ──
+  const hasWeekSpend = data.weekCategories.length > 0;
+  const weekPie = hasWeekSpend
+    ? data.weekCategories.map((c) => ({ value: c.amount, color: c.color }))
+    : [{ value: 1, color: palette.track }];
+  const weekLegend = data.weekCategories.slice(0, 5);
+
+  // Compact money for chart labels (₹1.2k) so bars/bubbles stay legible.
+  const compactAmount = (n: number) => {
+    const v = Math.round(n);
+    if (v >= 100000) return `${currency}${(v / 100000).toFixed(1)}L`;
+    if (v >= 1000) return `${currency}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+    return `${currency}${v}`;
   };
 
-  const categoryDisplay = insights.categoryRows.map((row) => ({
-    ...row,
-    ...styleForCategory(row.label),
+  // Day-by-day bar series (rounded-cap bars; today and the busiest day stand out).
+  const barSpacing = Math.max(12, Math.floor((chartViewportWidth - 7 * 22) / 7));
+  const barData = data.weekDaily.map((d) => ({
+    value: d.amount,
+    label: d.label,
+    frontColor: d.isToday ? palette.primaryDeep : palette.primary,
+    gradientColor: d.isToday ? palette.primary : palette.primaryBright,
+    topLabelComponent:
+      d.amount > 0 && d.amount === data.weekDailyMax
+        ? () => <Text style={s.barTopLabel}>{compactAmount(d.amount)}</Text>
+        : undefined,
   }));
 
+  // ── Impact card visuals ──
+  const savedTrees = data.savedAmount > 0 ? Math.max(1, Math.round(data.savedAmount / 1000)) : 0;
   const rewardTarget = 3000;
-  const rewardCurrent = Math.min(rewardTarget, Math.max(0, insights.savedAmount));
+  const rewardCurrent = Math.min(rewardTarget, Math.max(0, data.savedAmount));
   const rewardProgress = rewardTarget > 0 ? rewardCurrent / rewardTarget : 0;
-  const treesSaved = insights.savedAmount > 0 ? Math.max(1, Math.round(insights.savedAmount / 1000)) : 0;
-  const particleFieldWidth = 140;
-  const particleFieldHeight = 220;
   const impactParticles = useMemo(
     () =>
-      Array.from({ length: 48 }, (_, index) => {
-        const left = Math.random() * particleFieldWidth;
-        const top = Math.random() * particleFieldHeight;
-        const size = 1 + Math.random() * 2.4;
-        const opacity = 0.18 + Math.random() * 0.34;
-        return { id: `particle-${index}`, left, top, size, opacity };
-      }),
+      Array.from({ length: 48 }, (_, index) => ({
+        id: `particle-${index}`,
+        left: Math.random() * 140,
+        top: Math.random() * 220,
+        size: 1 + Math.random() * 2.4,
+        opacity: 0.18 + Math.random() * 0.34,
+      })),
     []
   );
 
-  const showSignInAlert = () => {
-    Alert.alert('Sign in required', 'Sign in to view insights data.');
-  };
-
-  const handleSeeImpact = () => {
-    if (!isSignedIn) { showSignInAlert(); return; }
-    if (!comparisonReady) {
-      Alert.alert('Monthly impact', 'Add a few expenses to compare month over month.');
-      return;
-    }
-    const deltaLine =
-      deltaAbs === 0
-        ? 'You matched last month.'
-        : `That's ${formatAmount(deltaAbs)} ${isSaving ? 'less' : 'more'} than last month.`;
-    Alert.alert(
-      'Monthly impact',
-      `This month: ${formatAmount(insights.expensesThisMonth)}\nLast month: ${formatAmount(insights.expensesLastMonth)}\n${deltaLine}`
-    );
-  };
-
-  const handleThisWeek = () => {
-    if (!isSignedIn) { showSignInAlert(); return; }
-    Alert.alert(
-      'This week',
-      `You spent ${formatAmount(insights.weeklySpend)} of ${formatAmount(insights.weeklyBudget)}.\n${formatAmount(insights.weeklyLeft)} left for the week.`
-    );
-  };
-
-  const handleViewCategories = () => {
-    if (!isSignedIn) { showSignInAlert(); return; }
-    if (insights.totalExpenses === 0) {
-      Alert.alert('Top categories', 'No expenses yet. Add a few to see the breakdown.');
-      return;
-    }
-    const lines = insights.categoryRows
-      .filter((row) => row.amount > 0)
-      .map((row) => `${row.label}: ${formatAmount(row.amount)} (${row.share}%)`)
-      .join('\n');
-    Alert.alert('Top categories', lines || 'No expenses yet.');
-  };
-
-  const handleGuidance = () => {
-    if (!isSignedIn) { showSignInAlert(); return; }
-    const message =
-      insights.weekendEstimate > 0
-        ? `You usually spend about ${formatAmount(insights.weekendEstimate)} on weekends.`
-        : 'Track a few weekend expenses to personalize this tip.';
-    Alert.alert('Gekko guidance', message);
-  };
-
-  const handleQuickTip = () => {
-    Alert.alert('Quick tip', "Track subscriptions you don't use. You could save up to ₹600/month!");
-  };
-
-  // month navigation helpers
+  // month navigation
   const goPrevMonth = () => {
     const m = selectedMonth - 1;
     if (m < 0) {
@@ -437,8 +190,6 @@ export default function InsightsScreen() {
       setSelectedYear((y) => y + 1);
     } else setSelectedMonth(m);
   };
-  const openMonthPicker = () => setMonthPickerVisible(true);
-  const selectMonthYear = (m: number, y: number) => { setSelectedMonth(m); setSelectedYear(y); setMonthPickerVisible(false); };
 
   return (
     <SafeAreaView style={s.page}>
@@ -447,11 +198,23 @@ export default function InsightsScreen() {
 
         {/* ── HEADER ─────────────────────────────────────────── */}
         <View style={s.header}>
-          <Text style={s.heading}>Insights</Text>
-          <Text style={s.subHeading}>Understand. Improve. Level up. 🌿</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.heading}>Insights</Text>
+            <Text style={s.subHeading}>{headerLine}</Text>
+          </View>
+          <PressableScale
+            style={s.weekChip}
+            onPress={goWeekBreakdown}
+            accessibilityRole="button"
+            accessibilityLabel="See this week's breakdown"
+          >
+            <Icon name="Calendar" size={14} color={palette.primaryDeep} clickable={false} />
+            <Text style={s.weekChipText}>This week</Text>
+            <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
+          </PressableScale>
         </View>
 
-        {/* ── LEVEL / XP STRIP — updates as expenses earn XP ──── */}
+        {/* ── LEVEL / XP STRIP ─────────────────────────────────── */}
         {profile ? (
           (() => {
             const lp = getLevelProgress(profile.xp ?? 0);
@@ -465,18 +228,10 @@ export default function InsightsScreen() {
                   borderRadius: 16,
                   paddingHorizontal: 14,
                   paddingVertical: 12,
-                  marginBottom: 14,
                 }}
               >
                 <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 19,
-                    backgroundColor: '#EAF8E5',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: '#EAF8E5', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text style={{ fontSize: 16 }}>⚡</Text>
                 </View>
@@ -490,14 +245,7 @@ export default function InsightsScreen() {
                     </Text>
                   </View>
                   <View style={{ height: 6, borderRadius: 3, backgroundColor: '#EDEFEC', overflow: 'hidden' }}>
-                    <View
-                      style={{
-                        width: `${Math.round(lp.progress * 100)}%`,
-                        height: '100%',
-                        borderRadius: 3,
-                        backgroundColor: GREEN,
-                      }}
-                    />
+                    <View style={{ width: `${Math.round(lp.progress * 100)}%`, height: '100%', borderRadius: 3, backgroundColor: GREEN }} />
                   </View>
                 </View>
               </View>
@@ -515,7 +263,15 @@ export default function InsightsScreen() {
                   const m = d.getMonth();
                   const y = d.getFullYear();
                   return (
-                    <TouchableOpacity key={`${m}-${y}`} onPress={() => selectMonthYear(m, y)} style={{ paddingVertical: 10 }}>
+                    <TouchableOpacity
+                      key={`${m}-${y}`}
+                      onPress={() => {
+                        setSelectedMonth(m);
+                        setSelectedYear(y);
+                        setMonthPickerVisible(false);
+                      }}
+                      style={{ paddingVertical: 10 }}
+                    >
                       <Text style={{ fontSize: 16, color: AMOUNT_DARK, fontFamily: fontFamily.semibold }}>{monthNames[m]} {y}</Text>
                     </TouchableOpacity>
                   );
@@ -528,153 +284,115 @@ export default function InsightsScreen() {
           </View>
         </Modal>
 
-        {/* ── HERO CARD ──────────────────────────────────────── */}
-        <View style={s.heroCard}>
-          <View style={s.heroImageWrap}>
-            <Image
-              source={require('../../assets/images/cardImagePlannergekko.png')}
-              style={s.heroImage}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={s.heroBody}>
-            <Text style={s.heroTitle}>Great job, {firstName}! 👋</Text>
-            <Text style={s.heroText}>{heroLine}</Text>
-          </View>
-          <View style={s.streakBox}>
-            <View style={s.fireBadge}>
-              <Icon name="Flame" color="#000000" size={20} />
-            </View>
-            <Text style={s.streakTitle}>On fire!</Text>
-            <Text style={s.streakSub}>{streakSub}</Text>
-          </View>
-        </View>
-
         {/* ── SPENDING COMPARISON ────────────────────────────── */}
         <View style={s.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={s.sectionLabel}>SPENDING COMPARISON</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity onPress={goPrevMonth}>
-                <Text style={{ fontSize: 16, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>‹</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={openMonthPicker}>
-                <Text style={{ fontSize: 13, color: AMOUNT_DARK, fontFamily: fontFamily.bold }}>{monthNames[selectedMonth]} {selectedYear}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={goNextMonth}>
-                <Text style={{ fontSize: 16, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>›</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={s.trendHeaderRow}>
+            <Text style={[s.sectionLabel, { marginBottom: 0 }]}>SPENDING COMPARISON</Text>
+            <PressableScale
+              style={s.fullReportBtn}
+              onPress={goFullReport}
+              accessibilityRole="button"
+              accessibilityLabel="Open the full spending report"
+            >
+              <Icon name="TrendingUp" size={13} color={palette.primaryDeep} clickable={false} />
+              <Text style={s.fullReportText}>Full report</Text>
+              <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
+            </PressableScale>
           </View>
 
-          {/* Month amounts row */}
+          <View style={s.monthNavRow}>
+            <TouchableOpacity onPress={goPrevMonth} hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous month">
+              <Text style={{ fontSize: 18, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>‹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMonthPickerVisible(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Pick a month">
+              <Text style={{ fontSize: 13, color: AMOUNT_DARK, fontFamily: fontFamily.bold }}>{monthNames[selectedMonth]} {selectedYear}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goNextMonth} hitSlop={8} accessibilityRole="button" accessibilityLabel="Next month">
+              <Text style={{ fontSize: 18, color: TEXT_MUTED, fontFamily: fontFamily.semibold }}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Month amounts */}
           <View style={{ flexDirection: 'row', gap: 24, marginBottom: 14 }}>
             <View>
               <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>{lastMonthLabel} (last month)</Text>
               <Text style={{ fontSize: 22, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, marginTop: 2, letterSpacing: -0.3 }}>
-                {formatAmount(insights.expensesLastMonth)}
+                {formatAmount(data.expensesLastMonth)}
               </Text>
               <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2, fontFamily: fontFamily.medium }}>
-                avg {formatAmount(insights.avgLastMonth)} / day
+                avg {formatAmount(data.avgLastMonth)} / day
               </Text>
             </View>
             <View>
               <Text style={{ fontSize: 11, color: palette.primaryDeep, fontFamily: fontFamily.semibold }}>{currentMonthLabel} (this month)</Text>
               <Text style={{ fontSize: 22, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, marginTop: 2, letterSpacing: -0.3 }}>
-                {formatAmount(insights.expensesThisMonth)}
+                {formatAmount(data.expensesThisMonth)}
               </Text>
               <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2, fontFamily: fontFamily.medium }}>
-                avg {formatAmount(insights.avgThisMonth)} / day
+                avg {formatAmount(data.avgThisMonth)} / day
               </Text>
             </View>
           </View>
 
-          {/* Line chart — brand green focus line with a soft area fill, recessive
-              neutral comparison line, and dashed projection, all on the app palette. */}
+          {/* Smooth trend lines: this month vs last month, plus a dashed forecast.
+              No fill / no y-axis for a clean glance; the full report is interactive. */}
           <LineChart
-            data={chartDisplay.data}
-            data2={chartDisplay.data2}
-            data3={chartDisplay.data3}
-            height={120}
-            spacing={12}
-            // When viewing a past month there's a single series — make it the green
-            // focus line (with fill). For the current month, data (last month) stays
-            // a recessive neutral and data2 (this month) becomes the green focus.
-            color1={viewingCurrent ? palette.textTertiary : palette.primary}
+            data={chartData1}
+            data2={chartData2}
+            data3={chartData3}
+            height={130}
+            width={chartViewportWidth}
+            spacing={fitSpacing}
+            color1={viewingCurrent ? 'rgba(102,204,68,0.45)' : palette.primary}
             color2={palette.primary}
-            color3="rgba(102,204,68,0.4)"
-            strokeDashArray1={viewingCurrent ? [5, 4] : undefined}
-            strokeDashArray3={[5, 4]}
-            thickness1={viewingCurrent ? 1.5 : 2.5}
-            thickness2={2.5}
-            thickness3={1.5}
-            areaChart={!viewingCurrent}
-            startFillColor={palette.primary}
-            endFillColor={palette.primary}
-            startOpacity={0.16}
-            endOpacity={0.01}
-            areaChart2
-            startFillColor2={palette.primary}
-            endFillColor2={palette.primary}
-            startOpacity2={0.18}
-            endOpacity2={0.01}
+            color3={palette.textTertiary}
+            strokeDashArray1={viewingCurrent ? [5, 5] : undefined}
+            thickness1={viewingCurrent ? 2 : 3}
+            thickness2={3}
+            thickness3={2}
+            curved
             hideDataPoints
-            hideYAxisText={false}
+            hideYAxisText
             yAxisColor="transparent"
             xAxisColor={palette.border}
             yAxisThickness={0}
             xAxisThickness={1}
             rulesType="dashed"
-            rulesColor="rgba(30,30,30,0.05)"
+            rulesColor="rgba(30,30,30,0.06)"
             dashWidth={4}
             dashGap={6}
-            yAxisTextStyle={{ color: palette.textTertiary, fontSize: 10, fontFamily: fontFamily.medium }}
             xAxisLabelTextStyle={{ color: palette.textTertiary, fontSize: 10, fontFamily: fontFamily.medium }}
-            xAxisLabelTexts={chartDisplay.labels}
+            xAxisLabelTexts={thinnedLabels}
             noOfSections={4}
-            curved
-            initialSpacing={8}
-            endSpacing={8}
+            initialSpacing={chartInitialSpacing}
+            endSpacing={chartEndSpacing}
             adjustToWidth={false}
-            showScrollIndicator
-            scrollAnimation
+            disableScroll
             maxValue={chartMaxValue}
-            yAxisLabelPrefix={currency}
-            formatYLabel={(v) => {
-              const n = Number(v);
-              return n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
-            }}
           />
 
-          {/* Chart legend */}
-          <View style={{ flexDirection: 'row', gap: 16, marginTop: 12 }}>
+          {/* Legend */}
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
             {viewingCurrent ? (
               <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.textTertiary }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Last month</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.primary }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>This month</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: 'rgba(102,204,68,0.4)' }} />
-                  <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Expected</Text>
-                </View>
+                <LegendDot color={palette.primary} label="This month" />
+                <LegendDot color={palette.textTertiary} label="Last month" />
+                <LegendDot color="rgba(102,204,68,0.45)" label="Forecast" />
               </>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 16, height: 3, borderRadius: 2, backgroundColor: palette.primary }} />
-                <Text style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: fontFamily.medium }}>Spending ({monthNames[selectedMonth]} {selectedYear})</Text>
-              </View>
+              <LegendDot color={palette.primary} label={`Spending (${monthNames[selectedMonth]} ${selectedYear})`} />
             )}
           </View>
 
-          {/* Insight pill */}
-          <TouchableOpacity style={s.insightPill} onPress={handleSeeImpact} activeOpacity={0.8}>
+          {/* Insight pill → Spend impact */}
+          <PressableScale
+            style={s.insightPill}
+            onPress={goImpact}
+            accessibilityRole="button"
+            accessibilityLabel="Open spend impact detail"
+          >
             <View style={s.insightPillLeft}>
-              <Icon name="Target" color="#000000" size={18} />
+              <Icon name="Target" color={palette.primaryDeep} size={18} clickable={false} />
               <View style={{ marginLeft: 8, flex: 1 }}>
                 <Text style={s.insightPillTitle}>{insightTitle}</Text>
                 <Text style={s.insightPillSub}>{insightSub}</Text>
@@ -682,9 +400,76 @@ export default function InsightsScreen() {
             </View>
             <View style={s.seeImpactBtn}>
               <Text style={s.seeImpactText}>See impact</Text>
-              <Icon name="ChevronRight" size={14} color="#000000" />
+              <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
             </View>
-          </TouchableOpacity>
+          </PressableScale>
+        </View>
+
+        {/* ── THIS WEEK, DAY BY DAY (rounded bars) ───────────── */}
+        <View style={s.card}>
+          <View style={s.chartHeaderRow}>
+            <Text style={s.sectionLabel}>THIS WEEK, DAY BY DAY</Text>
+            <PressableScale
+              style={s.periodPill}
+              onPress={goWeekBreakdown}
+              accessibilityRole="button"
+              accessibilityLabel="Open weekly breakdown"
+            >
+              <Text style={s.periodPillText}>This week</Text>
+              <Icon name="ChevronDown" size={13} color={palette.textPrimary} clickable={false} />
+            </PressableScale>
+          </View>
+
+          <View style={s.barHeadline}>
+            <Text style={s.barHeadlineAmt} numberOfLines={1} adjustsFontSizeToFit>
+              {formatAmount(data.weeklySpend)}
+            </Text>
+            <Text style={s.barHeadlineUnit}>spent this week</Text>
+          </View>
+          <View style={s.barMetaRow}>
+            <View style={s.barMetaChip}>
+              <Icon name="TrendingUp" size={12} color={palette.primaryDeep} clickable={false} />
+              <Text style={s.barMetaChipText}>{formatAmount(data.weekDailyAvg)}/day avg</Text>
+            </View>
+            <Text style={s.barMetaMuted}>
+              {data.weekBusiestDay.amount > 0
+                ? `Busiest: ${data.weekBusiestDay.label} · ${formatAmount(data.weekBusiestDay.amount)}`
+                : `${data.weekActiveDays} active ${data.weekActiveDays === 1 ? 'day' : 'days'}`}
+            </Text>
+          </View>
+
+          {data.weeklySpend > 0 ? (
+            <BarChart
+              data={barData}
+              height={132}
+              width={chartViewportWidth}
+              barWidth={22}
+              spacing={barSpacing}
+              initialSpacing={Math.floor(barSpacing / 2)}
+              endSpacing={2}
+              roundedTop
+              barBorderRadius={7}
+              showGradient
+              frontColor={palette.primary}
+              gradientColor={palette.primaryBright}
+              maxValue={data.weekDailyMax > 0 ? data.weekDailyMax * 1.28 : 1}
+              noOfSections={3}
+              hideYAxisText
+              yAxisThickness={0}
+              xAxisColor={palette.border}
+              xAxisThickness={1}
+              rulesType="dashed"
+              rulesColor="rgba(30,30,30,0.05)"
+              dashWidth={4}
+              dashGap={6}
+              xAxisLabelTextStyle={{ color: palette.textTertiary, fontSize: 10, fontFamily: fontFamily.medium }}
+              disableScroll
+            />
+          ) : (
+            <View style={s.barEmpty}>
+              <Text style={s.snapSub}>No spending logged this week yet.</Text>
+            </View>
+          )}
         </View>
 
         {/* ── WEEKLY SNAPSHOT ────────────────────────────────── */}
@@ -692,49 +477,87 @@ export default function InsightsScreen() {
           <View style={s.snapshotHeader}>
             <View style={s.snapshotTitleRow}>
               <Text style={s.sectionLabel}>WEEKLY SNAPSHOT</Text>
-              <Text style={s.dateTag}>
-                <Icon name="Calendar" size={16} color="#000000" /> {weekRangeLabel}
-              </Text>
+              <Text style={s.dateTag}>{weekRangeLabel}</Text>
             </View>
-            <TouchableOpacity style={s.thisWeekBtn} onPress={handleThisWeek} activeOpacity={0.8}>
-              <Text style={s.thisWeekText}>This week</Text>
-              <Icon name="ChevronRight" size={13} color="#000000" />
-            </TouchableOpacity>
+            <PressableScale
+              style={s.thisWeekBtn}
+              onPress={goWeekBreakdown}
+              accessibilityRole="button"
+              accessibilityLabel="Open weekly breakdown"
+            >
+              <Text style={s.thisWeekText}>Breakdown</Text>
+              <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
+            </PressableScale>
           </View>
 
-          <View style={s.snapshotBody}>
-            <View style={s.circleWrap}>
-              <View style={s.circleOuter}>
-                <Text style={s.circleText}>{weeklyProgressPct}%</Text>
-              </View>
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.snapAmount}>
-                {formatAmount(insights.weeklySpend)}{' '}
-                <Text style={s.snapOf}>of {formatAmount(insights.weeklyBudget)}</Text>
-              </Text>
-              <Text style={s.snapSub}>weekly budget used</Text>
-              <View style={s.snapBarBg}>
-                <View style={[s.snapBarFill, { width: `${weeklyProgressPct}%` }]} />
-              </View>
+          {/* Donut of where the week's money went + category legend (tap opens breakdown) */}
+          <View style={s.snapshotBodyRow}>
+            <PressableScale
+              style={s.pieWrap}
+              onPress={goWeekBreakdown}
+              accessibilityRole="button"
+              accessibilityLabel={`Weekly spending by category, ${formatAmount(data.weeklySpend)} spent this week. Opens breakdown.`}
+            >
+              <DonutChart
+                data={weekPie}
+                radius={58}
+                showLabels={false}
+                centerLabel={() => (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={s.pieCenterAmt} numberOfLines={1} adjustsFontSizeToFit>
+                      {compactAmount(data.weeklySpend)}
+                    </Text>
+                    <Text style={s.pieCenterSub}>this week</Text>
+                  </View>
+                )}
+              />
+              <Text style={s.pieHint}>Tap for breakdown</Text>
+            </PressableScale>
+
+            <View style={s.snapLegendCol}>
+              {hasWeekSpend ? (
+                weekLegend.map((c) => (
+                  <View key={c.label} style={s.weekLegendRow}>
+                    <View style={[s.weekLegendDot, { backgroundColor: c.color }]} />
+                    <Text style={s.weekLegendName} numberOfLines={1}>{c.label}</Text>
+                    <Text style={[s.weekLegendPct, { color: c.color }]}>{c.share}%</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={s.snapSub}>No spending logged this week yet.</Text>
+              )}
             </View>
           </View>
 
+          {/* Weekly budget usage */}
+          <View style={s.snapBudgetBlock}>
+            <Text style={s.snapAmount}>
+              {formatAmount(data.weeklySpend)} <Text style={s.snapOf}>of {formatAmount(data.weeklyBudget)}</Text>
+            </Text>
+            <Text style={s.snapSub}>weekly budget used</Text>
+            <View style={s.snapBarBg}>
+              <View style={[s.snapBarFill, { width: `${weeklyProgressPct}%` }]} />
+            </View>
+          </View>
+
+          <View style={s.snapDivider} />
+
+          {/* Tappable weekly stat tiles */}
           <View style={s.statsRow}>
-            <View style={s.statCol}>
-              <Text style={s.statNum}>{insights.biggestSpendsCount}</Text>
-              <Text style={s.statLbl}>Biggest{'\n'}spends</Text>
-            </View>
+            <PressableScale style={s.statTile} onPress={goTransactions} accessibilityRole="button" accessibilityLabel="See your biggest spend transactions">
+              <Text style={s.statNum} numberOfLines={1} adjustsFontSizeToFit>{formatAmount(data.weekBiggestSpend)}</Text>
+              <Text style={s.statLbl}>Biggest{'\n'}spend</Text>
+            </PressableScale>
             <View style={s.statDivider} />
-            <View style={s.statCol}>
-              <Text style={s.statNum}>{insights.transactionCount}</Text>
-              <Text style={s.statLbl}>Transactions</Text>
-            </View>
+            <PressableScale style={s.statTile} onPress={goTransactions} accessibilityRole="button" accessibilityLabel="See this week's transactions">
+              <Text style={s.statNum}>{data.weekTransactionCount}</Text>
+              <Text style={s.statLbl}>This week&apos;s{'\n'}transactions</Text>
+            </PressableScale>
             <View style={s.statDivider} />
-            <View style={s.statCol}>
-              <Text style={s.statNum}>{formatAmount(insights.weeklyLeft)}</Text>
+            <PressableScale style={s.statTile} onPress={goImpact} accessibilityRole="button" accessibilityLabel="See spend impact">
+              <Text style={s.statNum} numberOfLines={1} adjustsFontSizeToFit>{formatAmount(data.weeklyLeft)}</Text>
               <Text style={s.statLbl}>Left for{'\n'}the week</Text>
-            </View>
+            </PressableScale>
           </View>
         </View>
 
@@ -746,52 +569,48 @@ export default function InsightsScreen() {
               <Text style={s.thisMonthTag}>This Month</Text>
             </View>
 
-            {categoryDisplay.map((row) => {
-              const pct = row.barPercent ?? 0;
-              const color = row.color ?? '#7FB3FF';
-              const bgColor = row.bgColor ?? '#C3FFD8';
-              const iconName = row.iconName ?? 'ShoppingBag';
-              const iconColor = row.iconColor ?? '#000000';
-              const pctLabel = row.share ? `${row.share}%` : '0%';
-              return (
-                <View key={row.label} style={s.catItem}>
-                  <View style={[s.catIcon, { backgroundColor: bgColor }]}>
-                    <Icon name={iconName} size={16} color={iconColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={s.catNameRow}>
-                      <Text style={s.catName}>{row.label}</Text>
-                      <Text style={s.catAmt}>{formatAmount(row.amount)}</Text>
-                      <Text style={[s.catPct, { color }]}>{pctLabel}</Text>
+            {data.categoryRows.length === 0 ? (
+              <Text style={[s.snapSub, { paddingVertical: 8 }]}>Add expenses to see your category split.</Text>
+            ) : (
+              data.categoryRows.map((row) => {
+                const color = row.color;
+                return (
+                  <View key={row.label} style={s.catItem}>
+                    <View style={[s.catIcon, { backgroundColor: color + '22' }]}>
+                      <Icon name={iconForCategory(row.label)} size={16} color={color} clickable={false} />
                     </View>
-                    <View style={s.catBarBg}>
-                      <View style={[s.catBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+                    <View style={{ flex: 1 }}>
+                      <View style={s.catNameRow}>
+                        <Text style={s.catName} numberOfLines={1}>{row.label}</Text>
+                        <Text style={s.catAmt}>{formatAmount(row.amount)}</Text>
+                        <Text style={[s.catPct, { color }]}>{row.share ? `${row.share}%` : '0%'}</Text>
+                      </View>
+                      <View style={s.catBarBg}>
+                        <View style={[s.catBarFill, { width: `${row.barPercent ?? 0}%`, backgroundColor: color }]} />
+                      </View>
                     </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
 
-            <TouchableOpacity style={s.viewAllBtn} onPress={handleViewCategories} activeOpacity={0.8}>
+            <PressableScale style={s.viewAllBtn} onPress={goMonthBreakdown} accessibilityRole="button" accessibilityLabel="View all categories">
               <Text style={s.viewAllText}>View all categories</Text>
-              <Icon name="ChevronRight" size={13} color="#000000" />
-            </TouchableOpacity>
+              <Icon name="ChevronRight" size={13} color={palette.primaryDeep} clickable={false} />
+            </PressableScale>
           </View>
 
-          <View style={[s.impactCard, s.impactCardLayout]}>
+          {/* Spending Impact — tappable, routes to the detail page */}
+          <PressableScale
+            style={[s.impactCard, s.impactCardLayout]}
+            onPress={goImpact}
+            accessibilityRole="button"
+            accessibilityLabel="Open spend impact detail"
+          >
             <View style={s.visualSection}>
-              <Image
-                source={require('../../assets/images/tree.png')}
-                style={s.treeImage}
-                resizeMode="cover"
-              />
+              <Image source={require('../../assets/images/tree.png')} style={s.treeImage} resizeMode="cover" />
               <LinearGradient
-                colors={[
-                  'rgba(255,255,255,0)',
-                  'rgba(255,255,255,0.15)',
-                  'rgba(255,255,255,0.55)',
-                  'rgba(255,255,255,0.92)',
-                ]}
+                colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.15)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.92)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={s.fadeOverlay}
@@ -802,16 +621,7 @@ export default function InsightsScreen() {
                 {impactParticles.map((particle) => (
                   <View
                     key={particle.id}
-                    style={[
-                      s.particle,
-                      {
-                        left: particle.left,
-                        top: particle.top,
-                        opacity: particle.opacity,
-                        width: particle.size,
-                        height: particle.size,
-                      },
-                    ]}
+                    style={[s.particle, { left: particle.left, top: particle.top, opacity: particle.opacity, width: particle.size, height: particle.size }]}
                   />
                 ))}
               </View>
@@ -820,77 +630,82 @@ export default function InsightsScreen() {
             <View style={s.impactTextContainer}>
               <Text style={s.impactLabel}>SPENDING{'\n'}IMPACT</Text>
               <View style={s.impactAmountBlock}>
-                <Text style={s.impactAmt}>{formatAmount(insights.savedAmount)}</Text>
+                <Text style={s.impactAmt} numberOfLines={1} adjustsFontSizeToFit>{formatAmount(data.savedAmount)}</Text>
                 <Text style={s.impactSub}>saved this month</Text>
               </View>
               <View style={s.impactGrowBlock}>
-                <Text style={s.impactGrowText}>That&apos;s {treesSaved} 🌳</Text>
-                <Text style={s.impactGrowText}>for a greener planet!</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Text style={s.impactGrowText}>{savedTrees > 0 ? `That's ${savedTrees} 🌳` : 'Keep saving 🌱'}</Text>
+                  <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
+                </View>
+                <Text style={s.impactGrowText}>{savedTrees > 0 ? 'for a greener planet!' : 'to grow your impact'}</Text>
               </View>
             </View>
-          </View>
+          </PressableScale>
         </View>
 
-        {/* ── GEKKO GUIDANCE ─────────────────────────────────── */}
-        <TouchableOpacity style={s.guidanceCard} onPress={handleGuidance} activeOpacity={0.8}>
-          <View style={s.guidanceImgWrap}>
-            <Image
-              source={require('../../assets/images/cardImageMonkgekko.png')}
-              style={s.guidanceImg}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={s.guidanceContent}>
-            <Text style={s.guidanceLabel}>GEKKO GUIDANCE</Text>
-            <Text style={s.guidanceMain}>Try a no-spend weekend!</Text>
-            <Text style={s.guidanceSub}>
-              {insights.weekendEstimate > 0
-                ? `You usually spend ${formatAmount(insights.weekendEstimate)} on weekends.\nSave more by planning ahead.`
-                : 'Track a few weekend expenses to personalize this tip.'}
-            </Text>
-          </View>
-          <Icon name="ChevronRight" size={18} color="#000000" />
-        </TouchableOpacity>
-
-        {/* ── BADGE / REWARD CARD ────────────────────────────── */}
-        <LinearGradient
-          colors={['#CFE7FF', '#DCEEFF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={s.rewardCard}
-        >
-          <View style={s.rewardLeft}>
-            <View style={s.rewardIconWrap}>
-              <Text style={{ fontSize: 26 }}>🎁</Text>
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={s.rewardTitle}>Unlock &quot;Smart Saver&quot; badge</Text>
-              <Text style={s.rewardSub}>Save ₹3,000 more this month</Text>
-              <View style={s.rewardBarBg}>
-                <View style={[s.rewardBarFill, { width: `${Math.round(rewardProgress * 100)}%` }]} />
+        {/* Gekko Guidance · Unlock Smart Saver · Quick Tip — parked for a later version */}
+        {ENABLE_LATER_CARDS && (
+          <>
+            <TouchableOpacity style={s.guidanceCard} onPress={goImpact} activeOpacity={0.8}>
+              <View style={s.guidanceImgWrap}>
+                <Image source={require('../../assets/images/cardImageMonkgekko.png')} style={s.guidanceImg} resizeMode="contain" />
               </View>
-              <View style={s.rewardBarLabels}>
-                <Text style={s.rewardBarLbl}>{formatAmount(rewardCurrent)} / {formatAmount(rewardTarget)}</Text>
+              <View style={s.guidanceContent}>
+                <Text style={s.guidanceLabel}>GEKKO GUIDANCE</Text>
+                <Text style={s.guidanceMain}>Try a no-spend weekend!</Text>
+                <Text style={s.guidanceSub}>
+                  {data.weekendEstimate > 0
+                    ? `You usually spend ${formatAmount(data.weekendEstimate)} on weekends.`
+                    : 'Track a few weekend expenses to personalize this tip.'}
+                </Text>
               </View>
-            </View>
-          </View>
-          <View style={s.rewardBadge}>
-            <Text style={{ fontSize: 20 }}>🐷</Text>
-            <Text style={s.rewardBadgeLbl}>Smart Saver</Text>
-            <Text style={s.rewardBadgeSub}>Level 2</Text>
-          </View>
-        </LinearGradient>
+              <Icon name="ChevronRight" size={18} color="#000000" clickable={false} />
+            </TouchableOpacity>
 
-        {/* ── QUICK TIP ──────────────────────────────────────── */}
-        <TouchableOpacity style={s.tipCard} onPress={handleQuickTip} activeOpacity={0.8}>
-          <Text style={{ fontSize: 18 }}>💡</Text>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={s.tipTitle}>Quick tip</Text>
-            <Text style={s.tipText}>Track subscriptions you don&apos;t use. You could save up to ₹600/month!</Text>
-          </View>
-          <Icon name="ChevronRight" size={16} color="#000000" />
-        </TouchableOpacity>
+            <LinearGradient colors={['#CFE7FF', '#DCEEFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.rewardCard}>
+              <View style={s.rewardLeft}>
+                <View style={s.rewardIconWrap}>
+                  <Text style={{ fontSize: 26 }}>🎁</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={s.rewardTitle}>Unlock &quot;Smart Saver&quot; badge</Text>
+                  <Text style={s.rewardSub}>Save {formatAmount(rewardTarget)} more this month</Text>
+                  <View style={s.rewardBarBg}>
+                    <View style={[s.rewardBarFill, { width: `${Math.round(rewardProgress * 100)}%` }]} />
+                  </View>
+                  <View style={s.rewardBarLabels}>
+                    <Text style={s.rewardBarLbl}>{formatAmount(rewardCurrent)} / {formatAmount(rewardTarget)}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={s.rewardBadge}>
+                <Text style={{ fontSize: 20 }}>🐷</Text>
+                <Text style={s.rewardBadgeLbl}>Smart Saver</Text>
+                <Text style={s.rewardBadgeSub}>Level 2</Text>
+              </View>
+            </LinearGradient>
+
+            <TouchableOpacity style={s.tipCard} onPress={goImpact} activeOpacity={0.8}>
+              <Text style={{ fontSize: 18 }}>💡</Text>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={s.tipTitle}>Quick tip</Text>
+                <Text style={s.tipText}>Track subscriptions you don&apos;t use. You could save up to ₹600/month!</Text>
+              </View>
+              <Icon name="ChevronRight" size={16} color="#000000" clickable={false} />
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={s.legendRowFilled}>
+      <View style={[s.legendDotFilled, { backgroundColor: color }]} />
+      <Text style={s.legendText}>{label}</Text>
+    </View>
   );
 }

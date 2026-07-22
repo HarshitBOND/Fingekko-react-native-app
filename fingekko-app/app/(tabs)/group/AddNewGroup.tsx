@@ -240,8 +240,10 @@ export default function AddNewGroup() {
                 <View style={styles.header}>
                     <Pressable
                         style={styles.headerButton}
-                        hitSlop={6}
+                        hitSlop={8}
                         onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/YourGroups'))}
+                        accessibilityRole="button"
+                        accessibilityLabel="Go back"
                     >
                         <Icon name="ChevronLeft" size={22} color={palette.textPrimary} clickable={false} />
                     </Pressable>

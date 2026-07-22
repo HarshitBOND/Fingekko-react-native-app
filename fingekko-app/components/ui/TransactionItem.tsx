@@ -23,7 +23,7 @@ interface TransactionItemProps {
 const formatMoney = (n: number, currency: string) =>
   `${currency}${Math.abs(Math.round(n)).toLocaleString('en-IN')}`;
 
-export default function TransactionItem({
+function TransactionItem({
   icon = 'Wallet',
   emoji,
   title,
@@ -81,6 +81,8 @@ export default function TransactionItem({
   }
   return <View style={[styles.row, style]}>{body}</View>;
 }
+
+export default React.memo(TransactionItem);
 
 const styles = StyleSheet.create({
   row: {

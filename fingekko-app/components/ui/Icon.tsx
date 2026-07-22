@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useMemo } from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import { View, StyleSheet, StyleProp, ViewStyle, AccessibilityProps } from 'react-native';
 import LottieView from 'lottie-react-native';
 import * as LucideIcons from 'lucide-react-native';
 
@@ -60,6 +60,12 @@ interface IconProps {
   autoplay?: boolean;
   style?: StyleProp<ViewStyle>;
   clickable?: boolean; // Only clickable icons load Lordicons
+  /**
+   * Screen-reader label. When provided the icon is announced; when omitted the
+   * icon is treated as decorative and hidden from VoiceOver / TalkBack (the
+   * common case, since an icon usually sits inside an already-labelled control).
+   */
+  accessibilityLabel?: string;
 }
 
 const IconComponent = ({
@@ -69,9 +75,20 @@ const IconComponent = ({
   autoplay = true,
   style,
   clickable = false,
+  accessibilityLabel,
 }: IconProps) => {
-  const lottieUrl = clickable ? LORDICON_REGISTRY[name] : undefined;
+  // `clickable` opts into the animated Lordicon, which streams JSON from a CDN.
+  // If that fetch/parse ever fails (offline, slow, CDN down) we fall back to the
+  // bundled static Lucide glyph so a control never renders blank.
+  const [lottieFailed, setLottieFailed] = useState(false);
+  const lottieUrl = clickable && !lottieFailed ? LORDICON_REGISTRY[name] : undefined;
   const lottieRef = useRef<LottieView>(null);
+
+  // A labelled icon is announced as an image; an unlabelled icon is decorative
+  // and skipped by the screen reader so it doesn't add noise to its parent control.
+  const a11yProps: AccessibilityProps = accessibilityLabel
+    ? { accessible: true, accessibilityRole: 'image', accessibilityLabel }
+    : { accessible: false, accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' };
 
   useEffect(() => {
     if (lottieRef.current && autoplay && lottieUrl) {
@@ -109,7 +126,7 @@ const IconComponent = ({
 
   if (resolvedUrl) {
     return (
-      <View style={[{ width: size, height: size }, style, extraStyle]}>
+      <View style={[{ width: size, height: size }, style, extraStyle]} {...a11yProps}>
         <LottieView
           ref={lottieRef}
           source={{ uri: resolvedUrl }}
@@ -117,15 +134,18 @@ const IconComponent = ({
           autoPlay={autoplay}
           loop={autoplay}
           colorFilters={colorFilters}
+          // On any load/parse failure, drop to the bundled static glyph.
+          onAnimationFailure={() => setLottieFailed(true)}
         />
       </View>
     );
   }
 
   // Fallback to Lucide React Icons if not present in the animated registry
+  // (or if the animated icon failed to load above).
   const LucideIconComponent = (LucideIcons as any)[name];
   if (LucideIconComponent) {
-    return <LucideIconComponent size={size} color={color} style={style} />;
+    return <LucideIconComponent size={size} color={color} style={style} {...a11yProps} />;
   }
 
   return null;

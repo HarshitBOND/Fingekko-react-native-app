@@ -16,7 +16,7 @@ interface ListRowProps {
 }
 
 /** Generic pressable row: leading node, title/subtitle, trailing content or chevron. */
-export default function ListRow({ left, title, subtitle, right, showChevron, onPress, style }: ListRowProps) {
+function ListRow({ left, title, subtitle, right, showChevron, onPress, style }: ListRowProps) {
   const body = (
     <>
       {left}
@@ -44,6 +44,8 @@ export default function ListRow({ left, title, subtitle, right, showChevron, onP
   }
   return <View style={[styles.row, style]}>{body}</View>;
 }
+
+export default React.memo(ListRow);
 
 const styles = StyleSheet.create({
   row: {

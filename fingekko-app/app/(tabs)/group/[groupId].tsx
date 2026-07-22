@@ -329,6 +329,9 @@ export default function GroupDetailScreen() {
         <Pressable
           style={({ pressed }) => [styles.circleBtn, pressed && styles.circleBtnPressed]}
           onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Icon name="ChevronLeft" size={20} color={COLORS.textDark} />
         </Pressable>
