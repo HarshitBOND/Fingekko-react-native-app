@@ -38,6 +38,7 @@ export type AppEventMap = {
     reason: 'bill' | 'quest' | 'activity';
     message: string;
     shiftedGoals: ShiftedGoalItem[];
+    requiresConfirmation?: boolean;
   };
 };
 

@@ -11,7 +11,7 @@ export interface ShiftedGoalInfo {
 }
 
 /** Helper to shift a YYYY-MM-DD date string by N days. */
-function shiftDateIso(dateStr: string, days: number): string {
+export function shiftDateIso(dateStr: string, days: number): string {
   const base = new Date(dateStr);
   const validDate = isNaN(base.getTime()) ? new Date() : base;
   validDate.setDate(validDate.getDate() + days);
@@ -22,7 +22,8 @@ function shiftDateIso(dateStr: string, days: number): string {
 }
 
 /**
- * Calculates and updates goal deadlines when a user's monthly recurring bills change.
+ * Calculates candidate goal deadline shifts when a user's monthly recurring bills change.
+ * If applyNow is true, updates DB immediately; otherwise returns candidate shift for user confirmation.
  */
 export async function processGoalShiftOnEssentialChange(
   userId: string,
@@ -30,8 +31,9 @@ export async function processGoalShiftOnEssentialChange(
   newMonthlyEssentials: number,
   billName: string,
   billAmount: number,
-  isDelete: boolean = false
-): Promise<{ shiftedGoals: ShiftedGoalInfo[]; message: string } | null> {
+  isDelete: boolean = false,
+  applyNow: boolean = false
+): Promise<{ shiftedGoals: ShiftedGoalInfo[]; message: string; requiresConfirmation: boolean } | null> {
   const user = (await User.findOne({ _id: userId }).lean()) as any;
   if (!user || !user.monthlyIncome || user.monthlyIncome <= 0) {
     return null;
@@ -61,7 +63,6 @@ export async function processGoalShiftOnEssentialChange(
 
     let shiftDays = 0;
     if (newDaily <= 0 && oldDaily > 0) {
-      // Disposable income dropped to 0: shift deadline right by 30 days
       shiftDays = 30;
     } else if (oldDaily > 0 && newDaily > 0) {
       const oldDays = Math.ceil(remaining / oldDaily);
@@ -76,7 +77,9 @@ export async function processGoalShiftOnEssentialChange(
       const oldDeadline = goal.deadline || new Date().toISOString().split('T')[0];
       const newDeadline = shiftDateIso(oldDeadline, shiftDays);
 
-      await Goal.updateOne({ _id: goal._id }, { $set: { deadline: newDeadline } });
+      if (applyNow) {
+        await Goal.updateOne({ _id: goal._id }, { $set: { deadline: newDeadline } });
+      }
 
       shiftedGoals.push({
         goalId: goal._id.toString(),
@@ -94,14 +97,18 @@ export async function processGoalShiftOnEssentialChange(
   const maxShift = shiftedGoals[0].shiftDays;
   const absShift = Math.abs(maxShift);
   const message = isDelete
-    ? `You removed "${billName}". Because your monthly expenses decreased by ₹${billAmount}, your goals have moved ${absShift} day(s) earlier 🎉!`
-    : `You haven't added this bill "${billName}" (₹${billAmount}/mo) earlier. Due to this recurring expense, your goals have been shifted right by ${absShift} day(s) 📅.`;
+    ? `You removed "${billName}". Because your monthly expenses decreased by ₹${billAmount}, your goals can move ${absShift} day(s) earlier 🎉!`
+    : `You added "${billName}" (₹${billAmount}/mo). Due to this recurring expense, would you like to shift your goal deadlines right by ${absShift} day(s) 📅?`;
 
-  return { shiftedGoals, message };
+  return {
+    shiftedGoals,
+    message,
+    requiresConfirmation: !isDelete && !applyNow,
+  };
 }
 
 /**
- * Calculates and updates goal deadlines when a user skips or fails a quest.
+ * Calculates and updates goal deadlines automatically for expenses / quest fails.
  */
 export async function processGoalShiftOnQuestFail(
   userId: string,
@@ -135,7 +142,7 @@ export async function processGoalShiftOnQuestFail(
     });
   }
 
-  const message = `You did not complete your quest "${questTitle}" today. Missing your daily goal has shifted your target dates by ${shiftDays} day(s) ⏳.`;
+  const message = `You did not complete your quest "${questTitle}" today. Missing your daily goal has shifted your target dates right by ${shiftDays} day(s) ⏳.`;
 
   return { shiftedGoals, message };
 }

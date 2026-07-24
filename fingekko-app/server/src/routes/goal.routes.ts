@@ -340,4 +340,24 @@ router.delete('/:goalId', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/apply-shift', async (req: Request, res: Response) => {
+  const { shiftedGoals } = req.body ?? {};
+  if (!Array.isArray(shiftedGoals) || shiftedGoals.length === 0) {
+    return res.status(400).json({ message: 'No shifted goals provided.' });
+  }
+
+  try {
+    const currentUserId = await getCurrentUserId(req);
+    for (const item of shiftedGoals) {
+      if (item.goalId && item.newDeadline) {
+        await updateGoal(currentUserId, String(item.goalId), { deadline: item.newDeadline });
+      }
+    }
+    return res.json({ success: true, message: 'Goal deadlines updated successfully.' });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({ message: 'Failed to apply goal shifts.' });
+  }
+});
+
 export default router;

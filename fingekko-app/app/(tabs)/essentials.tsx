@@ -133,6 +133,7 @@ export default function EssentialsScreen() {
           reason: 'bill',
           message: res.goalShift.message,
           shiftedGoals: res.goalShift.shiftedGoals,
+          requiresConfirmation: Boolean(res.goalShift.requiresConfirmation),
         });
       }
     } catch (e: any) {

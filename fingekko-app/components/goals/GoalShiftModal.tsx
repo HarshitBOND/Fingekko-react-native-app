@@ -1,24 +1,32 @@
 import React, { useCallback, useState } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@clerk/clerk-expo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppText from '@/components/ui/AppText';
 import Icon from '@/components/ui/Icon';
 import PressableScale from '@/components/ui/PressableScale';
 import Card from '@/components/ui/Card';
 import { palette, radius, shadows, spacing } from '@/constants/design';
 import { useAppEvent } from '@/hooks/use-app-event';
+import { apiRequest } from '@/utils/api';
 import type { ShiftedGoalItem } from '@/lib/appEvents';
 
 type PendingShift = {
   reason: 'bill' | 'quest' | 'activity';
   message: string;
   shiftedGoals: ShiftedGoalItem[];
+  requiresConfirmation?: boolean;
 } | null;
+
+export const LAST_GOAL_SHIFT_KEY = '@last_goal_shift_anim';
 
 export default function GoalShiftModal() {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [pending, setPending] = useState<PendingShift>(null);
+  const [applying, setApplying] = useState(false);
 
   useAppEvent('goal:shifted', (payload) => {
     if (payload && payload.shiftedGoals && payload.shiftedGoals.length > 0) {
@@ -30,15 +38,45 @@ export default function GoalShiftModal() {
     setPending(null);
   }, []);
 
-  const goToGoals = useCallback(() => {
+  const storeAnimStateAndNavigate = useCallback(async (shiftedGoals: ShiftedGoalItem[]) => {
+    try {
+      const animData = {
+        timestamp: Date.now(),
+        shiftedGoals,
+      };
+      await AsyncStorage.setItem(LAST_GOAL_SHIFT_KEY, JSON.stringify(animData));
+    } catch (e) {
+      console.warn('Failed to save shift animation state:', e);
+    }
     setPending(null);
     router.push('/(tabs)/goals');
   }, [router]);
 
+  const handleConfirmShift = useCallback(async () => {
+    if (!pending) return;
+    setApplying(true);
+    try {
+      const token = await getToken();
+      if (token) {
+        await apiRequest({
+          method: 'post',
+          url: '/api/goals/apply-shift',
+          token,
+          data: { shiftedGoals: pending.shiftedGoals },
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to apply shift:', e);
+    } finally {
+      setApplying(false);
+      await storeAnimStateAndNavigate(pending.shiftedGoals);
+    }
+  }, [pending, getToken, storeAnimStateAndNavigate]);
+
   if (!pending) return null;
 
   const isBill = pending.reason === 'bill';
-  const isQuest = pending.reason === 'quest';
+  const requiresConfirm = Boolean(pending.requiresConfirmation);
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={dismiss}>
@@ -55,7 +93,7 @@ export default function GoalShiftModal() {
 
           <Animated.View entering={FadeIn.duration(280).delay(80)} style={styles.headerArea}>
             <AppText variant="h2" align="center" weight="bold">
-              Goal Timelines Shifted
+              {requiresConfirm ? 'Shift Goal Deadlines?' : 'Goal Timelines Shifted'}
             </AppText>
             <AppText variant="bodySm" color="textSecondary" align="center" style={styles.messageText}>
               {pending.message}
@@ -102,17 +140,39 @@ export default function GoalShiftModal() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(320).delay(180)} style={styles.actions}>
-            <PressableScale style={styles.primaryBtn} onPress={dismiss}>
-              <AppText variant="bodySm" weight="bold" color="onDark">
-                Understood, update my goals
-              </AppText>
-            </PressableScale>
+            {requiresConfirm ? (
+              <>
+                <PressableScale style={styles.primaryBtn} onPress={handleConfirmShift} disabled={applying}>
+                  {applying ? (
+                    <ActivityIndicator color={palette.white} />
+                  ) : (
+                    <AppText variant="bodySm" weight="bold" color="onDark">
+                      Yes, shift goal dates
+                    </AppText>
+                  )}
+                </PressableScale>
 
-            <PressableScale style={styles.secondaryBtn} onPress={goToGoals}>
-              <AppText variant="bodySm" weight="bold" color="primaryDeep">
-                View Goal Board
-              </AppText>
-            </PressableScale>
+                <PressableScale style={styles.secondaryBtn} onPress={dismiss}>
+                  <AppText variant="bodySm" weight="bold" color="primaryDeep">
+                    No, keep current dates
+                  </AppText>
+                </PressableScale>
+              </>
+            ) : (
+              <>
+                <PressableScale style={styles.primaryBtn} onPress={() => storeAnimStateAndNavigate(pending.shiftedGoals)}>
+                  <AppText variant="bodySm" weight="bold" color="onDark">
+                    View Goal Board & Animation
+                  </AppText>
+                </PressableScale>
+
+                <PressableScale style={styles.secondaryBtn} onPress={dismiss}>
+                  <AppText variant="bodySm" weight="bold" color="primaryDeep">
+                    Close
+                  </AppText>
+                </PressableScale>
+              </>
+            )}
           </Animated.View>
         </Animated.View>
       </View>
