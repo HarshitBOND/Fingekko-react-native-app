@@ -1,8 +1,26 @@
 import axios from 'axios';
 
+/**
+ * Where the app talks to.
+ *
+ * The fallback must be the production API, never a LAN address: a release build
+ * with a missing `EXPO_PUBLIC_API_URL` would otherwise ship pointing at a
+ * developer's laptop IP and fail for every user with no obvious cause.
+ */
+const PRODUCTION_API_URL = 'https://api.fingekko.com';
+
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
+
+if (__DEV__ && !process.env.EXPO_PUBLIC_API_URL) {
+  console.warn(
+    `EXPO_PUBLIC_API_URL is not set — falling back to ${PRODUCTION_API_URL}. ` +
+      'Set it in .env to point at your local server.',
+  );
+}
+
 export const createApi = (token?: string) => {
   const api = axios.create({
-    baseURL: process.env.EXPO_PUBLIC_API_URL|| 'http://10.234.11.110:4000',
+    baseURL: API_BASE_URL,
     headers: {
       Authorization: token ? `Bearer ${token}` : undefined,
     },

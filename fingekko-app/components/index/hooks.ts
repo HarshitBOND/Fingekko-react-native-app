@@ -5,6 +5,8 @@ import { summarizeByPayCycle } from '@/utils/pay-cycle';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAppEvent } from '@/hooks/use-app-event';
+import { emitAppEvent } from '@/lib/appEvents';
 import { Theme } from './constants';
 import type { ProgressItem } from './types';
 import { formatDateLabel, getFirstName } from './utils';
@@ -56,6 +58,15 @@ export const useHomeScreen = () => {
     }, [isSignedIn])
   );
 
+  // Live updates: a transaction or income change anywhere in the app refreshes
+  // Home immediately, even while it's the screen in front.
+  useAppEvent('transaction:changed', () => {
+    loadRealData();
+  });
+  useAppEvent('profile:changed', () => {
+    loadRealData();
+  });
+
   const profile = homeData?.user ?? null;
 
   const spending = useMemo(
@@ -65,7 +76,16 @@ export const useHomeScreen = () => {
 
   // We have no bank connection — the user has to tell us their income (and
   // when they get paid) before "remaining balance" means anything real.
-  const hasIncomeSetup = (profile?.monthlyIncome ?? 0) > 0;
+  // Either they told us their salary, or they've logged real income this cycle —
+  // both give "remaining balance" something true to stand on.
+  const hasIncomeSetup = (profile?.monthlyIncome ?? 0) > 0 || spending.incomeThisMonth > 0;
+  // Essentials onboarding (item 10): once income is set up we ask the user for
+  // their recurring bills. `essentialsOnboarded` flips true when they finish the
+  // form (even with zero bills), so we only prompt them once.
+  const essentialsOnboarded = profile?.essentialsOnboarded ?? false;
+  const needsEssentialsSetup = hasIncomeSetup && !essentialsOnboarded;
+  // The most urgent unpaid bill (item 11) — surfaced by the server on /home.
+  const nextEssential = profile?.nextEssential ?? null;
   const payday = profile?.payday ?? null;
   const [savingIncome, setSavingIncome] = useState(false);
 
@@ -81,6 +101,8 @@ export const useHomeScreen = () => {
         data: { monthlyIncome, payday: nextPayday },
       });
       await loadRealData();
+      // Insights and anything else reading the budget re-reads straight away.
+      emitAppEvent('profile:changed');
       return true;
     } catch (error) {
       console.warn('Failed to save income setup:', error);
@@ -99,6 +121,12 @@ export const useHomeScreen = () => {
   const avgDailySpend = spending.avgDailySpend;
   const currentDateLabel = formatDateLabel(now);
   const visibleStats = homeData?.stats ?? null;
+
+  // Bill-due nudge (item 11): only when the user has finished essentials setup,
+  // a bill is still unpaid this month, and there's actually enough left to cover
+  // it — we never nag someone who can't afford it right now.
+  const showBillDueAlert =
+    !!nextEssential && !needsEssentialsSetup && balanceAmount >= nextEssential.amount;
 
   const progressItems: ProgressItem[] | undefined = useMemo(() => {
     if (!visibleStats) return undefined;
@@ -131,6 +159,16 @@ export const useHomeScreen = () => {
     hasIncomeSetup,
     payday,
     monthlyIncome: monthlyBudget,
+    baseIncome: spending.baseIncome,
+    incomeThisMonth: spending.incomeThisMonth,
+    cashInHand: spending.cashInHand,
+    monthlyEssentials: spending.monthlyEssentials,
+    unpaidEssentials: spending.unpaidEssentials,
+    remainingAfterEssentials: spending.remainingAfterEssentials,
+    essentialsOnboarded,
+    needsEssentialsSetup,
+    nextEssential,
+    showBillDueAlert,
     savingIncome,
     saveIncomeSetup,
     refresh: loadRealData,

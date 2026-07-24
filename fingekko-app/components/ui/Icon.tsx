@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle, AccessibilityProps } from 'react-native';
 import LottieView from 'lottie-react-native';
-import * as LucideIcons from 'lucide-react-native';
+// The app's own allow-list, not the lucide barrel — see lucide-icons.ts for why.
+import * as LucideIcons from './lucide-icons';
 
 const LORDICON_REGISTRY: Record<string, string> = {
   Home: 'https://cdn.lordicon.com/etqbfrgp.json',       // house
@@ -39,6 +40,8 @@ const LORDICON_REGISTRY: Record<string, string> = {
   Zap: 'https://cdn.lordicon.com/flvisbip.json',        // energy/lightning
   Repeat: 'https://cdn.lordicon.com/bonsoxbe.json',     // sync/repeat
   Star: 'https://cdn.lordicon.com/xhdhgmqj.json',       // star rating
+  Sparkles: 'https://cdn.lordicon.com/xhdhgmqj.json',   // sparkle/star — money personality
+  Trophy: 'https://cdn.lordicon.com/rutwrxtb.json',     // trophy / all quests cleared
   PiggyBank: 'https://cdn.lordicon.com/wyqtxzeh.json',  // piggy bank / coins
   Shield: 'https://cdn.lordicon.com/khddyilg.json',     // shield security
   Lock: 'https://cdn.lordicon.com/khddyilg.json',       // padlock lock

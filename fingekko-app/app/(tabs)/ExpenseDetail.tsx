@@ -180,7 +180,7 @@ export default function ExpenseDetailScreen() {
         {/* Hero */}
         <Card variant="elevated" padding={20} style={[styles.heroCard, deleted && styles.numb]}>
           <AppText variant="h2" weight="bold" numberOfLines={2}>{expense.description}</AppText>
-          <AppText variant="hero" weight="bold" style={{ marginTop: spacing.xs }}>{inr(expense.amount)}</AppText>
+          <AppText numeric variant="hero" weight="bold" style={{ marginTop: spacing.xs }}>{inr(expense.amount)}</AppText>
           <View style={styles.metaRow}>
             {!!expense.category && (
               <View style={styles.tag}>
@@ -192,7 +192,7 @@ export default function ExpenseDetailScreen() {
           <View style={styles.netRow}>
             <AppText variant="caption" color="textSecondary" weight="bold">{netLabel}</AppText>
             {!deleted && net !== 0 && (
-              <AppText variant="title" weight="bold" style={{ color: netColor }}>{inr(net)}</AppText>
+              <AppText numeric variant="title" weight="bold" style={{ color: netColor }}>{inr(net)}</AppText>
             )}
           </View>
         </Card>
@@ -226,7 +226,7 @@ export default function ExpenseDetailScreen() {
                   <AppText variant="micro" color="success" weight="bold">SETTLED</AppText>
                 </View>
               )}
-              <AppText variant="bodySm" weight="bold" style={{ color: p.settled ? palette.textTertiary : palette.textPrimary }}>
+              <AppText numeric variant="bodySm" weight="bold" style={{ color: p.settled ? palette.textTertiary : palette.textPrimary }}>
                 {inr(p.amount)}
               </AppText>
             </View>
@@ -239,7 +239,7 @@ export default function ExpenseDetailScreen() {
             Total bill {inr(expense.amount)} · paid by {(expense.paidBy ?? []).map((p) => `${p.userId?.name?.split(' ')[0] ?? '?'} (${inr(p.amount)})`).join(', ') || '—'} · split across {expense.participants.length} {expense.participants.length === 1 ? 'person' : 'people'}.
           </AppText>
           {!deleted && (
-            <AppText variant="bodySm" weight="bold" style={{ color: netColor, marginTop: 4 }}>
+            <AppText numeric variant="bodySm" weight="bold" style={{ color: netColor, marginTop: 4 }}>
               {net > 0
                 ? `Net: you are owed ${inr(net)}.`
                 : net < 0

@@ -175,10 +175,30 @@ router.put('/:goalId', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Goal not found' });
     }
 
+    // `currentAmount` is a client-sent *absolute*, so a crafted request could
+    // jump straight past the target (minting completion/milestone XP), apply a
+    // negative delta, or write a negative balance. Sanitize it server-side
+    // (AUDIT item 21): clamp into [what's already saved, the target]. The
+    // effective target accounts for a target change in this same request.
+    // NOTE: this is a bounds/anti-forgery guard, not an affordability check —
+    // that stays client-side for now (item 7's known limitation).
+    let sanitizedCurrentAmount: number | undefined;
+    if (currentAmount !== undefined) {
+      if (!Number.isFinite(currentAmount)) {
+        return res.status(400).json({ message: 'currentAmount must be a number.' });
+      }
+      const effectiveTarget =
+        Number.isFinite(targetAmount) && targetAmount > 0 ? targetAmount : previous.targetAmount;
+      // Never below what's already saved (contributions only add), never above
+      // the target (no overshoot). If the target was lowered below the saved
+      // amount, this snaps the goal to the new target.
+      sanitizedCurrentAmount = Math.min(effectiveTarget, Math.max(previous.currentAmount, currentAmount));
+    }
+
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title;
     if (targetAmount !== undefined) updates.targetAmount = targetAmount;
-    if (currentAmount !== undefined) updates.currentAmount = currentAmount;
+    if (sanitizedCurrentAmount !== undefined) updates.currentAmount = sanitizedCurrentAmount;
     if (deadline !== undefined) updates.deadline = deadline;
     if (emoji !== undefined) updates.emoji = emoji;
 
@@ -187,8 +207,9 @@ router.put('/:goalId', async (req: Request, res: Response) => {
     // Gamification: reward real progress (money actually added toward the
     // goal). Everything below is gated on `contribution > 0` so unrelated
     // edits (title/target/deadline) through this same endpoint never
-    // spuriously trigger milestones/streaks/badges.
-    const contribution = typeof currentAmount === 'number' ? Math.max(0, currentAmount - previous.currentAmount) : 0;
+    // spuriously trigger milestones/streaks/badges. Derived from the *sanitized*
+    // written value, so a forged absolute can't inflate the reward.
+    const contribution = Math.max(0, goal.currentAmount - previous.currentAmount);
     const wasComplete = isGoalComplete(previous);
     const nowComplete = isGoalComplete(goal);
     const justCompleted = contribution > 0 && nowComplete && !wasComplete;

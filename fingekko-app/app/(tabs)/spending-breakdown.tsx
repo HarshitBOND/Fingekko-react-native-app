@@ -159,7 +159,7 @@ export default function SpendingBreakdownScreen() {
                   <AppText variant="label" style={styles.legendName} numberOfLines={1}>
                     {c.label}
                   </AppText>
-                  <AppText variant="label" weight="bold" style={styles.legendAmt}>
+                  <AppText numeric variant="label" weight="bold" style={styles.legendAmt}>
                     {formatAmount(c.amount)}
                   </AppText>
                   <View style={styles.legendPctWrap}>

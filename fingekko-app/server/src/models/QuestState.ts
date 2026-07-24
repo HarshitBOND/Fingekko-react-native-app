@@ -5,6 +5,10 @@ const questEntrySchema = new mongoose.Schema(
     questId: { type: Number, required: true },
     status: { type: String, required: true },
     progress: { type: Number, required: true },
+    // Net XP currently applied to the user for this entry (+xp done, −xp failed,
+    // 0 pending). Lets the server apply every status change as an idempotent
+    // delta and reconcile auto quests without ever double-awarding.
+    xpEffect: { type: Number, default: 0 },
   },
   { _id: false }
 );

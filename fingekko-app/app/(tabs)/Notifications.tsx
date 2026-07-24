@@ -13,6 +13,7 @@ import { apiRequest } from '../../utils/api';
 import Icon from '../../components/ui/Icon';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
 import AppText from '../../components/ui/AppText';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ScreenContainer from '../../components/ui/ScreenContainer';
@@ -183,17 +184,11 @@ export default function NotificationsScreen() {
           <ActivityIndicator size="large" color={palette.primaryDeep} />
         </View>
       ) : notifications.length === 0 ? (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIconWrap}>
-            <Icon name="BellOff" size={32} color={palette.textSecondary} />
-          </View>
-          <AppText variant="title" color="textPrimary" weight="bold">
-            All caught up!
-          </AppText>
-          <AppText variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-            No new notifications or pending splits.
-          </AppText>
-        </View>
+        <EmptyState
+          icon="BellOff"
+          title="All caught up!"
+          subtitle="No new notifications or pending splits."
+        />
       ) : (
         Object.entries(groupedNotifications).map(([groupTitle, items]) => {
           if (items.length === 0) return null;

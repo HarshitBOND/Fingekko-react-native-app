@@ -31,13 +31,17 @@ export default function HeroCard({
           <View style={[styles.blob, styles.blobBottom]} />
         </>
       ) : null}
-      <View style={{ padding }}>{children}</View>
+      {/* Above the gradient and the blobs. Android reorders an elevated view's
+          children by elevation rather than document order, which could leave
+          the card's own content painted underneath its background. */}
+      <View style={[styles.content, { padding }]}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shell: { overflow: 'hidden' },
+  content: { zIndex: 1 },
   blob: {
     position: 'absolute',
     borderRadius: 999,

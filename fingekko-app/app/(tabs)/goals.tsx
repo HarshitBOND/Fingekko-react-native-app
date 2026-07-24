@@ -30,17 +30,22 @@ import { useToast } from '@/hooks/useToast';
 import { layout, palette, radius, spacing } from '@/constants/design';
 import type {
   ApiGoal,
+  ApiTransaction,
+  ApiUser,
   BadgeDefinition,
   EarnedBadge,
   EarnedBadgeInfo,
   GoalsResponse,
   GoalStats,
   ProfileResponse,
+  TransactionsResponse,
   XpEventDto,
   XpEventsResponse,
 } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { computeGoalFeasibility } from '@/utils/goal-feasibility';
 import { formatCurrency } from '@/utils/helpers';
+import { summarizeByPayCycle } from '@/utils/pay-cycle';
 
 type GoalActionResponse = {
   goal: ApiGoal;
@@ -75,6 +80,7 @@ const EMPTY_GOALS: ApiGoal[] = [];
 const EMPTY_BADGES: EarnedBadge[] = [];
 const EMPTY_CATALOG: BadgeDefinition[] = [];
 const EMPTY_STATS: GoalStats = { contributionStreak: 0, bestContributionStreak: 0 };
+const EMPTY_TXNS: ApiTransaction[] = [];
 
 // Parses a "YYYY-MM-DD" deadline as a *local* calendar date. Deliberately
 // avoids `new Date(string)` here — that parses date-only strings as UTC
@@ -111,6 +117,10 @@ function addMonths(date: Date, months: number): Date {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
   return next;
+}
+
+function startOfDayMs(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
 function formatDeadlineLabel(deadline: string): string {
@@ -155,6 +165,9 @@ export default function GoalsScreen() {
   const [contributeError, setContributeError] = useState('');
 
   const [userXp, setUserXp] = useState(0);
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [profile, setProfile] = useState<ApiUser | null>(null);
+  const [transactions, setTransactions] = useState<ApiTransaction[]>(EMPTY_TXNS);
   const [reward, setReward] = useState<GoalRewardInfo | null>(null);
 
   const [goalStats, setGoalStats] = useState<GoalStats>(EMPTY_STATS);
@@ -169,20 +182,76 @@ export default function GoalsScreen() {
   const [deleting, setDeleting] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
 
+  // Earliest date this goal can realistically be reached given the entered
+  // target and the user's income, from the shared feasibility engine (item 13).
+  // `minDeadline === null` means no income-based restriction — either the amount
+  // isn't valid yet or income isn't set up (we never lock out a user who hasn't
+  // told us their income). Disposable = income − recurring essentials (item 10),
+  // so money already committed to rent/bills doesn't count toward feasibility.
+  const feasibility = useMemo(
+    () =>
+      computeGoalFeasibility({
+        targetAmount: Number(targetAmount),
+        monthlyIncome,
+        monthlyEssentials: profile?.monthlyEssentials ?? 0,
+        from: today,
+      }),
+    [targetAmount, monthlyIncome, profile?.monthlyEssentials, today]
+  );
+  const minDeadline = feasibility.minDeadline;
+
+  // A deadline can never be in the past (item 7). The effective floor is the
+  // later of "today" and the income-based feasibility date — so past dates are
+  // always blocked, and on top of that infeasible dates are blocked once we
+  // know the user's income. `minDeadline` is always >= tomorrow, so it wins
+  // whenever it exists; otherwise we fall back to today's start.
+  const todayStart = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+    [today]
+  );
+  const effectiveMin = minDeadline ?? todayStart;
+
+  const isBeforeMin = useCallback(
+    (year: number, month: number, day: number) =>
+      new Date(year, month, day).getTime() < startOfDayMs(effectiveMin),
+    [effectiveMin]
+  );
+
+  const minDeadlineIso = feasibility.minDeadlineIso;
+
+  // Real spend/budget scoped to the current pay cycle — the same source of
+  // truth Home and Safe-to-Spend use — so a goal contribution can be
+  // sanity-checked against what's actually left to spend this cycle.
+  const spending = useMemo(
+    () => summarizeByPayCycle(transactions, profile, today),
+    [transactions, profile, today]
+  );
+  // Only guard affordability once we actually know the user's income; a user
+  // who hasn't set up income has a meaningless "remaining balance" and must
+  // never be locked out of contributing (mirrors the minDeadline stance).
+  const hasIncomeSetup = monthlyIncome > 0 || spending.incomeThisMonth > 0;
+  const availableBalance = spending.remainingBalance;
+
   const fetchGoals = useCallback(async () => {
     if (!isSignedIn) {
       setGoals(EMPTY_GOALS);
+      setTransactions(EMPTY_TXNS);
+      setProfile(null);
       return;
     }
     try {
       const token = await getTokenRef.current();
       if (!token) return;
-      const [goalsResponse, profileResponse] = await Promise.all([
+      const [goalsResponse, profileResponse, transactionsResponse] = await Promise.all([
         apiRequest<GoalsResponse>('/api/goals', {}, token),
         apiRequest<ProfileResponse>('/api/profile', {}, token),
+        apiRequest<TransactionsResponse>('/api/transactions', {}, token),
       ]);
       setGoals(goalsResponse?.goals ?? EMPTY_GOALS);
       setUserXp(profileResponse?.user?.xp ?? 0);
+      setMonthlyIncome(profileResponse?.user?.monthlyIncome ?? 0);
+      setProfile(profileResponse?.user ?? null);
+      setTransactions(transactionsResponse?.transactions ?? EMPTY_TXNS);
       setGoalStats(goalsResponse?.goalStats ?? EMPTY_STATS);
       setBadges(goalsResponse?.badges ?? EMPTY_BADGES);
       setBadgeCatalog(goalsResponse?.badgeCatalog ?? EMPTY_CATALOG);
@@ -272,7 +341,12 @@ export default function GoalsScreen() {
 
   const openDatePicker = () => {
     const existing = parseDeadline(deadline);
-    const base = existing ?? today;
+    let base = existing ?? today;
+    // Never open the picker on a blocked day — snap the initial selection
+    // forward to the earliest allowed date (today, or the feasibility date).
+    if (startOfDayMs(base) < startOfDayMs(effectiveMin)) {
+      base = effectiveMin;
+    }
     setPickerYear(base.getFullYear());
     setPickerMonth(base.getMonth());
     setPickerDay(base.getDate());
@@ -281,10 +355,12 @@ export default function GoalsScreen() {
 
   const applyQuickDeadline = (months: number) => {
     const next = addMonths(today, months);
+    if (isBeforeMin(next.getFullYear(), next.getMonth(), next.getDate())) return;
     setDeadline(toIsoDate(next.getFullYear(), next.getMonth(), next.getDate()));
   };
 
   const confirmCustomDate = () => {
+    if (isBeforeMin(pickerYear, pickerMonth, pickerDay)) return;
     setDeadline(toIsoDate(pickerYear, pickerMonth, pickerDay));
     setDatePickerVisible(false);
   };
@@ -299,8 +375,20 @@ export default function GoalsScreen() {
       setFormError('Enter a target amount greater than 0.');
       return;
     }
-    if (!deadline.trim() || !parseDeadline(deadline)) {
+    const chosenDeadline = parseDeadline(deadline);
+    if (!deadline.trim() || !chosenDeadline) {
       setFormError('Choose a target date.');
+      return;
+    }
+    // Backstop for the picker restriction: reject a past date outright, and a
+    // date that arrives before this goal is realistically reachable on the
+    // user's income once we know that income.
+    if (startOfDayMs(chosenDeadline) < startOfDayMs(effectiveMin)) {
+      setFormError(
+        minDeadline
+          ? `On your income, the soonest you can realistically reach ${formatCurrency(amount)} is ${formatDeadlineLabel(minDeadlineIso)}.`
+          : 'Choose a target date in the future.'
+      );
       return;
     }
 
@@ -379,6 +467,17 @@ export default function GoalsScreen() {
       setContributeError('Enter an amount greater than 0.');
       return;
     }
+    // Affordability sanity check (item 7): you can't stash money you don't have
+    // this cycle. Only enforced once income is set up — otherwise the remaining
+    // balance is meaningless and we must not lock the user out.
+    if (hasIncomeSetup && amount > availableBalance) {
+      setContributeError(
+        availableBalance > 0
+          ? `That's more than you have left this cycle (${formatCurrency(availableBalance)}). Try a smaller amount.`
+          : `You've used up your budget this cycle, so there's nothing free to put toward this goal right now.`
+      );
+      return;
+    }
 
     setContributing(true);
     setContributeError('');
@@ -441,7 +540,7 @@ export default function GoalsScreen() {
           <AppText variant="title" color="textPrimary" weight="bold">
             Your Goals
           </AppText>
-          <AppText variant="caption" color="textSecondary">
+          <AppText numeric variant="caption" color="textSecondary">
             {goals.length === 0
               ? 'Save toward what matters, one goal at a time.'
               : `${summary.activeCount} active • ${formatCurrency(summary.totalSaved)} saved so far`}
@@ -511,7 +610,7 @@ export default function GoalsScreen() {
               </Pressable>
 
               <View style={styles.amountsRow}>
-                <AppText variant="bodySm" color="textPrimary" weight="bold">
+                <AppText numeric variant="bodySm" color="textPrimary" weight="bold">
                   {formatCurrency(goal.currentAmount)}
                 </AppText>
                 <AppText variant="caption" color="textSecondary">
@@ -546,9 +645,8 @@ export default function GoalsScreen() {
         })
       )}
 
-      {/* Create / edit goal modal */}
-      <Modal visible={createVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={createVisible} animationType="slide" transparent onRequestClose={() => { setCreateVisible(false); resetForm(); }}>
+        <View style={styles.modalOverlay} accessibilityViewIsModal={true}>
           <View style={styles.modalCard}>
             <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.md }}>
               {editingGoalId ? 'Edit Goal' : 'New Goal'}
@@ -617,21 +715,40 @@ export default function GoalsScreen() {
       </Modal>
 
       {/* Date picker modal */}
-      <Modal visible={datePickerVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={datePickerVisible} animationType="fade" transparent onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={styles.modalOverlay} accessibilityViewIsModal={true}>
           <View style={styles.modalCard}>
-            <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.md }}>
+            <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: minDeadline ? 4 : spacing.md }}>
               Choose a date
             </AppText>
 
+            {minDeadline && (
+              <AppText variant="caption" color="textSecondary" style={{ marginBottom: spacing.md }}>
+                On your income, the soonest you can realistically reach this goal is{' '}
+                <AppText variant="caption" color="textPrimary" weight="bold">
+                  {formatDeadlineLabel(minDeadlineIso)}
+                </AppText>
+                . Earlier dates are unavailable.
+              </AppText>
+            )}
+
             <View style={styles.quickRow}>
-              {QUICK_DEADLINES.map((option) => (
-                <Pressable key={option.label} style={styles.quickChip} onPress={() => applyQuickDeadline(option.months)}>
-                  <AppText variant="caption" color="primaryDeep" weight="bold">
-                    {option.label}
-                  </AppText>
-                </Pressable>
-              ))}
+              {QUICK_DEADLINES.map((option) => {
+                const next = addMonths(today, option.months);
+                const disabled = isBeforeMin(next.getFullYear(), next.getMonth(), next.getDate());
+                return (
+                  <Pressable
+                    key={option.label}
+                    style={[styles.quickChip, disabled && styles.chipDisabled]}
+                    disabled={disabled}
+                    onPress={() => applyQuickDeadline(option.months)}
+                  >
+                    <AppText variant="caption" color={disabled ? 'textTertiary' : 'primaryDeep'} weight="bold">
+                      {option.label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <AppText variant="caption" color="textSecondary" style={{ marginTop: spacing.md, marginBottom: 6 }}>
@@ -644,13 +761,28 @@ export default function GoalsScreen() {
             <View style={styles.pickerRow}>
               {[0, 1, 2, 3, 4].map((offset) => {
                 const year = today.getFullYear() + offset;
+                // The whole year is out if even its last day falls before the min.
+                const disabled = isBeforeMin(year, 11, 31);
                 return (
                   <Pressable
                     key={year}
-                    onPress={() => setPickerYear(year)}
-                    style={[styles.pickerChip, pickerYear === year && styles.pickerChipActive]}
+                    disabled={disabled}
+                    onPress={() => {
+                      setPickerYear(year);
+                      // Landing on the min year can make the held month/day
+                      // infeasible — snap them forward so nothing invalid stays selected.
+                      if (minDeadline && isBeforeMin(year, pickerMonth, pickerDay)) {
+                        setPickerMonth(minDeadline.getMonth());
+                        setPickerDay(minDeadline.getDate());
+                      }
+                    }}
+                    style={[
+                      styles.pickerChip,
+                      pickerYear === year && styles.pickerChipActive,
+                      disabled && styles.chipDisabled,
+                    ]}
                   >
-                    <AppText variant="caption" color={pickerYear === year ? 'onDark' : 'textPrimary'}>
+                    <AppText variant="caption" color={disabled ? 'textTertiary' : pickerYear === year ? 'onDark' : 'textPrimary'}>
                       {year}
                     </AppText>
                   </Pressable>
@@ -662,41 +794,66 @@ export default function GoalsScreen() {
               Month
             </AppText>
             <View style={styles.pickerRow}>
-              {MONTH_SHORT.map((label, index) => (
-                <Pressable
-                  key={label}
-                  onPress={() => setPickerMonth(index)}
-                  style={[styles.pickerChip, pickerMonth === index && styles.pickerChipActive]}
-                >
-                  <AppText variant="caption" color={pickerMonth === index ? 'onDark' : 'textPrimary'}>
-                    {label}
-                  </AppText>
-                </Pressable>
-              ))}
+              {MONTH_SHORT.map((label, index) => {
+                // A month is out if its last day still falls before the min.
+                const lastDay = new Date(pickerYear, index + 1, 0).getDate();
+                const disabled = isBeforeMin(pickerYear, index, lastDay);
+                return (
+                  <Pressable
+                    key={label}
+                    disabled={disabled}
+                    onPress={() => {
+                      setPickerMonth(index);
+                      if (minDeadline && isBeforeMin(pickerYear, index, pickerDay)) {
+                        setPickerDay(minDeadline.getDate());
+                      }
+                    }}
+                    style={[
+                      styles.pickerChip,
+                      pickerMonth === index && styles.pickerChipActive,
+                      disabled && styles.chipDisabled,
+                    ]}
+                  >
+                    <AppText variant="caption" color={disabled ? 'textTertiary' : pickerMonth === index ? 'onDark' : 'textPrimary'}>
+                      {label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <AppText variant="micro" color="textTertiary" style={{ marginTop: spacing.sm }}>
               Day
             </AppText>
             <ScrollView style={styles.dayScroll} contentContainerStyle={styles.pickerRow}>
-              {Array.from({ length: daysInPickerMonth }, (_, i) => i + 1).map((day) => (
-                <Pressable
-                  key={day}
-                  onPress={() => setPickerDay(day)}
-                  style={[styles.dayChip, pickerDay === day && styles.pickerChipActive]}
-                >
-                  <AppText variant="caption" color={pickerDay === day ? 'onDark' : 'textPrimary'}>
-                    {day}
-                  </AppText>
-                </Pressable>
-              ))}
+              {Array.from({ length: daysInPickerMonth }, (_, i) => i + 1).map((day) => {
+                const disabled = isBeforeMin(pickerYear, pickerMonth, day);
+                return (
+                  <Pressable
+                    key={day}
+                    disabled={disabled}
+                    onPress={() => setPickerDay(day)}
+                    style={[styles.dayChip, pickerDay === day && styles.pickerChipActive, disabled && styles.chipDisabled]}
+                  >
+                    <AppText variant="caption" color={disabled ? 'textTertiary' : pickerDay === day ? 'onDark' : 'textPrimary'}>
+                      {day}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
 
             <View style={styles.modalActions}>
               <Button variant="outline" size="md" onPress={() => setDatePickerVisible(false)} style={{ flex: 1 }}>
                 Cancel
               </Button>
-              <Button variant="primary" size="md" onPress={confirmCustomDate} style={{ flex: 1 }}>
+              <Button
+                variant="primary"
+                size="md"
+                onPress={confirmCustomDate}
+                disabled={isBeforeMin(pickerYear, pickerMonth, pickerDay)}
+                style={{ flex: 1 }}
+              >
                 Use this date
               </Button>
             </View>
@@ -705,8 +862,8 @@ export default function GoalsScreen() {
       </Modal>
 
       {/* Contribute modal */}
-      <Modal visible={!!contributeGoal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={!!contributeGoal} animationType="fade" transparent onRequestClose={() => setContributeGoal(null)}>
+        <View style={styles.modalOverlay} accessibilityViewIsModal={true}>
           <View style={styles.modalCard}>
             <AppText variant="title" color="textPrimary" weight="bold" style={{ marginBottom: spacing.sm }}>
               Add funds
@@ -721,6 +878,13 @@ export default function GoalsScreen() {
               value={contributeAmount}
               onChangeText={setContributeAmount}
             />
+            {hasIncomeSetup && (
+              <AppText variant="micro" color={availableBalance > 0 ? 'textTertiary' : 'danger'} style={{ marginTop: 6 }}>
+                {availableBalance > 0
+                  ? `${formatCurrency(availableBalance)} left to spend this cycle`
+                  : 'No budget left this cycle'}
+              </AppText>
+            )}
             {!!contributeError && (
               <AppText variant="caption" color="danger" style={{ marginTop: spacing.sm }}>
                 {contributeError}
@@ -870,6 +1034,7 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   pickerChipActive: { backgroundColor: palette.primary, borderColor: palette.primary },
+  chipDisabled: { opacity: 0.35 },
   dayScroll: { maxHeight: 130 },
   dayChip: {
     width: 38,

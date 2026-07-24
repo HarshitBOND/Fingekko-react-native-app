@@ -4,9 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CelebrationHost from '../../components/celebrate/CelebrationHost';
 import Icon from '../../components/ui/Icon';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import { fontFamily, gradients, layout, palette, radius, shadows } from '../../constants/design';
+import { useCurrencySync } from '../../hooks/useCurrencySync';
 
 // ─── Custom Tab Bar Icon ─────────────────────────────────────────
 type TabIconProps = {
@@ -52,11 +54,16 @@ const hiddenScreen = { href: null, tabBarStyle: { display: 'none' as const } };
 export default function TabLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   const insets = useSafeAreaInsets();
+  // Load the user's display currency once, app-wide (AUDIT item 17).
+  useCurrencySync();
 
   if (!isLoaded) return <LoadingScreen />;
   if (!isSignedIn) return <Redirect href="/(auth)/login" />;
 
   return (
+    <>
+    {/* Streak / quest celebrations pop over whatever tab is in front. */}
+    <CelebrationHost />
     <Tabs
       // 'history' makes the hardware/UI back button return to the *previously
       // visited* screen instead of jumping to the first tab (Home) — the default
@@ -132,7 +139,17 @@ export default function TabLayout() {
           is padded to clear it (ScreenContainer / scrollContent handle that). */}
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="quests" options={{ href: null }} />
+      {/* Money personality — moved off the home screen onto its own page. */}
+      <Tabs.Screen name="personality" options={{ href: null }} />
+      {/* Streak flow: calendar keeps the nav bar; the celebration + success
+          pages are full-screen (their own bottom button) so they hide it. */}
+      <Tabs.Screen name="streak-calendar" options={{ href: null }} />
+      <Tabs.Screen name="streak-complete" options={hiddenScreen} />
+      <Tabs.Screen name="entry-added" options={hiddenScreen} />
       <Tabs.Screen name="safe-to-spend" options={{ href: null }} />
+      <Tabs.Screen name="transactions" options={{ href: null }} />
+      <Tabs.Screen name="import" options={{ href: null }} />
+      <Tabs.Screen name="essentials" options={{ href: null }} />
       <Tabs.Screen name="spend-impact" options={{ href: null }} />
       <Tabs.Screen name="spending-breakdown" options={{ href: null }} />
       <Tabs.Screen name="spending-trend" options={{ href: null }} />
@@ -151,6 +168,7 @@ export default function TabLayout() {
       <Tabs.Screen name="group/AddNewGroup" options={hiddenScreen} />
       <Tabs.Screen name="group/AddGroupExpense" options={hiddenScreen} />
     </Tabs>
+    </>
   );
 }
 

@@ -41,8 +41,9 @@ export default function ConfirmDialog({
             visible={visible}
             transparent
             animationType="fade"
+            onRequestClose={onCancel}
         >
-            <View style={styles.overlay}>
+            <View style={styles.overlay} accessibilityViewIsModal={true} accessibilityRole="alert">
                 <Card variant="tactile" style={styles.containerCard}>
                     <Text style={styles.title}>
                         {title}

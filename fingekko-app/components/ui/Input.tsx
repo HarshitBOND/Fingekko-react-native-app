@@ -55,6 +55,9 @@ export default function Input({
         <TextInput
           style={[styles.textInput, inputStyle]}
           placeholderTextColor={palette.textTertiary}
+          accessibilityLabel={props.accessibilityLabel || label}
+          accessibilityHint={props.accessibilityHint}
+          aria-invalid={!!error}
           onFocus={(e) => {
             setFocus(true);
             onFocus?.(e);

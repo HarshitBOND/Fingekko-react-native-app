@@ -11,6 +11,17 @@ const userSchema = new mongoose.Schema(
     // income lands on the 1st, since salaries often land mid-month.
     payday: { type: Number, default: null, min: 1, max: 31 },
     currency: { type: String, default: 'INR' },
+    // Untracked cash the user has told us they hold (declared via the overspend
+    // prompt). A persistent buffer that survives payday and is drawn down by any
+    // cycle's overspend, so "remaining balance" reflects real money on hand
+    // (AUDIT items 12/20). `cashInHandCycleStart` anchors the value to a pay
+    // cycle so settlement can subtract elapsed cycles' overspend exactly once.
+    cashInHand: { type: Number, default: 0, min: 0 },
+    cashInHandCycleStart: { type: String, default: null },
+    // Whether the user has completed the essentials/recurring-bills onboarding
+    // form (AUDIT item 10). Completing it with zero bills is valid — the flag,
+    // not the bill count, tells us to stop gating them into the form.
+    essentialsOnboarded: { type: Boolean, default: false },
     level: { type: Number, default: 1 },
     xp: { type: Number, default: 0, min: 0 },
     points: { type: Number, default: 0 , min: 0},

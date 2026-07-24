@@ -13,8 +13,8 @@ import AppText from '../../components/ui/AppText';
 import ProgressBar from '../../components/ProgressBar';
 import PressableScale from '../../components/ui/PressableScale';
 import { palette, spacing, layout, radius, shadows, gradients } from '../../constants/design';
-import { Goal, Transaction, UserProfile } from '../../constants/types';
-import { formatCurrency } from '../../utils/helpers';
+import { Goal, Transaction } from '../../constants/types';
+import { formatMoney } from '../../utils/currency';
 import { calculateSafeToSpend } from '../../utils/safe-to-spend';
 
 export default function SafeToSpendScreen() {
@@ -93,37 +93,19 @@ export default function SafeToSpendScreen() {
     }, [fadeAnim, isSignedIn, slideAnim])
   );
 
-  const profileSnapshot = useMemo<UserProfile | null>(() => {
-    if (!profile) {
-      return null;
-    }
-
-    return {
-      name: profile.name,
-      monthlyIncome: profile.monthlyIncome ?? 0,
-      currency: profile.currency ?? '₹',
-      xp: profile.xp,
-      level: profile.level,
-      personalityType: null,
-      streak: {
-        currentStrak: 0,
-        bestStreak: 0,
-        lastTrackedDate: '',
-        trackedDates: [],
-      },
-      achievements: [],
-    };
-  }, [profile]);
-
+  // Feed the raw profile straight in — calculateSafeToSpend now shares Home's
+  // pay-cycle engine (AUDIT item 19), which needs the real `payday`, so the old
+  // hand-built snapshot (which dropped it) is gone.
   const safeSpendData = useMemo(
-    () => calculateSafeToSpend({ profile: profileSnapshot, transactions, goals }),
-    [goals, profileSnapshot, transactions]
+    () => calculateSafeToSpend({ profile, transactions, goals }),
+    [goals, profile, transactions]
   );
 
-  const currency = profile?.currency ?? '₹';
+  // Personal figures format in the user's profile currency (AUDIT item 17),
+  // set app-wide by useCurrencySync.
   const formatAmount = (amount: number, minZero = false) => {
     const value = minZero ? Math.max(0, amount) : amount;
-    return formatCurrency(Math.round(value), currency);
+    return formatMoney(value);
   };
 
   return (
@@ -162,7 +144,7 @@ export default function SafeToSpendScreen() {
             </AppText>
           </View>
           <View style={styles.heroAmountRow}>
-            <AppText
+            <AppText numeric
               variant="display"
               color="primaryDeep"
               weight="extrabold"
@@ -205,7 +187,7 @@ export default function SafeToSpendScreen() {
               <AppText variant="micro" color="textSecondary" style={styles.metricLabel}>
                 Goal reserve/day
               </AppText>
-              <AppText variant="body" color="textPrimary" weight="bold" style={styles.metricValue}>
+              <AppText numeric variant="body" color="textPrimary" weight="bold" style={styles.metricValue}>
                 {formatAmount(safeSpendData.goalDailyReserve, true)}
               </AppText>
             </Card>
@@ -222,7 +204,7 @@ export default function SafeToSpendScreen() {
               <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
                 Income
               </AppText>
-              <AppText variant="bodySm" color="textPrimary" weight="bold">
+              <AppText numeric variant="bodySm" color="textPrimary" weight="bold">
                 {formatAmount(safeSpendData.cycleIncome, true)}
               </AppText>
             </View>
@@ -231,16 +213,32 @@ export default function SafeToSpendScreen() {
               <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
                 Expenses
               </AppText>
-              <AppText variant="bodySm" color="textPrimary" weight="bold">
+              <AppText numeric variant="bodySm" color="textPrimary" weight="bold">
                 {formatAmount(safeSpendData.cycleExpenses, true)}
               </AppText>
             </View>
+            {safeSpendData.unpaidEssentials > 0 && (
+              <View style={styles.summaryItem}>
+                <View style={[styles.summaryDot, { backgroundColor: palette.warning }]} />
+                <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
+                  Bills to pay
+                </AppText>
+                <AppText numeric variant="bodySm" color="textPrimary" weight="bold">
+                  {formatAmount(safeSpendData.unpaidEssentials, true)}
+                </AppText>
+              </View>
+            )}
             <View style={styles.summaryItem}>
-              <View style={[styles.summaryDot, { backgroundColor: palette.success }]} />
+              <View
+                style={[
+                  styles.summaryDot,
+                  { backgroundColor: safeSpendData.savings < 0 ? palette.danger : palette.success },
+                ]}
+              />
               <AppText variant="bodySm" color="textSecondary" style={styles.summaryLabel}>
-                Savings
+                {safeSpendData.savings < 0 ? 'Over budget' : 'Savings'}
               </AppText>
-              <AppText variant="bodySm" color="success" weight="bold">
+              <AppText numeric variant="bodySm" color={safeSpendData.savings < 0 ? 'danger' : 'success'} weight="bold">
                 {formatAmount(safeSpendData.savings)}
               </AppText>
             </View>

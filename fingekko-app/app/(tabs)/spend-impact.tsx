@@ -152,7 +152,7 @@ export default function SpendImpactScreen() {
                 <View key={c.label} style={styles.catRow}>
                   <View style={[styles.catDot, { backgroundColor: c.color }]} />
                   <AppText variant="label" style={styles.catName} numberOfLines={1}>{c.label}</AppText>
-                  <AppText variant="label" weight="bold">{formatAmount(c.amount)}</AppText>
+                  <AppText numeric variant="label" weight="bold">{formatAmount(c.amount)}</AppText>
                   <AppText variant="caption" weight="bold" style={{ color: c.color, minWidth: 40, textAlign: 'right' }}>
                     {c.share}%
                   </AppText>

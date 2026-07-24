@@ -18,6 +18,8 @@ interface ScreenContainerProps {
   refreshControl?: React.ReactElement<RefreshControlProps>;
   /** Fixed element rendered above the scroll area (e.g. a header). */
   header?: React.ReactNode;
+  /** Handle on the scroll view, for screens that need to drive it themselves. */
+  scrollRef?: React.RefObject<ScrollView | null>;
 }
 
 // floating nav clearance = bar height + bottom inset + a little air
@@ -38,6 +40,7 @@ export default function ScreenContainer({
   backgroundColor = palette.bg,
   refreshControl,
   header,
+  scrollRef,
 }: ScreenContainerProps) {
   const pad: ViewStyle = {
     paddingHorizontal: gutter ? layout.gutter : 0,
@@ -52,6 +55,7 @@ export default function ScreenContainer({
       {header}
       {scroll ? (
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[pad, contentStyle]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

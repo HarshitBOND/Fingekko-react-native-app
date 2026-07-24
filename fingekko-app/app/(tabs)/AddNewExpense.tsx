@@ -1,5 +1,7 @@
 import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { isAmountUnusual } from '@/utils/amount-guard';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useAuth } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Icon from '../../components/ui/Icon';
@@ -34,7 +36,7 @@ import {
   sumValues,
 } from '../../components/groups/splitModel';
 import { useToast } from '../../hooks/useToast';
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../constants/design';
+import { palette, spacing, radius, shadows, fontFamily, numericFontFamily, layout } from '../../constants/design';
 
 // Each category carries a lucide icon (rendered via the Icon lucide fallback),
 // shown in the picker and reflected on the category button once chosen.
@@ -88,6 +90,8 @@ export default function AddNewExpense() {
   const [category, setCategory] = useState<string>('');
   const [expenseIcon, setExpenseIcon] = useState<string>('');
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  // Held while the user confirms an unusually large shared total.
+  const [pendingConfirm, setPendingConfirm] = useState(false);
 
   const [friends, setFriends] = useState<FriendsResponse>({
     friends: [],
@@ -321,6 +325,17 @@ export default function AddNewExpense() {
       return;
     }
 
+    // A shared total this large is usually a typo — a hard ceiling only, since a
+    // group bill can legitimately dwarf any one person's typical solo spend.
+    if (isAmountUnusual(amountValue)) {
+      setPendingConfirm(true);
+      return;
+    }
+
+    await submitExpense();
+  };
+
+  const submitExpense = async () => {
     try {
       setSaving(true);
       const token = await getTokenRef.current();
@@ -684,6 +699,20 @@ export default function AddNewExpense() {
         }}
       />
 
+      <ConfirmDialog
+        visible={pendingConfirm}
+        title="That's a large amount"
+        message={`You're about to add a shared expense of ₹${Math.round(amountValue).toLocaleString('en-IN')}. Double-check you didn't add an extra zero.`}
+        confirmText="Yes, it's correct"
+        cancelText="Let me fix it"
+        loading={saving}
+        onCancel={() => setPendingConfirm(false)}
+        onConfirm={() => {
+          setPendingConfirm(false);
+          submitExpense();
+        }}
+      />
+
       {/* Category select sheet (unchanged behavior) */}
       <Modal visible={categoryPickerOpen} animationType="slide" transparent onRequestClose={() => setCategoryPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCategoryPickerOpen(false)}>
@@ -894,7 +923,7 @@ const styles = StyleSheet.create({
   },
   rupee: {
     fontSize: 22,
-    fontFamily: fontFamily.bold,
+    fontFamily: numericFontFamily.bold,
     color: palette.primaryDeep,
   },
   descriptionInput: {
@@ -909,7 +938,7 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     fontSize: 30,
-    fontFamily: fontFamily.bold,
+    fontFamily: numericFontFamily.bold,
     color: palette.textPrimary,
     borderBottomWidth: 1.5,
     borderBottomColor: palette.borderStrong,

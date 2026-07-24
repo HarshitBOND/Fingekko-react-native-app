@@ -10,11 +10,11 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import ScreenContainer from '@/components/ui/ScreenContainer';
 import SectionHeader from '@/components/ui/SectionHeader';
 import BalanceCard from './BalanceCard';
+import BillDueAlert from './BillDueAlert';
+import EssentialsPrompt from './EssentialsPrompt';
 import Header from './Header';
-import PlannerCard from './PlannerCard';
 import QuickActions from './QuickActions';
 import StatStrip from './StatStrip';
-import StreakCard from './StreakCard';
 import SuggestionsBar from './SuggestionsBar';
 import { useHomeScreen } from './hooks';
 
@@ -28,7 +28,6 @@ const Section = ({ delay, children }: { delay: number; children: React.ReactNode
 export function HomeScreen() {
   const home = useHomeScreen();
   const [refreshing, setRefreshing] = useState(false);
-  const [streakOpen, setStreakOpen] = useState(false);
 
   if (home.initialLoading) {
     return <LoadingScreen label="Getting your finances ready..." />;
@@ -67,11 +66,29 @@ export function HomeScreen() {
           spendProgress={home.spendProgress}
           remainingProgress={home.remainingProgress}
           hasIncomeSetup={home.hasIncomeSetup}
+          baseIncome={home.baseIncome}
+          incomeThisMonth={home.incomeThisMonth}
+          cashInHand={home.cashInHand}
+          unpaidEssentials={home.unpaidEssentials}
           payday={home.payday}
           savingIncome={home.savingIncome}
           onSaveIncome={home.saveIncomeSetup}
         />
       </Section>
+
+      {/* ─── Gate: ask for recurring bills once income is set (item 10) ─── */}
+      {home.needsEssentialsSetup && (
+        <Section delay={65}>
+          <EssentialsPrompt />
+        </Section>
+      )}
+
+      {/* ─── Nudge: an unpaid bill you can cover — pay it first (item 11) ─── */}
+      {home.showBillDueAlert && home.nextEssential && (
+        <Section delay={65}>
+          <BillDueAlert essential={home.nextEssential} />
+        </Section>
+      )}
 
       {/* ─── Secondary: act on it ─── */}
       <Section delay={90}>
@@ -86,20 +103,9 @@ export function HomeScreen() {
           questsDone={home.visibleStats?.questsDone}
           questsTarget={home.visibleStats?.questsTarget}
           betterThanYesterday={home.visibleStats?.betterThanYesterday}
-          streakOpen={streakOpen}
-          onToggleStreak={() => setStreakOpen((open) => !open)}
+          onViewStreak={() => router.push('/streak-calendar')}
         />
       </Section>
-
-      {streakOpen && (
-        <Section delay={0}>
-          <StreakCard
-            visibleDayStreak={home.visibleStats?.dayStreak}
-            visibleBestStreak={home.visibleStats?.bestStreak}
-            activeTransactions={home.activeTransactions}
-          />
-        </Section>
-      )}
 
       {/* ─── Today: the two things asking for attention right now ─── */}
       <Section delay={200}>
@@ -110,13 +116,6 @@ export function HomeScreen() {
         </View>
       </Section>
 
-      {/* ─── Looking ahead ─── */}
-      <Section delay={260}>
-        <View style={{ gap: spacing.md }}>
-          <SectionHeader title="Coming up" actionLabel="Insights" onAction={goToInsights} />
-          <PlannerCard onViewInsights={goToInsights} />
-        </View>
-      </Section>
     </ScreenContainer>
   );
 }

@@ -219,6 +219,10 @@ export function computeSpending(transactions: Transaction[], profile: ApiUser | 
   const weeklySpend = weekExpenses.reduce((sum, item) => sum + item.amount, 0);
 
   const monthlyIncome = profile?.monthlyIncome ?? 0;
+  // Recurring bills committed each month (AUDIT item 10) — surfaced so Insights
+  // doesn't contradict the Home/Safe-to-Spend picture of what's already spoken for.
+  const monthlyEssentials = profile?.monthlyEssentials ?? 0;
+  const unpaidEssentials = profile?.unpaidEssentials ?? 0;
   // Without a set income, base the weekly budget on last month's real spend
   // instead of inflating this week's own number.
   const weeklyBudget =
@@ -322,6 +326,8 @@ export function computeSpending(transactions: Transaction[], profile: ApiUser | 
     savedAmount: isSaving ? monthlyDeltaAbs : 0,
     savedPercent: isSaving ? monthlyDeltaPercent : 0,
     totalExpenses,
+    monthlyEssentials,
+    unpaidEssentials,
     // week
     weekStart,
     weeklySpend,

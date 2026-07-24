@@ -1,5 +1,7 @@
 import type { FriendsResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { isAmountUnusual } from '@/utils/amount-guard';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,7 +34,7 @@ import {
   sumValues,
 } from '../../../components/groups/splitModel';
 import { useToast } from '../../../hooks/useToast';
-import { fontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
+import { fontFamily, numericFontFamily, layout, palette, radius, shadows, spacing } from '../../../constants/design';
 
 const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Other'];
 
@@ -80,6 +82,8 @@ export default function AddGroupExpense() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Held while the user confirms an unusually large shared total.
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -245,6 +249,17 @@ export default function AddGroupExpense() {
       return;
     }
 
+    // A shared total this large is usually a typo — hard ceiling only (a group
+    // bill can legitimately dwarf any one person's typical solo spend).
+    if (isAmountUnusual(amountValue)) {
+      setPendingConfirm(true);
+      return;
+    }
+
+    await submitExpense();
+  };
+
+  const submitExpense = async () => {
     try {
       setSaving(true);
       const token = await getTokenRef.current();
@@ -487,6 +502,20 @@ export default function AddGroupExpense() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ConfirmDialog
+        visible={pendingConfirm}
+        title="That's a large amount"
+        message={`You're about to add a shared expense of ${inr(amountValue)}. Double-check you didn't add an extra zero.`}
+        confirmText="Yes, it's correct"
+        cancelText="Let me fix it"
+        loading={saving}
+        onCancel={() => setPendingConfirm(false)}
+        onConfirm={() => {
+          setPendingConfirm(false);
+          submitExpense();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -541,7 +570,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.xs,
   },
-  rupee: { fontSize: 22, fontFamily: fontFamily.bold, color: palette.primaryDeep },
+  rupee: { fontSize: 22, fontFamily: numericFontFamily.bold, color: palette.primaryDeep },
   descriptionInput: {
     flex: 1,
     fontSize: 18,
@@ -554,7 +583,7 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     fontSize: 30,
-    fontFamily: fontFamily.bold,
+    fontFamily: numericFontFamily.bold,
     color: palette.textPrimary,
     borderBottomWidth: 1.5,
     borderBottomColor: palette.borderStrong,

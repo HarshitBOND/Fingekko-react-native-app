@@ -8,14 +8,14 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui/Card";
 import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/pie-chart";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import { TrendingUp } from "lucide-react";
 
 export const description = "A pie chart with a label list";
@@ -93,7 +93,7 @@ export default function RoundedPieChart() {
                 fontSize={12}
                 fontWeight={500}
                 fill="currentColor"
-                formatter={(value: number) => value.toString()}
+                formatter={(value: any) => String(value ?? '')}
               />
             </Pie>
           </PieChart>

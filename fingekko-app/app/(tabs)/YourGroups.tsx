@@ -272,7 +272,7 @@ export default function YourGroups() {
                 <AppText variant="micro" style={{ color: owed ? palette.success : palette.danger }}>
                     {owed ? 'owes you' : 'you owe'}
                 </AppText>
-                <AppText variant="label" style={{ color: owed ? palette.success : palette.danger }}>
+                <AppText numeric variant="label" style={{ color: owed ? palette.success : palette.danger }}>
                     {inr(balance)}
                 </AppText>
             </View>
@@ -586,7 +586,7 @@ export default function YourGroups() {
                                                 {timeAgo(exp.createdAt)}
                                             </AppText>
                                         </View>
-                                        <AppText variant="label" color="textSecondary">
+                                        <AppText numeric variant="label" color="textSecondary">
                                             {inr(exp.amount)}
                                         </AppText>
                                     </Pressable>

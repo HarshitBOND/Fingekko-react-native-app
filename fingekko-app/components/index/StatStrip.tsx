@@ -9,9 +9,8 @@ type StatStripProps = {
   questsDone?: number;
   questsTarget?: number;
   betterThanYesterday?: number;
-  /** Whether the streak calendar below is currently expanded. */
-  streakOpen: boolean;
-  onToggleStreak: () => void;
+  /** Opens the full-screen Streak Calendar. */
+  onViewStreak: () => void;
 };
 
 type Stat = { icon: string; value: string; label: string; tint: string; fill: string };
@@ -27,8 +26,7 @@ export default function StatStrip({
   questsDone = 0,
   questsTarget = 0,
   betterThanYesterday,
-  streakOpen,
-  onToggleStreak,
+  onViewStreak,
 }: StatStripProps) {
   const stats: Stat[] = [
     { icon: 'Flame', value: String(dayStreak), label: 'day streak', tint: palette.warning, fill: palette.warningLight },
@@ -42,6 +40,17 @@ export default function StatStrip({
     },
   ];
 
+  // "Better than yesterday" is a signed % change in quests done, so it can be
+  // negative or zero — phrase each case honestly instead of "−50% better" (item 18).
+  const yesterdayLabel =
+    typeof betterThanYesterday !== 'number'
+      ? 'Track your streak over time'
+      : betterThanYesterday > 0
+        ? `${betterThanYesterday}% better than yesterday`
+        : betterThanYesterday < 0
+          ? `${Math.abs(betterThanYesterday)}% behind yesterday`
+          : 'On par with yesterday';
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
@@ -52,7 +61,7 @@ export default function StatStrip({
               <View style={[styles.iconWrap, { backgroundColor: stat.fill }]}>
                 <Icon name={stat.icon} size={16} color={stat.tint} clickable={false} />
               </View>
-              <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              <AppText variant="title" numeric numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {stat.value}
               </AppText>
               <AppText variant="micro" color="textTertiary" numberOfLines={1}>
@@ -63,22 +72,15 @@ export default function StatStrip({
         ))}
       </View>
 
-      <Pressable style={styles.footer} onPress={onToggleStreak} hitSlop={6}>
+      <Pressable style={styles.footer} onPress={onViewStreak} hitSlop={6}>
         <AppText variant="caption" color="textSecondary">
-          {typeof betterThanYesterday === 'number'
-            ? `${betterThanYesterday}% better than yesterday`
-            : 'Track your streak over time'}
+          {yesterdayLabel}
         </AppText>
         <View style={styles.footerAction}>
           <AppText variant="micro" color="primaryDeep">
-            {streakOpen ? 'Hide calendar' : 'Streak calendar'}
+            View streak calendar
           </AppText>
-          <Icon
-            name={streakOpen ? 'ChevronUp' : 'ChevronDown'}
-            size={14}
-            color={palette.primaryDeep}
-            clickable={false}
-          />
+          <Icon name="ChevronRight" size={14} color={palette.primaryDeep} clickable={false} />
         </View>
       </Pressable>
     </View>

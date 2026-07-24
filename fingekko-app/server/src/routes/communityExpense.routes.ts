@@ -338,6 +338,9 @@ router.post('/', async (req: Request, res: Response) => {
           amount: roundTwo(myShare),
           category: req.body?.category ? String(req.body.category) : 'Other',
           date: String(req.body?.expenseDate ?? new Date().toISOString()),
+          // Marks this as shared spending so the personality engine can measure
+          // the social ratio without double-counting the community expense.
+          isSplit: true,
         });
       } catch (mirrorError) {
         console.error('Failed to mirror expense into transactions:', mirrorError);

@@ -11,6 +11,7 @@ import { DIFFICULTY_META, QUEST_TYPE_META } from '@/constants/quests';
 import { gradients, layout, palette, radius, shadows, spacing } from '@/constants/design';
 import { useQuests, type ActiveQuest } from '@/hooks/useQuests';
 import HeroCard from '@/components/ui/HeroCard';
+import { formatCurrencyCopy } from '@/utils/currency';
 
 function QuestRow({
   quest,
@@ -25,6 +26,9 @@ function QuestRow({
   const difficultyMeta = DIFFICULTY_META[quest.difficulty] ?? DIFFICULTY_META[3];
   const isDone = quest.status === 'completed';
   const isFailed = quest.status === 'failed';
+  // Auto quests are judged from real spending — no manual buttons, and they can
+  // flip on their own as the day's transactions come in.
+  const isAuto = quest.verify === 'auto';
 
   return (
     <View style={[styles.card, isDone && styles.cardDone, isFailed && styles.cardFailed]}>
@@ -36,16 +40,16 @@ function QuestRow({
         <View style={styles.cardHeadings}>
           {/* No numberOfLines — quest names wrap instead of being cut off. */}
           <AppText variant="title" style={isDone ? styles.doneText : undefined}>
-            {quest.title}
+            {formatCurrencyCopy(quest.title)}
           </AppText>
           <AppText variant="caption" color="textSecondary" style={styles.description}>
-            {quest.description}
+            {formatCurrencyCopy(quest.description)}
           </AppText>
         </View>
 
         <View style={styles.xpBadge}>
           <Icon name="Zap" size={12} color={palette.warning} clickable={false} />
-          <AppText variant="micro" color="warning">
+          <AppText variant="micro" numeric color="warning">
             {quest.xp}
           </AppText>
         </View>
@@ -62,44 +66,69 @@ function QuestRow({
             {difficultyMeta.label}
           </AppText>
         </View>
+        {isAuto && (
+          <View style={[styles.tag, { backgroundColor: palette.infoLight }]}>
+            <Icon name="Sparkles" size={11} color={palette.info} clickable={false} />
+            <AppText variant="micro" color="info">
+              Auto-verified
+            </AppText>
+          </View>
+        )}
         {isDone && (
           <View style={[styles.tag, { backgroundColor: palette.successLight }]}>
             <Icon name="Check" size={11} color={palette.success} clickable={false} />
             <AppText variant="micro" color="success">
-              Complete
+              {isAuto ? 'On track' : 'Complete'}
             </AppText>
           </View>
         )}
         {isFailed && (
           <View style={[styles.tag, { backgroundColor: palette.dangerLight }]}>
             <AppText variant="micro" color="danger">
-              Skipped today
+              {isAuto ? 'Not met' : 'Skipped today'}
             </AppText>
           </View>
         )}
       </View>
 
-      <View style={styles.actionRow}>
-        <Pressable
-          style={({ pressed }) => [styles.action, isDone && styles.actionDoneActive, pressed && styles.pressed]}
-          onPress={onComplete}
-        >
-          <Icon name="Check" size={15} color={isDone ? palette.white : palette.success} clickable={false} />
-          <AppText variant="label" style={{ color: isDone ? palette.white : palette.success }}>
-            {isDone ? 'Completed' : 'Mark done'}
+      {isAuto ? (
+        // No manual control: this quest is settled from the day's real spending.
+        <View style={styles.autoNote}>
+          <Icon
+            name={isFailed ? 'CircleAlert' : 'ShieldCheck'}
+            size={15}
+            color={isFailed ? palette.danger : palette.info}
+            clickable={false}
+          />
+          <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
+            {isFailed
+              ? 'You went over — this one auto-failed for today.'
+              : "Tracked automatically from your spending. Stay on track and the XP is yours."}
           </AppText>
-        </Pressable>
+        </View>
+      ) : (
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.action, isDone && styles.actionDoneActive, pressed && styles.pressed]}
+            onPress={onComplete}
+          >
+            <Icon name="Check" size={15} color={isDone ? palette.white : palette.success} clickable={false} />
+            <AppText variant="label" style={{ color: isDone ? palette.white : palette.success }}>
+              {isDone ? 'Completed' : 'Mark done'}
+            </AppText>
+          </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [styles.action, styles.actionSkip, isFailed && styles.actionSkipActive, pressed && styles.pressed]}
-          onPress={onFail}
-        >
-          <Icon name="X" size={15} color={isFailed ? palette.white : palette.textSecondary} clickable={false} />
-          <AppText variant="label" style={{ color: isFailed ? palette.white : palette.textSecondary }}>
-            Skip
-          </AppText>
-        </Pressable>
-      </View>
+          <Pressable
+            style={({ pressed }) => [styles.action, styles.actionSkip, isFailed && styles.actionSkipActive, pressed && styles.pressed]}
+            onPress={onFail}
+          >
+            <Icon name="X" size={15} color={isFailed ? palette.white : palette.textSecondary} clickable={false} />
+            <AppText variant="label" style={{ color: isFailed ? palette.white : palette.textSecondary }}>
+              Skip
+            </AppText>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -144,9 +173,9 @@ export default function QuestsScreen() {
             <AppText variant="label" color="onDarkMuted">
               {allDone ? 'Board cleared' : 'Quest board'}
             </AppText>
-            <AppText variant="hero" color="onDark" style={{ marginTop: 2 }}>
+            <AppText variant="hero" numeric color="onDark" style={{ marginTop: 2 }}>
               {completedCount}
-              <AppText variant="h2" color="onDarkMuted">
+              <AppText variant="h2" numeric color="onDarkMuted">
                 {' '}
                 / {totalCount}
               </AppText>
@@ -177,7 +206,7 @@ export default function QuestsScreen() {
             <AppText variant="micro" color="onDarkMuted">
               XP EARNED
             </AppText>
-            <AppText variant="title" color="onDark">
+            <AppText variant="title" numeric color="onDark">
               {earnedXp}
             </AppText>
           </View>
@@ -186,7 +215,7 @@ export default function QuestsScreen() {
             <AppText variant="micro" color="onDarkMuted">
               UP FOR GRABS
             </AppText>
-            <AppText variant="title" color="onDark">
+            <AppText variant="title" numeric color="onDark">
               {availableXp}
             </AppText>
           </View>
@@ -305,6 +334,15 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
 
+  autoNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: palette.infoLight,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   action: {
     flex: 1,

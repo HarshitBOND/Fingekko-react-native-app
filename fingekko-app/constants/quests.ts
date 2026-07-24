@@ -45,6 +45,14 @@ export const DIFFICULTY_META: Record<number, { label: string; color: string; tin
   5: { label: 'Legendary', color: '#8B5CF6', tint: '#F1EBFE' },
 };
 
+/**
+ * @deprecated The authoritative quest bank now lives on the server
+ * (`server/src/quests/questBank.ts`) — it owns quest content, XP, difficulty and
+ * the `self`/`auto` split, and ships each board fully enriched to the client
+ * (AUDIT items 29–31). This client copy is no longer read by `useQuests`; only
+ * `QUEST_TYPE_META` / `DIFFICULTY_META` above are still used, for display. Do not
+ * edit the entries below expecting a gameplay effect — change the server bank.
+ */
 export const QUEST_BANK: Quest[] = [
   {
     id: 1,

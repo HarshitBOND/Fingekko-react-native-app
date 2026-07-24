@@ -13,6 +13,9 @@ type UpdateUserData = Partial<{
   monthlyIncome: number;
   payday: number | null;
   currency: string;
+  cashInHand: number;
+  cashInHandCycleStart: string | null;
+  essentialsOnboarded: boolean;
 }>
 
 type UpdateUserClerkData = Partial<{
@@ -67,6 +70,17 @@ async function updateById(id: string, update: UpdateUserData) {
   return User.findByIdAndUpdate(id, update, { new: true }).lean();
 }
 
+// Atomically move the cash-in-hand buffer by `delta`, clamped at 0 (declaring
+// cash is a positive delta; a correction can be negative). The aggregation
+// pipeline keeps the read-modify-write atomic. AUDIT item 12.
+async function incrementCashInHand(id: string, delta: number) {
+  return User.findByIdAndUpdate(
+    id,
+    [{ $set: { cashInHand: { $max: [0, { $add: [{ $ifNull: ['$cashInHand', 0] }, delta] }] } } }],
+    { new: true },
+  ).lean();
+}
+
 type UpdateUserStatsData = Partial<{
   dayStreak: number;
   bestStreak: number;
@@ -111,9 +125,12 @@ async function awardXp(userId: string, xpDelta: number): Promise<AwardXpResult> 
   const previous = await User.findById(userId).select('level').lean<{ level: number } | null>();
   const previousLevel = previous?.level ?? 1;
 
+  // Clamp xp at 0 atomically: a negative delta (e.g. reversing a deleted
+  // transaction's award, or a failed-quest penalty) must never push xp below
+  // zero. An aggregation-pipeline update keeps the read-modify-write atomic.
   const updated = await User.findByIdAndUpdate(
     userId,
-    { $inc: { xp: xpDelta } },
+    [{ $set: { xp: { $max: [0, { $add: [{ $ifNull: ['$xp', 0] }, xpDelta] }] } } }],
     { new: true }
   ).select('xp level').lean<{ xp: number; level: number } | null>();
 
@@ -121,6 +138,8 @@ async function awardXp(userId: string, xpDelta: number): Promise<AwardXpResult> 
     throw new Error('User not found');
   }
 
+  // Level is monotonic: it climbs when xp crosses a threshold but never drops
+  // when xp is spent/reversed — losing xp shouldn't demote the user.
   const nextLevel = Math.floor(Math.max(0, updated.xp ?? 0) / XP_PER_LEVEL) + 1;
   const leveledUp = nextLevel > previousLevel;
 
@@ -128,9 +147,12 @@ async function awardXp(userId: string, xpDelta: number): Promise<AwardXpResult> 
     await User.findByIdAndUpdate(userId, { level: nextLevel });
   }
 
+  // Report the level the user actually keeps (never below where they were).
+  const effectiveLevel = Math.max(previousLevel, nextLevel);
+
   return {
     xp: updated.xp ?? 0,
-    level: nextLevel,
+    level: effectiveLevel,
     leveledUp,
     xpDelta,
   };
@@ -184,6 +206,7 @@ export {
   findByClerkId,
   updateByclerkId,
   updateById,
+  incrementCashInHand,
   updateUserStats,
   updateGoalStats,
   awardXp,

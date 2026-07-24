@@ -1,4 +1,8 @@
+// expo-image aliased: RN's Image (used elsewhere in this file) can't decode
+// WebP on iOS.
+import { Image as ExpoImage } from 'expo-image';
 import Navbar from '@/components/Navbar';
+import { currencySymbol } from '@/utils/currency';
 import { getLevelProgress } from '@/utils/gamification';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -15,6 +19,8 @@ import { buildMonthlyComparison } from './compute';
 import { s } from './style';
 import { useSpendingData } from './useSpendingData';
 
+const TREE_ART = require('@/assets/images/tree.webp');
+
 // Gekko Guidance, Unlock Smart Saver, and Quick Tip are parked for a later
 // version — flip this to re-enable them without re-plumbing anything.
 const ENABLE_LATER_CARDS = false;
@@ -30,7 +36,13 @@ const iconForCategory = (label: string) => {
 };
 
 export default function InsightsScreen() {
-  const { profile, transactions, currency, formatAmount, data, now } = useSpendingData();
+  const { profile, transactions, formatAmount, data, cycle, now } = useSpendingData();
+
+  // Reflect the Home card's debt state so Insights never contradicts it (item 25).
+  // Only meaningful once income is set up (salary or income logged this cycle) —
+  // otherwise "remaining balance" is just negated spend, same gate Home uses.
+  const hasIncomeSetup = (profile?.monthlyIncome ?? 0) > 0 || cycle.incomeThisMonth > 0;
+  const inDebt = hasIncomeSetup && cycle.remainingBalance < 0;
   const { width: screenW } = useWindowDimensions();
 
   // ── Routes ──
@@ -134,12 +146,14 @@ export default function InsightsScreen() {
     : [{ value: 1, color: palette.track }];
   const weekLegend = data.weekCategories.slice(0, 5);
 
-  // Compact money for chart labels (₹1.2k) so bars/bubbles stay legible.
+  // Compact money for chart labels (₹1.2k) so bars/bubbles stay legible. Uses the
+  // active currency symbol (AUDIT item 17), not a hard-coded ₹.
   const compactAmount = (n: number) => {
+    const sym = currencySymbol();
     const v = Math.round(n);
-    if (v >= 100000) return `${currency}${(v / 100000).toFixed(1)}L`;
-    if (v >= 1000) return `${currency}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
-    return `${currency}${v}`;
+    if (v >= 100000) return `${sym}${(v / 100000).toFixed(1)}L`;
+    if (v >= 1000) return `${sym}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+    return `${sym}${v}`;
   };
 
   // Day-by-day bar series (rounded-cap bars; today and the busiest day stand out).
@@ -333,6 +347,51 @@ export default function InsightsScreen() {
               </Text>
             </View>
           </View>
+
+          {/* Over-budget this cycle (AUDIT item 25) — mirrors the Home hero card's
+              debt state so Insights never reads rosier than the real position. */}
+          {inDebt && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 14,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 10,
+                backgroundColor: palette.dangerLight,
+              }}
+            >
+              <Icon name="TrendingDown" size={13} color={palette.danger} clickable={false} />
+              <Text style={{ flex: 1, fontSize: 12, color: AMOUNT_DARK, fontFamily: fontFamily.semibold }}>
+                Over budget this cycle by {formatAmount(Math.abs(cycle.remainingBalance))}
+              </Text>
+            </View>
+          )}
+
+          {/* Recurring bills committed each month (AUDIT item 10) — keeps Insights
+              consistent with what Home/Safe-to-Spend reserve against essentials. */}
+          {data.monthlyEssentials > 0 && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 14,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 10,
+                backgroundColor: palette.warningLight,
+              }}
+            >
+              <Icon name="ReceiptText" size={13} color={palette.warning} clickable={false} />
+              <Text style={{ flex: 1, fontSize: 12, color: AMOUNT_DARK, fontFamily: fontFamily.medium }}>
+                {formatAmount(data.monthlyEssentials)}/mo committed to bills
+                {data.unpaidEssentials > 0 ? ` · ${formatAmount(data.unpaidEssentials)} still to pay` : ' · all paid'}
+              </Text>
+            </View>
+          )}
 
           {/* Smooth trend lines: this month vs last month, plus a dashed forecast.
               No fill / no y-axis for a clean glance; the full report is interactive. */}
@@ -608,7 +667,11 @@ export default function InsightsScreen() {
             accessibilityLabel="Open spend impact detail"
           >
             <View style={s.visualSection}>
-              <Image source={require('../../assets/images/tree.png')} style={s.treeImage} resizeMode="cover" />
+              {/* Was an SVG component (1.5MB source); now a 32KB WebP, which
+                  also lets the platform decode it off the JS thread. */}
+              <View style={s.treeImage} pointerEvents="none">
+                <ExpoImage source={TREE_ART} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+              </View>
               <LinearGradient
                 colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.15)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.92)']}
                 start={{ x: 0, y: 0 }}
@@ -649,7 +712,9 @@ export default function InsightsScreen() {
           <>
             <TouchableOpacity style={s.guidanceCard} onPress={goImpact} activeOpacity={0.8}>
               <View style={s.guidanceImgWrap}>
-                <Image source={require('../../assets/images/cardImageMonkgekko.png')} style={s.guidanceImg} resizeMode="contain" />
+                {/* WebP: Metro bundles this require() even though the card is behind
+                    ENABLE_LATER_CARDS, so the old 252KB PNG was shipping unused. */}
+                <ExpoImage source={require('../../assets/images/personality-strategist.webp')} style={s.guidanceImg} contentFit="contain" />
               </View>
               <View style={s.guidanceContent}>
                 <Text style={s.guidanceLabel}>GEKKO GUIDANCE</Text>
@@ -690,7 +755,7 @@ export default function InsightsScreen() {
               <Text style={{ fontSize: 18 }}>💡</Text>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={s.tipTitle}>Quick tip</Text>
-                <Text style={s.tipText}>Track subscriptions you don&apos;t use. You could save up to ₹600/month!</Text>
+                <Text style={s.tipText}>Track subscriptions you don&apos;t use. You could save up to {currencySymbol()}600/month!</Text>
               </View>
               <Icon name="ChevronRight" size={16} color="#000000" clickable={false} />
             </TouchableOpacity>

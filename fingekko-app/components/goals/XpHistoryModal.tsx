@@ -35,7 +35,7 @@ function relativeTime(ts: number): string {
 export default function XpHistoryModal({ visible, events, loading, onClose }: XpHistoryModalProps) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} accessibilityViewIsModal={true}>
         <View style={styles.card}>
           <View style={styles.headerRow}>
             <AppText variant="title" weight="bold" color="textPrimary">

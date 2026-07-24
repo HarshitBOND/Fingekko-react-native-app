@@ -393,7 +393,7 @@ export default function SpendingTrendScreen() {
               <View style={[styles.insightDot, { backgroundColor: palette.primary }]} />
               <AppText variant="bodySm" color="textPrimary" style={{ flex: 1 }}>
                 At this pace you&apos;re on track to spend about{' '}
-                <AppText variant="bodySm" weight="bold">{formatAmount(projectedEnd)}</AppText>{' '}
+                <AppText numeric variant="bodySm" weight="bold">{formatAmount(projectedEnd)}</AppText>{' '}
                 by {MONTH_NAMES[selectedMonth]} {daysInMonth}
                 {lastMonthTotal > 0
                   ? projectedEnd <= lastMonthTotal

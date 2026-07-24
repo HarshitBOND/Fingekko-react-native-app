@@ -1,16 +1,19 @@
 // utils/helpers.ts
 // 🛠️ Small reusable helper functions
 
+import { formatMoney } from './currency';
+
 // Generate a unique ID for transactions, goals, etc.
 // Uses timestamp + random number = practically unique every time
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Format a number as Indian currency
-// e.g. 45000 → ₹45,000
-export function formatCurrency(amount: number, currency = '₹'): string {
-  return `${currency}${amount.toLocaleString('en-IN')}`;
+// Format a personal money figure in the user's profile currency (AUDIT item 17).
+// Thin wrapper over the central formatter so existing callers keep working while
+// respecting the user's currency instead of a hard-coded ₹.
+export function formatCurrency(amount: number): string {
+  return formatMoney(amount);
 }
 
 // Format date to readable string

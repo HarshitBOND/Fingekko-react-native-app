@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { connectDb, getDbStatus } from "./db.js";
 import clerkWebhookRoutes from "./routes/clerkWebhook.js";
+import essentialRoutes from "./routes/essential.routes.js";
 import expenseRoutes from "./routes/communityExpense.routes.js";
 import friendRoutes from "./routes/friends.routes.js";
 import goalRoutes from "./routes/goal.routes.js";
@@ -68,6 +69,7 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/goals", goalRoutes);
+app.use("/api/essentials", essentialRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 

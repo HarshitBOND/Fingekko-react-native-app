@@ -7,6 +7,12 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     category: { type: String, required: true },
     date: { type: String, required: true },
+    // True when this row mirrors the user's share of a shared expense. Splits
+    // are already mirrored here so Home/Insights include them, which means the
+    // personality engine must be able to tell them apart rather than counting
+    // the community expense a second time. Defaults false, so existing rows
+    // stay valid without a migration.
+    isSplit: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

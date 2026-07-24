@@ -146,7 +146,7 @@ export default function AdjustSplitModal({ visible, totalAmount, people, value, 
     return (
       <View style={styles.pctRow}>
         {!!previewOwed[person.id] && (
-          <AppText variant="micro" color="textTertiary">{inr(previewOwed[person.id])}</AppText>
+          <AppText numeric variant="micro" color="textTertiary">{inr(previewOwed[person.id])}</AppText>
         )}
         <View style={styles.amountBox}>
           <TextInput
@@ -226,7 +226,7 @@ export default function AdjustSplitModal({ visible, totalAmount, people, value, 
               <View style={{ flex: 1 }}>
                 <AppText variant="label" numberOfLines={1}>{person.isYou ? 'You' : person.name}</AppText>
                 {mode === 'equally' && selectedIds.includes(person.id) && (
-                  <AppText variant="micro" color="textTertiary">{inr(equalPreview[person.id] ?? perPerson)}</AppText>
+                  <AppText numeric variant="micro" color="textTertiary">{inr(equalPreview[person.id] ?? perPerson)}</AppText>
                 )}
               </View>
               {renderRight(person)}

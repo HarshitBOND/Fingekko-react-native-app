@@ -1,11 +1,14 @@
 import type { ApiUser, ProfileResponse } from '@/types';
 import { apiRequest } from '@/utils/api';
+import { formatMoney } from '@/utils/currency';
 import { getLevelProgress } from '@/utils/gamification';
 import { useAuth, useUser } from '@clerk/clerk-expo';
-import { useFocusEffect } from 'expo-router';
+import Constants from 'expo-constants';
+import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, View } from 'react-native';
 import Navbar from '../../components/Navbar';
 import ScreenContainer from '../../components/ui/ScreenContainer';
 import Card from '../../components/ui/Card';
@@ -15,6 +18,29 @@ import Icon from '../../components/ui/Icon';
 import Toast from '../../components/ui/Toast';
 import { useToast } from '../../hooks/useToast';
 import { palette, spacing, layout, radius, shadows } from '../../constants/design';
+
+const extra = Constants.expoConfig?.extra ?? {};
+const WEBSITE_URL = String(extra.websiteUrl ?? 'https://www.fingekko.com');
+const PRIVACY_URL = String(extra.privacyPolicyUrl ?? `${WEBSITE_URL}/privacy`);
+const APP_VARIANT = String(extra.appVariant ?? 'production');
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+
+const LEGAL_LINKS = [
+  { label: 'Privacy Policy', url: PRIVACY_URL, icon: 'Shield' },
+  { label: 'About FinGekko', url: WEBSITE_URL, icon: 'CircleAlert' },
+] as const;
+
+/**
+ * Opens in an in-app browser so the user keeps their session and can swipe
+ * back, falling back to the system browser if that isn't available.
+ */
+const openLink = async (url: string) => {
+  try {
+    await WebBrowser.openBrowserAsync(url);
+  } catch {
+    Linking.openURL(url).catch(() => {});
+  }
+};
 
 export default function ProfileScreen() {
   const { getToken, isSignedIn, signOut } = useAuth();
@@ -209,10 +235,55 @@ export default function ProfileScreen() {
             Monthly income
           </AppText>
           <AppText variant="body" color="textPrimary" weight="bold">
-            {profile?.currency ?? 'Rs. '}{profile?.monthlyIncome ?? 0}
+            {formatMoney(profile?.monthlyIncome ?? 0)}
           </AppText>
         </View>
       </Card>
+
+      {/* Manage — quick access to the recurring-bills list (AUDIT item 10). */}
+      <Card variant="elevated" padding={0} style={styles.legalCard}>
+        <Pressable
+          onPress={() => router.push('/(tabs)/essentials')}
+          style={({ pressed }) => [styles.legalRow, pressed && styles.legalRowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Manage bills and essentials"
+        >
+          <Icon name="ReceiptText" size={18} color={palette.textSecondary} clickable={false} />
+          <AppText variant="bodySm" style={{ flex: 1 }}>
+            Bills &amp; essentials
+          </AppText>
+          <Icon name="ChevronRight" size={16} color={palette.textTertiary} clickable={false} />
+        </Pressable>
+      </Card>
+
+      {/* Legal — Play requires a reachable privacy policy, and users should not
+          have to leave the app to find it. */}
+      <Card variant="elevated" padding={0} style={styles.legalCard}>
+        {LEGAL_LINKS.map((link, index) => (
+          <Pressable
+            key={link.label}
+            onPress={() => openLink(link.url)}
+            style={({ pressed }) => [
+              styles.legalRow,
+              index > 0 && styles.legalRowDivided,
+              pressed && styles.legalRowPressed,
+            ]}
+            accessibilityRole="link"
+            accessibilityLabel={link.label}
+          >
+            <Icon name={link.icon} size={18} color={palette.textSecondary} clickable={false} />
+            <AppText variant="bodySm" style={{ flex: 1 }}>
+              {link.label}
+            </AppText>
+            <Icon name="ChevronRight" size={16} color={palette.textTertiary} clickable={false} />
+          </Pressable>
+        ))}
+      </Card>
+
+      <AppText variant="micro" color="textTertiary" align="center">
+        FinGekko v{APP_VERSION}
+        {APP_VARIANT !== 'production' ? ` · ${APP_VARIANT}` : ''}
+      </AppText>
 
       {error ? (
         <AppText variant="bodySm" color="danger" weight="bold" style={styles.errorText}>
@@ -310,6 +381,24 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
+  },
+  legalCard: {
+    overflow: 'hidden',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
+    minHeight: 52,
+  },
+  legalRowDivided: {
+    borderTopWidth: 1,
+    borderTopColor: palette.divider,
+  },
+  legalRowPressed: {
+    backgroundColor: palette.cardMuted,
   },
   signOutButton: {
     marginTop: spacing.sm,

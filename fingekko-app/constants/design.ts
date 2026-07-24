@@ -164,9 +164,36 @@ export const fontFamily = {
 
 export type FontWeightName = keyof typeof fontFamily;
 
+/**
+ * Numerals stay in Plus Jakarta — same face as the prose around them. A serif
+ * numeral was tried here and read as a different app bolted onto this one; the
+ * only thing numbers need is *tabular* figures, so a counting balance or a live
+ * streak doesn't jitter as digits change width.
+ */
+export const numericFontFamily = fontFamily;
+
+/**
+ * Noto Serif Display — the one exception, kept for the streak calendar's day
+ * cells and year label. Dense grids of figures are where a display serif earns
+ * its keep, and the calendar is the only such grid in the app.
+ */
+export const calendarNumericFontFamily = {
+  regular: 'NotoSerifDisplay_400Regular',
+  medium: 'NotoSerifDisplay_500Medium',
+  semibold: 'NotoSerifDisplay_600SemiBold',
+  bold: 'NotoSerifDisplay_700Bold',
+  extrabold: 'NotoSerifDisplay_800ExtraBold',
+} as const satisfies Record<FontWeightName, string>;
+
 /** Map a semantic weight to the correct Plus Jakarta face (weight is encoded in the family). */
 export const font = (weight: FontWeightName = 'regular'): TextStyle => ({
   fontFamily: fontFamily[weight],
+});
+
+/** Numeric type: the prose face plus tabular figures. */
+export const numericFont = (weight: FontWeightName = 'bold'): TextStyle => ({
+  fontFamily: numericFontFamily[weight],
+  fontVariant: ['tabular-nums'],
 });
 
 export type TypographyVariant =
@@ -194,8 +221,27 @@ export const typography: Record<TypographyVariant, TextStyle> = {
   label: { fontFamily: fontFamily.semibold, fontSize: 14, lineHeight: 20 },
   caption: { fontFamily: fontFamily.medium, fontSize: 13, lineHeight: 18 },
   micro: { fontFamily: fontFamily.semibold, fontSize: 11, lineHeight: 14, letterSpacing: 0.3 },
-  money: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, letterSpacing: -0.3 },
-  moneyLg: { fontFamily: fontFamily.extrabold, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  // Money variants are numerals by definition — tabular figures already applied.
+  money: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  moneyLg: { fontFamily: fontFamily.extrabold, fontSize: 34, lineHeight: 40, letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
+};
+
+/**
+ * The calendar serif runs shorter than Plus Jakarta at the same point size and
+ * its figures close up under negative tracking, so serif numerals get their own
+ * line-height and neutral letter-spacing. Only applies to `numeric="serif"`.
+ */
+export const serifNumericVariantOverrides: Partial<Record<TypographyVariant, TextStyle>> = {
+  display: { fontSize: 40, lineHeight: 52, letterSpacing: 0 },
+  hero: { fontSize: 34, lineHeight: 44, letterSpacing: 0 },
+  h1: { fontSize: 28, lineHeight: 38, letterSpacing: 0 },
+  h2: { fontSize: 22, lineHeight: 30, letterSpacing: 0 },
+  title: { fontSize: 18, lineHeight: 26, letterSpacing: 0 },
+  body: { letterSpacing: 0 },
+  bodySm: { letterSpacing: 0 },
+  label: { letterSpacing: 0 },
+  caption: { letterSpacing: 0 },
+  micro: { letterSpacing: 0.2 },
 };
 
 /* Whether the custom font actually loaded (set from _layout after useFonts). Kept
@@ -211,7 +257,10 @@ export default {
   shadows,
   motion,
   fontFamily,
+  numericFontFamily,
+  calendarNumericFontFamily,
   font,
+  numericFont,
   typography,
 };
 

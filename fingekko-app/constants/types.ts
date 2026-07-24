@@ -40,6 +40,12 @@ export interface Achievement{
 export interface UserProfile{
     name: string;
     monthlyIncome: number;
+    /** Persistent untracked-cash buffer, drawn down at payday (AUDIT items 12/20). */
+    cashInHand?: number;
+    /** Sum of recurring essentials/bills per month (AUDIT item 10). */
+    monthlyEssentials?: number;
+    /** Essentials not yet marked paid this month (money still to go out). */
+    unpaidEssentials?: number;
     xp: number;
     level: number;
     currency: string;
@@ -52,7 +58,10 @@ export interface Category{
     id: string;
     label: string;
     emoji : string;
+    /** Ionicons glyph name (legacy surfaces). */
     icon: string;
+    /** Lucide name for the shared `Icon` component — what new screens render. */
+    lucide: string;
     color: string;
     type: TransactionType;
 }

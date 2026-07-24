@@ -17,7 +17,7 @@ import AddMembersModal from '../../../components/groups/AddMembersModal';
 import Toast from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
 
-import { palette, spacing, radius, shadows, fontFamily, layout } from '../../../constants/design';
+import { palette, spacing, radius, shadows, fontFamily, numericFontFamily, layout } from '../../../constants/design';
 
 const COLORS = {
   bg: palette.bg,
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   balanceTitle: { fontSize: 17, fontFamily: fontFamily.bold, color: COLORS.textDark, flex: 1, marginRight: 8 },
-  balanceAmount: { fontSize: 20, fontFamily: fontFamily.bold, color: COLORS.green },
+  balanceAmount: { fontSize: 20, fontFamily: numericFontFamily.bold, color: COLORS.green },
   balanceNote: { fontSize: 12, color: COLORS.textGray, marginTop: 6, fontFamily: fontFamily.medium },
 
   quickActionsGrid: {
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   memberRightLabel: { fontSize: 12, color: COLORS.textGray, fontFamily: fontFamily.semibold },
   
   memberBalanceLabel: { fontSize: 11, fontFamily: fontFamily.bold },
-  memberBalanceAmount: { fontSize: 14, fontFamily: fontFamily.bold, marginTop: 2 },
+  memberBalanceAmount: { fontSize: 14, fontFamily: numericFontFamily.bold, marginTop: 2 },
   owesYouText: { color: palette.success },
   youOweText: { color: palette.danger },
   settledText: { color: palette.textTertiary },
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settleText: { fontSize: 14, color: COLORS.textDark, fontFamily: fontFamily.semibold },
-  settleAmount: { fontSize: 16, fontFamily: fontFamily.bold, color: COLORS.green },
+  settleAmount: { fontSize: 16, fontFamily: numericFontFamily.bold, color: COLORS.green },
 
   settleModalRow: {
     flexDirection: 'row',

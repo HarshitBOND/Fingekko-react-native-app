@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { gradients, palette, radius, shadows, spacing } from '@/constants/design';
+import { currencySymbol } from '@/utils/currency';
 import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import Button from '../ui/Button';
@@ -23,7 +24,7 @@ export default function SuggestionsBar({ onViewInsights }: SuggestionsBarProps) 
         <View style={styles.text}>
           <AppText variant="title">A better choice?</AppText>
           <AppText variant="caption" color="textSecondary" style={styles.line}>
-            Cook at home more often to save ₹850 — that&apos;s 2 days closer to your Goa trip.
+            Cook at home more often to save {currencySymbol()}850 — that&apos;s 2 days closer to your Goa trip.
           </AppText>
         </View>
       </View>

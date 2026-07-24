@@ -1,6 +1,8 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { gradients, palette, radius, spacing } from '@/constants/design';
+import { formatMoney } from '@/utils/currency';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import AppText from '../ui/AppText';
 import Badge from '../ui/Badge';
@@ -19,12 +21,22 @@ type BalanceCardProps = {
   spendProgress: number;
   remainingProgress: number;
   hasIncomeSetup: boolean;
+  /** The salary figure from setup — what the edit modal writes. */
+  baseIncome: number;
+  /** Income transactions logged this cycle, on top of `baseIncome`. */
+  incomeThisMonth: number;
+  /** Declared untracked cash counted toward the remaining balance (items 12/20). */
+  cashInHand: number;
+  /** Recurring bills not yet paid this month — reserved from what's free to spend (item 10). */
+  unpaidEssentials?: number;
   payday: number | null;
   savingIncome: boolean;
   onSaveIncome: (monthlyIncome: number, payday: number) => Promise<boolean>;
 };
 
-const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+// Sign-aware so debt reads as "−₹300" (proper minus, symbol before the digits)
+// rather than "₹-300", in the user's profile currency (AUDIT item 17).
+const inr = (n: number) => formatMoney(n);
 
 function ordinal(day: number) {
   if (day >= 11 && day <= 13) return `${day}th`;
@@ -48,20 +60,39 @@ export default function BalanceCard({
   avgDailySpend,
   spendProgress,
   hasIncomeSetup,
+  baseIncome,
+  incomeThisMonth,
+  cashInHand,
+  unpaidEssentials = 0,
   payday,
   savingIncome,
   onSaveIncome,
 }: BalanceCardProps) {
   const pct = Math.round(spendProgress * 100);
+  // Debt is the loudest state: the cycle is over budget and the balance is
+  // negative. It overrides the calmer Healthy/Watch badge and repaints the card
+  // red so overspend can never hide behind "₹0 left, 100% used".
+  const inDebt = balanceAmount < 0;
+  // Edge (AUDIT item 22): the user has logged income this cycle but never set a
+  // salary, so `hasIncomeSetup` is true purely on logged income. The budget math
+  // still works (monthlyBudget = logged income), but calling that a "budget" and
+  // hiding the salary setup would mislead — so we label it honestly as logged
+  // income and keep the "add your salary" action in reach.
+  const salarySet = baseIncome > 0;
+  const loggedIncomeOnly = !salarySet && incomeThisMonth > 0;
   const healthy = spendProgress < 0.75;
+  const badgeLabel = inDebt ? 'Over budget' : healthy ? 'Healthy' : 'Watch';
+  const badgeTone = inDebt ? 'danger' : healthy ? 'success' : 'warning';
   const [hidden, setHidden] = useState(false);
   const [setupVisible, setSetupVisible] = useState(false);
-  const [incomeInput, setIncomeInput] = useState(monthlyBudget > 0 ? String(Math.round(monthlyBudget)) : '');
+  // The modal edits the *salary* figure only — logged income transactions are
+  // added on top of it and must never be written back as the salary.
+  const [incomeInput, setIncomeInput] = useState(baseIncome > 0 ? String(Math.round(baseIncome)) : '');
   const [paydayInput, setPaydayInput] = useState(payday ? String(payday) : '');
   const [formError, setFormError] = useState('');
 
   const openSetup = () => {
-    setIncomeInput(monthlyBudget > 0 ? String(Math.round(monthlyBudget)) : '');
+    setIncomeInput(baseIncome > 0 ? String(Math.round(baseIncome)) : '');
     setPaydayInput(payday ? String(payday) : '');
     setFormError('');
     setSetupVisible(true);
@@ -89,7 +120,7 @@ export default function BalanceCard({
   };
 
   return (
-    <HeroCard colors={gradients.hero} padding={22}>
+    <HeroCard colors={inDebt ? gradients.danger : gradients.hero} padding={22}>
       {!hasIncomeSetup ? (
         <View style={styles.setupPrompt}>
           <View style={styles.setupIconWrap}>
@@ -124,11 +155,11 @@ export default function BalanceCard({
                 <Icon name={hidden ? 'EyeOff' : 'Eye'} size={15} color={palette.textOnDarkMuted} />
               </Pressable>
             </View>
-            <Badge label={healthy ? 'Healthy' : 'Watch'} tone={healthy ? 'success' : 'warning'} solid />
+            <Badge label={badgeLabel} tone={badgeTone} solid />
           </View>
 
           {hidden ? (
-            <AppText variant="display" color="onDark" style={styles.balance}>
+            <AppText variant="display" numeric color="onDark" style={styles.balance}>
               ••••••
             </AppText>
           ) : (
@@ -161,10 +192,42 @@ export default function BalanceCard({
                 accessibilityLabel="Edit income and budget"
               >
                 <AppText variant="caption" color="onDarkMuted">
-                  of {inr(monthlyBudget)} budget{payday ? ` • paid on the ${ordinal(payday)}` : ''}
+                  {loggedIncomeOnly
+                    ? `of ${inr(monthlyBudget)} logged • add your salary`
+                    : `of ${inr(monthlyBudget)} budget${payday ? ` • paid on the ${ordinal(payday)}` : ''}`}
                 </AppText>
                 <Icon name="Settings" size={11} color={palette.textOnDarkMuted} />
               </Pressable>
+              {incomeThisMonth > 0 && (
+                <View style={styles.incomePill}>
+                  <Icon name="ArrowDownLeft" size={11} color={palette.white} clickable={false} />
+                  <AppText variant="micro" color="onDark">
+                    +{inr(incomeThisMonth)} income logged
+                  </AppText>
+                </View>
+              )}
+              {cashInHand > 0 && (
+                <View style={styles.incomePill}>
+                  <Icon name="Wallet" size={11} color={palette.white} clickable={false} />
+                  <AppText variant="micro" color="onDark">
+                    incl. {inr(cashInHand)} cash on hand
+                  </AppText>
+                </View>
+              )}
+              {unpaidEssentials > 0 && (
+                <Pressable
+                  onPress={() => router.push('/(tabs)/essentials')}
+                  hitSlop={6}
+                  style={styles.incomePill}
+                  accessibilityRole="button"
+                  accessibilityLabel="View your bills"
+                >
+                  <Icon name="ReceiptText" size={11} color={palette.white} clickable={false} />
+                  <AppText variant="micro" color="onDark">
+                    {inr(unpaidEssentials)} bills to pay
+                  </AppText>
+                </Pressable>
+              )}
             </View>
 
             <ProgressRing
@@ -174,7 +237,7 @@ export default function BalanceCard({
               gradient={['#EAF8E5', '#A7E58C']}
               trackColor="rgba(255,255,255,0.18)"
             >
-              <AppText variant="title" color="onDark">
+              <AppText variant="title" numeric color="onDark">
                 {pct}%
               </AppText>
               <AppText variant="micro" color="onDarkMuted">
@@ -190,7 +253,7 @@ export default function BalanceCard({
                 <Icon name="CalendarDays" size={16} color={palette.white} />
               </View>
               <View>
-                <AppText variant="label" color="onDark">
+                <AppText variant="label" numeric color="onDark">
                   {daysLeftInMonth}
                 </AppText>
                 <AppText variant="micro" color="onDarkMuted">
@@ -204,7 +267,7 @@ export default function BalanceCard({
                 <Icon name="Wallet" size={16} color={palette.white} />
               </View>
               <View>
-                <AppText variant="label" color="onDark" numberOfLines={1}>
+                <AppText variant="label" numeric color="onDark" numberOfLines={1}>
                   {inr(avgDailySpend)}
                 </AppText>
                 <AppText variant="micro" color="onDarkMuted">
@@ -216,8 +279,8 @@ export default function BalanceCard({
         </>
       )}
 
-      <Modal visible={setupVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={setupVisible} animationType="fade" transparent onRequestClose={() => setSetupVisible(false)}>
+        <View style={styles.modalOverlay} accessibilityViewIsModal={true}>
           <View style={styles.modalCard}>
             <AppText variant="title" color="textPrimary" weight="bold">
               Your income
@@ -280,6 +343,17 @@ const styles = StyleSheet.create({
   },
   spendCol: { flex: 1, gap: 3, paddingRight: spacing.base },
   budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  incomePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
   chipRow: {
     marginTop: spacing.lg,
     flexDirection: 'row',

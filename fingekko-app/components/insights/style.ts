@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { fontFamily, layout, palette, radius, shadows, spacing } from '@/constants/design';
+import { fontFamily, layout, numericFontFamily, palette, radius, shadows, spacing } from '@/constants/design';
 import { AMOUNT_DARK, CARD_BG, GREEN, PAGE_BG, TEXT_PRIMARY, TEXT_SECONDARY } from './constants';
 
 const NAV_CLEARANCE = layout.navBarHeight + layout.navBarBottomInset + 28;
@@ -38,14 +38,14 @@ export const s = StyleSheet.create({
   snapDivider: { height: 1, backgroundColor: palette.divider, marginBottom: 14 },
   pieWrap: { alignItems: 'center', width: 132 },
   pieHint: { fontSize: 10, color: palette.textTertiary, fontFamily: fontFamily.semibold, marginTop: 6 },
-  pieCenterPct: { fontSize: 18, fontFamily: fontFamily.extrabold, color: TEXT_PRIMARY },
-  pieCenterAmt: { fontSize: 16, fontFamily: fontFamily.extrabold, color: TEXT_PRIMARY, maxWidth: 74, textAlign: 'center' },
+  pieCenterPct: { fontSize: 18, fontFamily: numericFontFamily.extrabold, color: TEXT_PRIMARY },
+  pieCenterAmt: { fontSize: 16, fontFamily: numericFontFamily.extrabold, color: TEXT_PRIMARY, maxWidth: 74, textAlign: 'center' },
   pieCenterSub: { fontSize: 10, fontFamily: fontFamily.semibold, color: palette.textTertiary, marginTop: -2 },
   weekLegend: { gap: 8, marginTop: 12 },
   weekLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   weekLegendDot: { width: 9, height: 9, borderRadius: 5 },
   weekLegendName: { flex: 1, fontSize: 12, fontFamily: fontFamily.semibold, color: TEXT_PRIMARY, textTransform: 'capitalize' },
-  weekLegendPct: { fontSize: 12, fontFamily: fontFamily.bold },
+  weekLegendPct: { fontSize: 12, fontFamily: numericFontFamily.bold },
   statTile: {
     flex: 1,
     alignItems: 'center',
@@ -138,7 +138,7 @@ export const s = StyleSheet.create({
   /* Filled legend dot (reference-style) */
   legendRowFilled: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDotFilled: { width: 9, height: 9, borderRadius: 5 },
-  legendText: { fontSize: 11, color: TEXT_SECONDARY, fontFamily: fontFamily.medium },
+  legendText: { fontSize: 11, color: TEXT_SECONDARY, fontFamily: numericFontFamily.medium },
 
   /* Dark value bubble (line-chart pointer tooltip) */
   valueBubble: {
@@ -150,12 +150,12 @@ export const s = StyleSheet.create({
     minWidth: 78,
     ...shadows.md,
   },
-  valueBubbleAmt: { color: palette.white, fontSize: 14, fontFamily: fontFamily.extrabold },
+  valueBubbleAmt: { color: palette.white, fontSize: 14, fontFamily: numericFontFamily.extrabold },
   valueBubbleSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontFamily: fontFamily.medium, marginTop: 1 },
 
   /* Day-by-day bar chart card */
   barHeadline: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 4, marginBottom: 2 },
-  barHeadlineAmt: { fontSize: 30, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, letterSpacing: -0.6 },
+  barHeadlineAmt: { fontSize: 30, lineHeight: 40, fontFamily: numericFontFamily.extrabold, color: AMOUNT_DARK, letterSpacing: 0 },
   barHeadlineUnit: { fontSize: 13, fontFamily: fontFamily.semibold, color: TEXT_SECONDARY, marginBottom: 6 },
   barMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   barMetaChip: {
@@ -169,7 +169,7 @@ export const s = StyleSheet.create({
   },
   barMetaChipText: { fontSize: 11, color: palette.primaryDeep, fontFamily: fontFamily.bold },
   barMetaMuted: { fontSize: 11, color: TEXT_SECONDARY, fontFamily: fontFamily.medium },
-  barTopLabel: { fontSize: 10, color: AMOUNT_DARK, fontFamily: fontFamily.bold, marginBottom: 4 },
+  barTopLabel: { fontSize: 10, color: AMOUNT_DARK, fontFamily: numericFontFamily.bold, marginBottom: 4 },
   barEmpty: { paddingVertical: 20, alignItems: 'center' },
 
   insightPill: {
@@ -195,7 +195,7 @@ export const s = StyleSheet.create({
     marginBottom: 14,
   },
   snapshotTitleRow: { gap: 2 },
-  dateTag: { fontSize: 12, color: palette.textSecondary, fontFamily: fontFamily.medium },
+  dateTag: { fontSize: 12, color: palette.textSecondary, fontFamily: numericFontFamily.medium },
   thisWeekBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   thisWeekText: { fontSize: 13, color: palette.primaryDeep, fontFamily: fontFamily.bold },
 
@@ -209,9 +209,9 @@ export const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  circleText: { fontSize: 18, fontFamily: fontFamily.bold, color: TEXT_PRIMARY },
+  circleText: { fontSize: 18, fontFamily: numericFontFamily.bold, color: TEXT_PRIMARY },
 
-  snapAmount: { fontSize: 22, fontFamily: fontFamily.bold, color: AMOUNT_DARK },
+  snapAmount: { fontSize: 22, fontFamily: numericFontFamily.bold, color: AMOUNT_DARK },
   snapOf: { fontSize: 14, fontFamily: fontFamily.medium, color: palette.textSecondary },
   snapSub: { color: palette.textSecondary, fontSize: 13, marginTop: 2, fontFamily: fontFamily.medium },
   snapBarBg: {
@@ -226,7 +226,7 @@ export const s = StyleSheet.create({
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statCol: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, height: 36, backgroundColor: palette.border },
-  statNum: { fontSize: 20, fontFamily: fontFamily.bold, color: AMOUNT_DARK },
+  statNum: { fontSize: 20, fontFamily: numericFontFamily.bold, color: AMOUNT_DARK },
   statLbl: { fontSize: 11, color: palette.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 15, fontFamily: fontFamily.medium },
 
   twoColRow: { gap: spacing.lg },
@@ -245,8 +245,8 @@ export const s = StyleSheet.create({
   },
   catNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   catName: { fontSize: 14, fontFamily: fontFamily.semibold, color: TEXT_PRIMARY, flex: 1 },
-  catAmt: { fontSize: 14, fontFamily: fontFamily.bold, color: AMOUNT_DARK, marginRight: 6 },
-  catPct: { fontSize: 12, fontFamily: fontFamily.bold, minWidth: 30, textAlign: 'right' },
+  catAmt: { fontSize: 14, fontFamily: numericFontFamily.bold, color: AMOUNT_DARK, marginRight: 6 },
+  catPct: { fontSize: 12, fontFamily: numericFontFamily.bold, minWidth: 30, textAlign: 'right' },
   catBarBg: {
     height: 8,
     borderRadius: radius.pill,
@@ -288,7 +288,7 @@ export const s = StyleSheet.create({
   },
   impactLabel: { fontSize: 11, letterSpacing: 1.4, fontFamily: fontFamily.bold, color: palette.textTertiary, textTransform: 'uppercase' },
   impactAmountBlock: { marginTop: 8 },
-  impactAmt: { fontSize: 28, fontFamily: fontFamily.extrabold, color: AMOUNT_DARK, letterSpacing: -0.4 },
+  impactAmt: { fontSize: 28, lineHeight: 38, fontFamily: numericFontFamily.extrabold, color: AMOUNT_DARK, letterSpacing: 0 },
   impactSub: { fontSize: 12, color: palette.textSecondary, marginTop: 4, fontFamily: fontFamily.medium },
   impactGrowBlock: { marginTop: 12 },
   impactGrowText: { fontSize: 14, fontFamily: fontFamily.semibold, color: TEXT_SECONDARY },
@@ -327,7 +327,7 @@ export const s = StyleSheet.create({
   rewardBarBg: { height: 7, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.6)', marginTop: 8, width: 130, overflow: 'hidden' },
   rewardBarFill: { height: '100%', width: '22%', backgroundColor: palette.primary, borderRadius: 999 },
   rewardBarLabels: { marginTop: 4 },
-  rewardBarLbl: { fontSize: 11, color: palette.textSecondary, fontFamily: fontFamily.medium },
+  rewardBarLbl: { fontSize: 11, color: palette.textSecondary, fontFamily: numericFontFamily.medium },
   rewardBadge: { width: 74, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: radius.md, padding: 10, marginLeft: 10 },
   rewardBadgeLbl: { color: TEXT_PRIMARY, fontFamily: fontFamily.bold, fontSize: 11, marginTop: 4, textAlign: 'center' },
   rewardBadgeSub: { color: palette.textSecondary, fontSize: 11, textAlign: 'center', fontFamily: fontFamily.medium },

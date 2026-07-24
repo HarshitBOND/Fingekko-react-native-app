@@ -7,6 +7,7 @@ import Icon from './ui/Icon';
 import { QUEST_TYPE_META } from '@/constants/quests';
 import { palette, radius, spacing } from '@/constants/design';
 import { useQuests } from '@/hooks/useQuests';
+import { formatCurrencyCopy } from '@/utils/currency';
 
 /**
  * Home-screen preview of the daily quest board. Deliberately shallow — it shows
@@ -93,7 +94,7 @@ export default function TodaysQuest() {
                   numberOfLines={2}
                   style={[styles.previewText, isDone && styles.previewDone]}
                 >
-                  {quest.title}
+                  {formatCurrencyCopy(quest.title)}
                 </AppText>
                 <View style={styles.previewXp}>
                   <Icon name="Zap" size={11} color={palette.warning} clickable={false} />

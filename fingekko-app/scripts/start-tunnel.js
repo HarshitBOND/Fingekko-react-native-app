@@ -67,6 +67,15 @@ async function main() {
         ...process.env,
         EXPO_PACKAGER_PROXY_URL: url,
         EXPO_NO_DEPENDENCY_VALIDATION: '1',
+        // This box has only ~4 GB of RAM total. Metro runs the packager, a
+        // transform worker and (if web is opened) the web + SSR bundlers at
+        // once, each a separate Node process. A high per-process cap lets them
+        // grow toward multiple GB before V8 bothers to GC, so their combined
+        // footprint blows past the OS commit limit and the process is killed
+        // mid-allocation (AlignedAlloc failure), not gently GC-paused. Cap old
+        // space LOW so V8 collects early and total memory stays bounded. See
+        // metro.config.js for the matching single-worker cap.
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=2048`.trim(),
       },
     }
   );

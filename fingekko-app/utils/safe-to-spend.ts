@@ -1,4 +1,6 @@
-import { Goal, Transaction, UserProfile } from '../constants/types';
+import { Goal, Transaction } from '../constants/types';
+import type { ApiUser } from '../types';
+import { summarizeByPayCycle } from './pay-cycle';
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 
@@ -13,10 +15,12 @@ export type SafeSpendResult = {
   balance: number;
   goalDailyReserve: number;
   buffer: number;
+  /** Unpaid recurring bills reserved out of the safe-to-spend figure (AUDIT item 10). */
+  unpaidEssentials: number;
 };
 
 type CalculationInput = {
-  profile: UserProfile | null;
+  profile: ApiUser | null;
   transactions: Transaction[];
   goals: Goal[];
   today?: Date;
@@ -30,70 +34,42 @@ function parseDate(value?: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function addMonths(date: Date, months: number): Date {
-  const next = new Date(date.getTime());
-  const day = next.getDate();
-  next.setMonth(next.getMonth() + months);
-  if (next.getDate() < day) {
-    next.setDate(0);
-  }
-  return next;
-}
-
 function daysBetween(from: Date, to: Date): number {
   return Math.ceil((to.getTime() - from.getTime()) / MS_IN_DAY);
 }
 
+/** Local YYYY-MM-DD — matches how transaction dates are stored (not UTC). */
+function localIso(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * Safe-to-spend now derives its cycle, balance and essentials figures from the
+ * shared `summarizeByPayCycle` (AUDIT item 19) — the same source of truth Home
+ * and Goals use. It no longer runs its own income-anchored cycle, so all three
+ * screens agree on the pay cycle, the remaining balance, and the reservation of
+ * *unpaid* essentials. On top of that shared base it layers the daily allowance,
+ * the 10% buffer, and the per-day goal reserve, which are specific to this screen.
+ */
 export function calculateSafeToSpend({
   profile,
   transactions,
   goals,
   today = new Date(),
 }: CalculationInput): SafeSpendResult {
-  const todayString = today.toISOString().split('T')[0];
-  const parsedTransactions = transactions
-    .map(transaction => ({
-      ...transaction,
-      parsedDate: parseDate(transaction.date),
-    }))
-    .filter(transaction => transaction.parsedDate);
+  const summary = summarizeByPayCycle(transactions, profile, today);
 
-  const incomeTransactions = parsedTransactions
-    .filter(transaction => transaction.type === 'income')
-    .sort((a, b) => b.parsedDate!.getTime() - a.parsedDate!.getTime());
-
-  const lastIncomeDate = incomeTransactions[0]?.parsedDate ?? null;
-  const cycleStart = lastIncomeDate ?? new Date(today.getFullYear(), today.getMonth(), 1);
-  const cycleTransactions = parsedTransactions.filter(
-    transaction => transaction.parsedDate! >= cycleStart
-  );
-
-  const cycleIncome = cycleTransactions
-    .filter(transaction => transaction.type === 'income')
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-  const cycleExpenses = cycleTransactions
-    .filter(transaction => transaction.type === 'expense')
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-  const fallbackMonthlyIncome = profile?.monthlyIncome ?? 0;
-  const effectiveIncome = cycleIncome > 0 ? cycleIncome : fallbackMonthlyIncome;
-  const currentBalance = effectiveIncome - cycleExpenses;
-
-  const nextIncomeDate = (() => {
-    if (lastIncomeDate) {
-      const next = addMonths(lastIncomeDate, 1);
-      return next <= today ? addMonths(next, 1) : next;
-    }
-
-    if (fallbackMonthlyIncome > 0) {
-      return new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    }
-
-    return new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
-  })();
-
-  const daysLeft = Math.max(1, daysBetween(today, nextIncomeDate));
+  // Income this cycle = salary set up + income logged this cycle (Home's figure),
+  // not the old "logged income OR salary" pick that could disagree with Home.
+  const cycleIncome = summary.monthlyBudget;
+  const cycleExpenses = summary.expensesThisMonth;
+  const unpaidEssentials = summary.unpaidEssentials;
+  // Free cash for the rest of the cycle with unpaid bills already reserved —
+  // identical to what Home shows once essentials are taken out.
+  const currentBalance = summary.remainingAfterEssentials;
+  // The pay cycle can be on its last day (0 left); never divide by zero.
+  const daysLeft = Math.max(1, summary.daysLeftInMonth);
 
   const goalDailyReserve = goals.reduce((sum, goal) => {
     const deadline = parseDate(goal.deadline);
@@ -110,27 +86,36 @@ export function calculateSafeToSpend({
     return sum + remaining / daysToDeadline;
   }, 0);
 
-  const buffer = Math.max(0, effectiveIncome * 0.1);
-  const baseDailyAllowance = Math.max(0, (currentBalance - buffer) / daysLeft);
-  const dailyBudget = Math.max(0, baseDailyAllowance - goalDailyReserve);
+  const buffer = Math.max(0, cycleIncome * 0.1);
+  // No floor at 0 here: flooring hides overspend and would disagree with the Home
+  // card (pay-cycle.ts), which lets the balance go negative. When the cycle is
+  // over budget these go negative and the debt shows consistently on both screens.
+  // The Safe-to-Spend hero still displays ≥0 via the screen's `minZero` formatting,
+  // but the underlying figure stays honest.
+  const baseDailyAllowance = (currentBalance - buffer) / daysLeft;
+  const dailyBudget = baseDailyAllowance - goalDailyReserve;
 
-  const spentToday = parsedTransactions
-    .filter(transaction => transaction.type === 'expense' && transaction.date === todayString)
+  const todayString = localIso(today);
+  const spentToday = transactions
+    .filter((transaction) => transaction.type === 'expense' && transaction.date?.slice(0, 10) === todayString)
     .reduce((sum, transaction) => sum + transaction.amount, 0);
 
-  const safeToSpend = Math.max(0, dailyBudget - spentToday);
-  const progress = dailyBudget > 0 ? Math.min(1, spentToday / dailyBudget) : 0;
+  const safeToSpend = dailyBudget - spentToday;
+  // Once there's no allowance left (or the cycle is in debt) today's spend has
+  // fully consumed it — read as 100% used rather than a nonsensical ratio.
+  const progress = dailyBudget > 0 ? spentToday / dailyBudget : 1;
 
   return {
     safeToSpend,
     dailyBudget,
     progress,
     daysLeft,
-    cycleIncome: effectiveIncome,
+    cycleIncome,
     cycleExpenses,
     savings: currentBalance,
     balance: currentBalance,
     goalDailyReserve,
     buffer,
+    unpaidEssentials,
   };
 }

@@ -66,6 +66,9 @@ export default function AnimatedNumber({
   return (
     <AppText
       variant={variant}
+      // Always a numeral — tabular figures also stop the count-up from
+      // reflowing the layout on every frame as digit widths change.
+      numeric
       color={color}
       style={style}
       numberOfLines={numberOfLines}

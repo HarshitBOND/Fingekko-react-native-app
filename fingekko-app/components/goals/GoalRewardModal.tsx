@@ -144,7 +144,7 @@ export default function GoalRewardModal({ reward, onDismiss }: GoalRewardModalPr
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <Pressable style={styles.overlay} onPress={onDismiss}>
+      <Pressable style={styles.overlay} onPress={onDismiss} accessibilityViewIsModal={true}>
         <Pressable onPress={(e) => e.stopPropagation()}>
           <Animated.View style={[styles.card, cardStyle]}>
             <View style={styles.particleField}>

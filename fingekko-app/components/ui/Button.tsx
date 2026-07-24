@@ -72,7 +72,12 @@ export default function Button({
   const isDisabled = disabled || loading;
 
   const content = (
-    <View style={[styles.content, { gap: dims.gap }]}>
+    // `pointerEvents="none"` keeps the press on the Pressable itself; the
+    // z-index is what guarantees the label paints *over* the absolutely-filled
+    // gradient. Without it, Android's elevation (shadows.primary) reorders the
+    // shell's children and the gradient can cover the text — a button that
+    // looks empty.
+    <View style={[styles.content, { gap: dims.gap }]} pointerEvents="none">
       {loading ? (
         <ActivityIndicator color={colors.text} size="small" />
       ) : (
@@ -137,6 +142,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   text: {
     fontFamily: fontFamily.bold,

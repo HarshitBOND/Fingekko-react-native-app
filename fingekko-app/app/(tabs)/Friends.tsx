@@ -15,6 +15,7 @@ import ScreenContainer from '../../components/ui/ScreenContainer';
 import Card from '../../components/ui/Card';
 import AppText from '../../components/ui/AppText';
 import Navbar from '../../components/Navbar';
+import EmptyState from '../../components/ui/EmptyState';
 import PressableScale from '../../components/ui/PressableScale';
 import { palette, spacing, layout, radius, shadows, fontFamily } from '../../constants/design';
 
@@ -259,10 +260,10 @@ const Avatar = React.memo(({ name }: { name: string }) => {
 });
 Avatar.displayName = 'Avatar';
 
-const EmptyState = React.memo(({ text }: { text: string }) => (
-  <AppText variant="bodySm" color="textSecondary" align="center" style={styles.emptyText}>{text}</AppText>
+const EmptySectionState = React.memo(({ text }: { text: string }) => (
+  <EmptyState icon="Users" title={text} style={{ paddingVertical: spacing.md }} />
 ));
-EmptyState.displayName = 'EmptyState';
+EmptySectionState.displayName = 'EmptySectionState';
 
 const FriendCard = React.memo(({
   item,
@@ -465,7 +466,7 @@ const FriendSection = React.memo(({
       {title}
     </AppText>
     {data.length === 0 ? (
-      <EmptyState text={emptyText} />
+      <EmptySectionState text={emptyText} />
     ) : (
       <View style={styles.sectionList}>
         {data.map(renderItem)}
@@ -559,7 +560,7 @@ export default function FriendsScreen() {
         )}
 
         {!searchLoading && searchQuery.trim() !== '' && searchResults.length === 0 && (
-          <EmptyState text="No results found." />
+          <EmptySectionState text="No results found." />
         )}
 
         {searchResults.length > 0 && (
