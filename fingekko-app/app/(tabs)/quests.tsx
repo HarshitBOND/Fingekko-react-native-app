@@ -7,7 +7,7 @@ import Icon from '@/components/ui/Icon';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import ProgressBar from '@/components/ProgressBar';
 import ScreenContainer from '@/components/ui/ScreenContainer';
-import { DIFFICULTY_META, QUEST_TYPE_META } from '@/constants/quests';
+import { DIFFICULTY_META, getQuestTypeMeta } from '@/constants/quests';
 import { gradients, layout, palette, radius, shadows, spacing } from '@/constants/design';
 import { useQuests, type ActiveQuest } from '@/hooks/useQuests';
 import HeroCard from '@/components/ui/HeroCard';
@@ -22,7 +22,7 @@ function QuestRow({
   onComplete: () => void;
   onFail: () => void;
 }) {
-  const typeMeta = QUEST_TYPE_META[quest.type];
+  const typeMeta = getQuestTypeMeta(quest?.type);
   const difficultyMeta = DIFFICULTY_META[quest.difficulty] ?? DIFFICULTY_META[3];
   const isDone = quest.status === 'completed';
   const isFailed = quest.status === 'failed';

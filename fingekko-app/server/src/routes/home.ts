@@ -589,6 +589,8 @@ router.get('/quests/state', authMiddleware, async (req: Request, res: Response, 
   }
 });
 
+import { processGoalShiftOnQuestFail } from '../services/goalShiftService.js';
+
 router.put('/quests/state', authMiddleware, async (req: Request, res: Response, next: Function) => {
   const { action, questId } = req.body ?? {};
 
@@ -623,6 +625,11 @@ router.put('/quests/state', authMiddleware, async (req: Request, res: Response, 
     const target: QuestStatus = action === 'complete' ? 'completed' : action === 'skip' ? 'failed' : 'pending';
     const actionResult = await applyTransition(userId, entry, target);
 
+    let goalShift = null;
+    if (action === 'skip' || target === 'failed') {
+      goalShift = await processGoalShiftOnQuestFail(userId, def.title, 1);
+    }
+
     // Keep auto quests fresh + settle XP, then recompute streak/stats.
     const ctx = await buildEvalContext(userId, req.user.monthlyIncome ?? 0, now);
     await reconcileAuto(userId, state, ctx);
@@ -636,6 +643,7 @@ router.put('/quests/state', authMiddleware, async (req: Request, res: Response, 
       xp: xpResult.xp,
       level: xpResult.level,
       leveledUp: xpResult.leveledUp,
+      goalShift,
     });
   } catch (error) {
     return next(error);

@@ -4,7 +4,7 @@ import ProgressBar from './ProgressBar';
 import AppText from './ui/AppText';
 import Card from './ui/Card';
 import Icon from './ui/Icon';
-import { QUEST_TYPE_META } from '@/constants/quests';
+import { getQuestTypeMeta } from '@/constants/quests';
 import { palette, radius, spacing } from '@/constants/design';
 import { useQuests } from '@/hooks/useQuests';
 import { formatCurrencyCopy } from '@/utils/currency';
@@ -81,7 +81,7 @@ export default function TodaysQuest() {
 
         <View style={styles.previewList}>
           {preview.map((quest) => {
-            const meta = QUEST_TYPE_META[quest.type];
+            const meta = getQuestTypeMeta(quest?.type);
             const isDone = quest.status === 'completed';
             return (
               <View key={quest.id} style={styles.previewRow}>

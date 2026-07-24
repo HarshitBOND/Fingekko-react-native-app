@@ -116,16 +116,25 @@ export default function EssentialsScreen() {
       const token = await getTokenRef.current();
       if (!token) throw new Error('Not signed in');
       const payload = { name, amount: Math.round(amount), dueDay: Math.round(dueDay), category: categoryKey };
+      let res: any;
       if (editingId) {
-        await apiRequest({ method: 'put', url: `/api/essentials/${editingId}`, token, data: payload });
+        res = await apiRequest({ method: 'put', url: `/api/essentials/${editingId}`, token, data: payload });
       } else {
-        await apiRequest({ method: 'post', url: '/api/essentials', token, data: payload });
+        res = await apiRequest({ method: 'post', url: '/api/essentials', token, data: payload });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setFormVisible(false);
       await load();
       // Every budget surface reserves against essentials — nudge them to re-read.
       emitAppEvent('profile:changed');
+
+      if (res?.goalShift?.shiftedGoals?.length > 0) {
+        emitAppEvent('goal:shifted', {
+          reason: 'bill',
+          message: res.goalShift.message,
+          shiftedGoals: res.goalShift.shiftedGoals,
+        });
+      }
     } catch (e: any) {
       setFormError(e?.message || 'Could not save this bill. Try again.');
     } finally {
@@ -159,10 +168,18 @@ export default function EssentialsScreen() {
     try {
       const token = await getTokenRef.current();
       if (!token) throw new Error('Not signed in');
-      await apiRequest({ method: 'delete', url: `/api/essentials/${target.id}`, token });
+      const res: any = await apiRequest({ method: 'delete', url: `/api/essentials/${target.id}`, token });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       emitAppEvent('profile:changed');
       setPendingDelete(null);
+
+      if (res?.goalShift?.shiftedGoals?.length > 0) {
+        emitAppEvent('goal:shifted', {
+          reason: 'bill',
+          message: res.goalShift.message,
+          shiftedGoals: res.goalShift.shiftedGoals,
+        });
+      }
     } catch (e: any) {
       setEssentials(previous);
       setError(e?.message || 'Could not delete this bill. Try again.');

@@ -9,6 +9,15 @@
  * progress publishes here, and every interested screen re-reads immediately.
  */
 
+export type ShiftedGoalItem = {
+  goalId: string;
+  title: string;
+  emoji?: string;
+  oldDeadline: string;
+  newDeadline: string;
+  shiftDays: number;
+};
+
 export type AppEventMap = {
   /** A transaction was created or removed — balances, insights and streaks are stale. */
   'transaction:changed': { type: 'expense' | 'income'; date: string; amount: number };
@@ -24,6 +33,12 @@ export type AppEventMap = {
    * state and every other copy adopts it instead of drifting out of sync.
    */
   'quests:changed': { state: unknown; source: symbol };
+  /** Goal timelines shifted due to a new bill, skipped quest, or financial activity. */
+  'goal:shifted': {
+    reason: 'bill' | 'quest' | 'activity';
+    message: string;
+    shiftedGoals: ShiftedGoalItem[];
+  };
 };
 
 type Handler<K extends keyof AppEventMap> = (payload: AppEventMap[K]) => void;

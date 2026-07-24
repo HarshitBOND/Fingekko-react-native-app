@@ -37,6 +37,19 @@ export const QUEST_TYPE_META: Record<QuestType, { label: string; color: string; 
   learning: { label: 'Learning', color: '#5B9BD5', tint: palette.infoLight },
 };
 
+export const DEFAULT_QUEST_TYPE_META = {
+  label: 'Quest',
+  color: palette.primaryDeep,
+  tint: palette.primaryLight,
+};
+
+export function getQuestTypeMeta(type?: QuestType | string) {
+  if (type && type in QUEST_TYPE_META) {
+    return QUEST_TYPE_META[type as QuestType];
+  }
+  return DEFAULT_QUEST_TYPE_META;
+}
+
 export const DIFFICULTY_META: Record<number, { label: string; color: string; tint: string }> = {
   1: { label: 'Easy', color: palette.success, tint: palette.successLight },
   2: { label: 'Light', color: palette.info, tint: palette.infoLight },

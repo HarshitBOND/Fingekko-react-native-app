@@ -12,6 +12,8 @@ import {
 } from '../repositories/essentialRepository.js';
 import { updateById } from '../repositories/userRepository.js';
 
+import { processGoalShiftOnEssentialChange } from '../services/goalShiftService.js';
+
 const router = express.Router();
 
 // Hard sanity ceiling on a single bill — a backstop against typos/overflow, far
@@ -74,13 +76,27 @@ router.post('/', authMiddleware, async (req: Request, res: Response, next: Funct
 
   try {
     const userId = userIdOf(req);
+    const monthKey = monthKeyOf();
+    const oldSummary = await summarizeEssentials(userId, monthKey);
+
     const essential = await createEssential(userId, {
       name: value!.name!,
       amount: value!.amount!,
       dueDay: value!.dueDay!,
       category: value!.category,
     });
-    return res.status(201).json({ essential });
+
+    const newSummary = await summarizeEssentials(userId, monthKey);
+    const goalShift = await processGoalShiftOnEssentialChange(
+      userId,
+      oldSummary.monthlyTotal,
+      newSummary.monthlyTotal,
+      essential.name,
+      essential.amount,
+      false
+    );
+
+    return res.status(201).json({ essential, goalShift });
   } catch (error) {
     return next(error);
   }
@@ -99,8 +115,24 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response, next: Fun
     const existing = await getEssentialById(userId, id);
     if (!existing) return res.status(404).json({ error: 'Essential not found.' });
 
+    const monthKey = monthKeyOf();
+    const oldSummary = await summarizeEssentials(userId, monthKey);
+
     const essential = await updateEssential(userId, id, value);
-    return res.json({ essential });
+    if (!essential) return res.status(404).json({ error: 'Essential not found.' });
+
+    const newSummary = await summarizeEssentials(userId, monthKey);
+
+    const goalShift = await processGoalShiftOnEssentialChange(
+      userId,
+      oldSummary.monthlyTotal,
+      newSummary.monthlyTotal,
+      essential.name,
+      essential.amount,
+      false
+    );
+
+    return res.json({ essential, goalShift });
   } catch (error) {
     return next(error);
   }
@@ -110,9 +142,25 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response, next: 
   try {
     const userId = userIdOf(req);
     const id = String(req.params.id);
+    const existing = await getEssentialById(userId, id);
+    if (!existing) return res.status(404).json({ error: 'Essential not found.' });
+
+    const monthKey = monthKeyOf();
+    const oldSummary = await summarizeEssentials(userId, monthKey);
+
     const deleted = await deleteEssential(userId, id);
-    if (!deleted) return res.status(404).json({ error: 'Essential not found.' });
-    return res.json({ essential: deleted });
+    const newSummary = await summarizeEssentials(userId, monthKey);
+
+    const goalShift = await processGoalShiftOnEssentialChange(
+      userId,
+      oldSummary.monthlyTotal,
+      newSummary.monthlyTotal,
+      existing.name,
+      existing.amount,
+      true
+    );
+
+    return res.json({ essential: deleted, goalShift });
   } catch (error) {
     return next(error);
   }

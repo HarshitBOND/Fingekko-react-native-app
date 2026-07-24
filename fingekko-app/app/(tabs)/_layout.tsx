@@ -5,6 +5,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CelebrationHost from '../../components/celebrate/CelebrationHost';
+import GoalShiftModal from '../../components/goals/GoalShiftModal';
 import Icon from '../../components/ui/Icon';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import { fontFamily, gradients, layout, palette, radius, shadows } from '../../constants/design';
@@ -64,6 +65,7 @@ export default function TabLayout() {
     <>
     {/* Streak / quest celebrations pop over whatever tab is in front. */}
     <CelebrationHost />
+    <GoalShiftModal />
     <Tabs
       // 'history' makes the hardware/UI back button return to the *previously
       // visited* screen instead of jumping to the first tab (Home) — the default

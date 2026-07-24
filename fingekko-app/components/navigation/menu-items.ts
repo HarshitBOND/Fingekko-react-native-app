@@ -23,6 +23,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     title: 'Money',
     items: [
       { icon: 'Wallet', label: 'Safe to Spend', href: '/(tabs)/safe-to-spend', hint: 'What you can spend today' },
+      { icon: 'ReceiptText', label: 'Bills & Essentials', href: '/(tabs)/essentials', hint: 'Add or manage recurring bills' },
       { icon: 'BarChart3', label: 'Insights', href: '/(tabs)/insights', hint: 'Where your money went' },
       { icon: 'Target', label: 'Goals', href: '/(tabs)/goals', hint: 'What you are saving for' },
     ],

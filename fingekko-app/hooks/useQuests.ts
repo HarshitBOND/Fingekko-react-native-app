@@ -156,13 +156,20 @@ export function useQuests() {
       try {
         const token = await getTokenRef.current();
         if (!token) return;
-        const response = await apiRequest<QuestActionResponse>({
+        const response = await apiRequest<QuestActionResponse & { goalShift?: any }>({
           method: 'put',
           url: '/api/quests/state',
           token,
           data: { action, questId },
         });
         if (response?.state) adoptAndBroadcast(response.state);
+        if (response?.goalShift?.shiftedGoals?.length > 0) {
+          emitAppEvent('goal:shifted', {
+            reason: 'quest',
+            message: response.goalShift.message,
+            shiftedGoals: response.goalShift.shiftedGoals,
+          });
+        }
       } catch (error) {
         console.warn('Failed to update quest:', error);
         // Re-sync with the server so we don't strand the optimistic guess.
